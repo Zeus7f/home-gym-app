@@ -1,7 +1,7 @@
 // High-Fidelity Local State Store implementing Gym Management Operating Model
 // PRD Refactor: Gym -> Owner -> Trainers -> Members -> Attendance -> Sessions -> Exercises -> Finance -> Reports
 
-import {
+import type {
   Gym,
   Member,
   Trainer,
@@ -14,6 +14,21 @@ import {
   UserAccount,
   DailyCapacityConfig
 } from '../domain/gymManagement';
+
+export type {
+  Gym,
+  Member,
+  Trainer,
+  DailySession,
+  SessionExercise,
+  PaymentRecord,
+  TrainerPaymentRecord,
+  SessionAdjustmentRecord,
+  AuditLog,
+  UserAccount,
+  DailyCapacityConfig
+};
+export type { ExerciseItem } from '../exercises/catalog';
 import { EXERCISE_CATALOG, ExerciseItem } from '../exercises/catalog';
 import { getTodayJalaliString, getTodayJalali } from '../date/jalali';
 import { supabase, isLiveSupabase } from './client';
@@ -1186,7 +1201,7 @@ class GymStore {
   exercises: ExerciseItem[] = [...EXERCISE_CATALOG];
 
   users: UserAccount[] = INITIAL_USERS;
-  currentUser: UserAccount | null = INITIAL_USERS[0]; // Initially logged in as Admin for convenience
+  currentUser: UserAccount | null = null; // Unauthenticated by default (F3)
 
   dailyCapacityConfigs: Record<string, DailyCapacityConfig> = {};
 
@@ -1194,6 +1209,69 @@ class GymStore {
   activeMemberId = 'm-reza';
 
   listeners = new Set<() => void>();
+  private STORAGE_KEY = 'hg_store_state_v2';
+  private SESSION_KEY = 'hg_current_user_id';
+  private saveTimeout: any = null;
+
+  constructor() {
+    this.hydrateFromStorage();
+  }
+
+  private hydrateFromStorage() {
+    try {
+      if (typeof window === 'undefined') return;
+      const raw = localStorage.getItem(this.STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.gym) this.gym = parsed.gym;
+        if (parsed.trainers) this.trainers = parsed.trainers;
+        if (parsed.members) this.members = parsed.members;
+        if (parsed.todaySessions) this.todaySessions = parsed.todaySessions;
+        if (parsed.pastSessions) this.pastSessions = parsed.pastSessions;
+        if (parsed.memberPayments) this.memberPayments = parsed.memberPayments;
+        if (parsed.trainerPayouts) this.trainerPayouts = parsed.trainerPayouts;
+        if (parsed.sessionAdjustments) this.sessionAdjustments = parsed.sessionAdjustments;
+        if (parsed.auditLogs) this.auditLogs = parsed.auditLogs;
+        if (parsed.exercises) this.exercises = parsed.exercises;
+        if (parsed.users) this.users = parsed.users;
+        if (parsed.dailyCapacityConfigs) this.dailyCapacityConfigs = parsed.dailyCapacityConfigs;
+      }
+
+      // Restore session
+      const savedUserId = sessionStorage.getItem(this.SESSION_KEY) || localStorage.getItem(this.SESSION_KEY);
+      if (savedUserId) {
+        const found = this.users.find(u => u.id === savedUserId);
+        if (found) {
+          this.currentUser = found;
+        }
+      }
+    } catch (e) {
+      console.warn('Store hydration warning:', e);
+    }
+  }
+
+  private saveToStorage() {
+    try {
+      if (typeof window === 'undefined') return;
+      const payload = {
+        gym: this.gym,
+        trainers: this.trainers,
+        members: this.members,
+        todaySessions: this.todaySessions,
+        pastSessions: this.pastSessions,
+        memberPayments: this.memberPayments,
+        trainerPayouts: this.trainerPayouts,
+        sessionAdjustments: this.sessionAdjustments,
+        auditLogs: this.auditLogs,
+        exercises: this.exercises,
+        users: this.users,
+        dailyCapacityConfigs: this.dailyCapacityConfigs
+      };
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.warn('Store save warning:', e);
+    }
+  }
 
   subscribe(fn: () => void) {
     this.listeners.add(fn);
@@ -1202,6 +1280,10 @@ class GymStore {
 
   notify() {
     this.listeners.forEach(fn => fn());
+    if (this.saveTimeout) clearTimeout(this.saveTimeout);
+    this.saveTimeout = setTimeout(() => {
+      this.saveToStorage();
+    }, 250);
   }
 
   // ==========================================
@@ -1218,12 +1300,19 @@ class GymStore {
       return { success: false, message: 'کلمه عبور وارد شده نادرست است.' };
     }
     this.currentUser = user;
+    try {
+      sessionStorage.setItem(this.SESSION_KEY, user.id);
+    } catch (e) {}
     this.notify();
     return { success: true };
   }
 
   logout() {
     this.currentUser = null;
+    try {
+      sessionStorage.removeItem(this.SESSION_KEY);
+      localStorage.removeItem(this.SESSION_KEY);
+    } catch (e) {}
     this.notify();
   }
 
@@ -1267,33 +1356,36 @@ class GymStore {
   // CALENDAR & DAILY CAPACITY OVERRIDES
   // ==========================================
   setGymDailyCapacity(date: string, capacity: number) {
+    const validCap = Math.max(1, Number(capacity) || 1);
     if (!this.dailyCapacityConfigs[date]) {
       this.dailyCapacityConfigs[date] = { date };
     }
-    this.dailyCapacityConfigs[date].gymCapacity = capacity;
+    this.dailyCapacityConfigs[date].gymCapacity = validCap;
     this.notify();
   }
 
   getGymDailyCapacity(date: string): number {
-    return this.dailyCapacityConfigs[date]?.gymCapacity ?? this.gym.capacity;
+    const cap = this.dailyCapacityConfigs[date]?.gymCapacity ?? this.gym.capacity ?? 30;
+    return Math.max(1, cap);
   }
 
   setTrainerDailyCapacity(date: string, trainerId: string, capacity: number) {
+    const validCap = Math.max(1, Number(capacity) || 1);
     if (!this.dailyCapacityConfigs[date]) {
       this.dailyCapacityConfigs[date] = { date, trainerCapacities: {} };
     }
     if (!this.dailyCapacityConfigs[date].trainerCapacities) {
       this.dailyCapacityConfigs[date].trainerCapacities = {};
     }
-    this.dailyCapacityConfigs[date].trainerCapacities![trainerId] = capacity;
+    this.dailyCapacityConfigs[date].trainerCapacities![trainerId] = validCap;
     this.notify();
   }
 
   getTrainerDailyCapacity(date: string, trainerId: string): number {
     const override = this.dailyCapacityConfigs[date]?.trainerCapacities?.[trainerId];
-    if (override !== undefined) return override;
+    if (override !== undefined) return Math.max(1, override);
     const trainer = this.trainers.find(t => t.id === trainerId);
-    return trainer?.dailyCapacity ?? 6;
+    return Math.max(1, trainer?.dailyCapacity ?? 6);
   }
 
   getSessionsForDate(date: string, trainerId?: string, memberId?: string): DailySession[] {
@@ -1516,15 +1608,18 @@ class GymStore {
     this.notify();
   }
 
-  // Add New Member
-  addMember(data: Omit<Member, 'id' | 'usedSessions' | 'remainingSessions' | 'outstandingBalance' | 'registrationDate'>) {
+  // Add New Member (with optional initial password)
+  addMember(
+    data: Omit<Member, 'id' | 'usedSessions' | 'remainingSessions' | 'outstandingBalance' | 'registrationDate'>,
+    initialPassword?: string
+  ) {
     const newMember: Member = {
       ...data,
       id: 'm-' + Date.now(),
       usedSessions: 0,
       remainingSessions: data.totalSessions,
       outstandingBalance: Math.max(0, data.packagePrice - data.paidAmount),
-      registrationDate: new Date().toLocaleDateString('fa-IR')
+      registrationDate: getTodayJalaliString()
     };
     this.members.unshift(newMember);
 
@@ -1535,18 +1630,33 @@ class GymStore {
         memberId: newMember.id,
         memberName: newMember.name,
         amount: data.paidAmount,
-        date: new Date().toLocaleDateString('fa-IR'),
+        date: getTodayJalaliString(),
         method: 'card',
         description: 'پیش‌پرداخت اولیه هنگام ثبت نام',
         recordedBy: 'مدیر باشگاه'
       });
     }
 
+    if (initialPassword && initialPassword.trim()) {
+      this.createUserAccount({
+        username: data.phone || `member_${Date.now().toString().slice(-4)}`,
+        password: initialPassword.trim(),
+        role: 'member',
+        entityId: newMember.id,
+        displayName: newMember.name
+      });
+    }
+
     this.notify();
+    return newMember;
   }
 
-  // Record Member Payment
+  // Record Member Payment (with validation)
   recordMemberPayment(memberId: string, amount: number, method: 'card' | 'cash' | 'transfer', description: string) {
+    if (amount <= 0) {
+      throw new Error('مبلغ پرداختی باید بیشتر از صفر باشد.');
+    }
+
     const member = this.members.find(m => m.id === memberId);
     if (!member) return;
 
@@ -1558,7 +1668,7 @@ class GymStore {
       memberId: member.id,
       memberName: member.name,
       amount,
-      date: new Date().toLocaleDateString('fa-IR'),
+      date: getTodayJalaliString(),
       method,
       description,
       recordedBy: 'مدیر باشگاه'
@@ -1577,10 +1687,14 @@ class GymStore {
     this.notify();
   }
 
-  // Adjust Member Session Balance (Section 67)
+  // Adjust Member Session Balance (Section 67 with clamping)
   adjustMemberSessions(memberId: string, delta: number, reason: string) {
     const member = this.members.find(m => m.id === memberId);
     if (!member) return;
+
+    if (member.totalSessions + delta < member.usedSessions) {
+      throw new Error('مجموع جلسات نمی‌تواند کمتر از تعداد جلسات استفاده‌شده باشد.');
+    }
 
     member.totalSessions += delta;
     member.remainingSessions = Math.max(0, member.totalSessions - member.usedSessions);
@@ -1591,7 +1705,7 @@ class GymStore {
       memberName: member.name,
       delta,
       reason,
-      date: new Date().toLocaleDateString('fa-IR'),
+      date: getTodayJalaliString(),
       performedBy: 'مدیر باشگاه'
     });
 
@@ -1608,8 +1722,11 @@ class GymStore {
     this.notify();
   }
 
-  // Add Trainer
-  addTrainer(data: Omit<Trainer, 'id' | 'completedSessions' | 'paidCompensation' | 'outstandingCompensation'>) {
+  // Add Trainer (with optional password)
+  addTrainer(
+    data: Omit<Trainer, 'id' | 'completedSessions' | 'paidCompensation' | 'outstandingCompensation'>,
+    initialPassword?: string
+  ) {
     const newTrainer: Trainer = {
       ...data,
       id: 't-' + Date.now(),
@@ -1618,7 +1735,19 @@ class GymStore {
       outstandingCompensation: 0
     };
     this.trainers.push(newTrainer);
+
+    if (initialPassword && initialPassword.trim()) {
+      this.createUserAccount({
+        username: data.phone || `trainer_${Date.now().toString().slice(-4)}`,
+        password: initialPassword.trim(),
+        role: 'trainer',
+        entityId: newTrainer.id,
+        displayName: newTrainer.name
+      });
+    }
+
     this.notify();
+    return newTrainer;
   }
 
   // Record Trainer Payout (Section 13 & 32)

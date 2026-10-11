@@ -1,77 +1,151 @@
-/* Home Gym Multi-Tenant Platform — Design System Tokens */
-/* PRD V4.1 Section 5.1 */
+/* ============================================================
+   HomeGym Design System — Tokens
+   Palette: prototype (Ink / Brass / Rubber / Chalk)
+   G3 fix: all colours defined here as CSS custom properties.
+         No hex values should appear in component files.
+   G4 ready: dark mode overrides via [data-theme="dark"]
+   ============================================================ */
 
+/* ---- Primitive palette (prototype-faithful) ---- */
 :root {
-  --color-text: #0F172A;
-  --color-text-muted: #64748B;
-  --color-surface-0: #FFFFFF;
-  --color-surface-1: #F8FAFC;
-  --color-surface-2: #F1F5F9;
-  --color-border: #E2E8F0;
-  
-  --color-brand: #0D9488;
-  --color-brand-hover: #0F766E;
-  --color-brand-fg: #FFFFFF;
-  
-  --color-danger: #F43F5E;
-  --color-danger-fg: #FFFFFF;
-  
-  --color-cardio: #0284C7;
-  --color-functional: #059669;
-  --color-strength: #7C3AED;
+  /* Brand colours */
+  --c-ink:    #06314e;   /* primary: buttons, sidebar, text-strong */
+  --c-deep:   #041d2c;   /* darker ink: sidebar bg, headings */
+  --c-steel:  #18527e;   /* secondary blue: links, muted actions */
+  --c-brass:  #d1b252;   /* accent: live indicator, FAB, "now" ring */
+  --c-brass-hover: #c7a744;
+  --c-rubber: #c4472c;   /* danger: debt, low-sessions, no-show */
+  --c-rubber-dark: #a8381f;
+  --c-chalk:  #f7f9fb;   /* page background */
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* Neutral surface scale */
+  --c-surface-0: #f7f9fb;   /* page bg = chalk */
+  --c-surface-1: #ffffff;   /* card bg */
+  --c-surface-2: #eef2f5;   /* segmented control bg, subtle fills */
+  --c-surface-3: #e3ecf3;   /* wait-state bg, avatar mist */
+
+  /* Border */
+  --c-border:     #dfe6ec;
+  --c-border-strong: #c9d6e0;
+
+  /* Text */
+  --c-text:       #041d2c;   /* = deep, primary text */
+  --c-text-muted: #5d7181;   /* secondary / meta text */
+  --c-text-faint: #8a99a5;   /* placeholders, disabled */
+
+  /* Session status colours */
+  --c-status-done-bg:   #06314e;
+  --c-status-done-fg:   #ffffff;
+  --c-status-live-bg:   #d1b252;
+  --c-status-live-fg:   #041d2c;
+  --c-status-wait-bg:   #e3ecf3;
+  --c-status-wait-fg:   #18527e;
+  --c-status-wait-dot:  #8fb0c8;
+  --c-status-cancel-bg: #eef2f5;
+  --c-status-cancel-fg: #6b7d8a;
+  --c-status-noshow-bg: #fbeae5;
+  --c-status-noshow-fg: #a8381f;
+  --c-status-noshow-dot:#c4472c;
+
+  /* Capacity chart segments */
+  --c-seg-done:   #06314e;
+  --c-seg-live:   #d1b252;
+  --c-seg-wait:   #8fb0c8;
+  --c-seg-noshow: #c4472c;
+
+  /* Availability indicator */
+  --c-avail-bg:   #eaf3ec;
+  --c-avail-fg:   #22603a;
+  --c-avail-dot:  #2f8a52;
+
+  /* Semantic aliases (kept for backward compat with older components) */
+  --color-text:         var(--c-text);
+  --color-text-muted:   var(--c-text-muted);
+  --color-surface-0:    var(--c-surface-0);
+  --color-surface-1:    var(--c-surface-1);
+  --color-surface-2:    var(--c-surface-2);
+  --color-border:       var(--c-border);
+  --color-brand:        var(--c-ink);
+  --color-brand-hover:  var(--c-deep);
+  --color-brand-light:  var(--c-surface-3);
+  --color-brand-fg:     #ffffff;
+  --color-danger:       var(--c-rubber);
+  --color-danger-light: var(--c-status-noshow-bg);
+  --color-danger-fg:    #ffffff;
+
+  /* Typography */
+  --font-display: "Lalezar", "Vazirmatn", system-ui, sans-serif;
+  --font-ui:      "Vazirmatn", system-ui, -apple-system, sans-serif;
+  /* G8: fonts are self-hosted (see index.css @font-face). No Google Fonts import. */
+
+  /* Radii */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   18px;
+  --radius-2xl:  22px;
   --radius-full: 9999px;
-  
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* Shadows */
+  --shadow-card:     0 1px 3px 0 rgba(6,49,78,.06), 0 1px 2px -1px rgba(6,49,78,.04);
+  --shadow-floating: 0 10px 30px -5px rgba(6,49,78,.08), 0 4px 8px -2px rgba(6,49,78,.04);
+  --shadow-elevated: 0 20px 45px -10px rgba(6,49,78,.12), 0 0 1px 1px rgba(6,49,78,.02);
+
+  /* Transitions */
+  --ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* ---- Dark mode overrides ---- */
+/* G4: contrast-safe values for all tokens above */
 [data-theme="dark"] {
-  --color-text: #F8FAFC;
-  --color-text-muted: #94A3B8;
-  --color-surface-0: #0B0D10;
-  --color-surface-1: #11151A;
-  --color-surface-2: #171C22;
-  --color-border: #27313A;
-  
-  --color-brand: #2DD4BF;
-  --color-brand-hover: #14B8A6;
-  --color-brand-fg: #0F172A;
-  
-  --color-danger: #FB7185;
-  --color-danger-fg: #0F172A;
-  
-  --color-cardio: #38BDF8;
-  --color-functional: #34D399;
-  --color-strength: #A78BFA;
-}
+  --c-surface-0: #07090d;
+  --c-surface-1: #0f1318;
+  --c-surface-2: #161c24;
+  --c-surface-3: #1a2431;
 
-body {
-  background-color: var(--color-surface-0);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  margin: 0;
-  padding: 0;
-  -webkit-font-smoothing: antialiased;
-}
+  --c-border:       #222b35;
+  --c-border-strong:#2e3c4a;
 
-/* Tabular numerals for workout metrics (weights, reps, timers) */
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
-}
+  --c-text:       #f0f4f7;
+  --c-text-muted: #7d9aac;
+  --c-text-faint: #4f6273;
 
-/* Custom scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: var(--radius-full);
+  /* Brand stays recognisable but lightened */
+  --c-ink:    #3a7fb5;
+  --c-deep:   #2960a0;
+  --c-steel:  #5a9bc8;
+  --c-brass:  #d1b252;   /* brass intentionally unchanged — still readable on dark */
+  --c-rubber: #e05c40;
+
+  /* Session status — adjusted for dark bg */
+  --c-status-done-bg:   #1a3a52;
+  --c-status-done-fg:   #a8c8e0;
+  --c-status-live-bg:   #3d3010;
+  --c-status-live-fg:   #d1b252;
+  --c-status-wait-bg:   #0f1d2a;
+  --c-status-wait-fg:   #5a9bc8;
+  --c-status-cancel-bg: #141b22;
+  --c-status-cancel-fg: #4f6273;
+  --c-status-noshow-bg: #2a0f0a;
+  --c-status-noshow-fg: #e05c40;
+
+  --c-avail-bg:  #0d2014;
+  --c-avail-fg:  #5dc87a;
+  --c-avail-dot: #3ab85a;
+
+  /* Shadows deeper on dark */
+  --shadow-card:     0 1px 4px 0 rgba(0,0,0,.3);
+  --shadow-floating: 0 10px 30px -5px rgba(0,0,0,.4), 0 4px 8px -2px rgba(0,0,0,.2);
+  --shadow-elevated: 0 25px 50px -12px rgba(0,0,0,.6), 0 0 1px 1px rgba(255,255,255,.04);
+
+  /* Backward-compat aliases */
+  --color-text:         var(--c-text);
+  --color-text-muted:   var(--c-text-muted);
+  --color-surface-0:    var(--c-surface-0);
+  --color-surface-1:    var(--c-surface-1);
+  --color-surface-2:    var(--c-surface-2);
+  --color-border:       var(--c-border);
+  --color-brand:        var(--c-ink);
+  --color-brand-hover:  var(--c-deep);
+  --color-danger:       var(--c-rubber);
 }

@@ -194,3 +194,77 @@ export function formatJalaliHuman(j: JalaliDate): string {
   const monthName = PERSIAN_MONTH_NAMES[j.jm - 1];
   return `${dayOfWeek} ${j.jd} ${monthName} ${j.jy}`;
 }
+
+// Format today as human-readable — replaces hard-coded GYM.date (G7 fix)
+// Returns e.g. "سه‌شنبه ۱۴ مهر ۱۴۰۵"
+export function formatJalaliHumanToday(): string {
+  return formatJalaliHuman(getTodayJalali());
+}
+
+/**
+ * Returns the current hour (0–23) as a live value.
+ * Replaces the hard-coded GYM.now = 20 in the prototype (G7 fix).
+ */
+export function getCurrentHour(): number {
+  return new Date().getHours();
+}
+
+/**
+ * WeekDay entry used by the Sched page and the Member home week strip.
+ */
+export interface WeekDay {
+  /** Short label e.g. "شنبه" */
+  label: string;
+  /** Short label e.g. "ش" */
+  labelShort: string;
+  /** Jalali day-of-month number */
+  dayNum: number;
+  /** Jalali month number (for display) */
+  monthNum: number;
+  /** Whether this day is today */
+  isToday: boolean;
+  /** ISO-like Jalali date string "YYYY/MM/DD" — use as a unique key */
+  dateKey: string;
+}
+
+/**
+ * Returns the 7-day week (Saturday → Friday) that contains today.
+ * Replaces the hard-coded DAYS / WEEK arrays in the prototype (G7 fix).
+ *
+ * @example
+ * getCurrentWeekShamsi()
+ * // [
+ * //   { label: "شنبه",    labelShort: "ش", dayNum: 11, monthNum: 7, isToday: false, dateKey: "1405/07/11" },
+ * //   { label: "یکشنبه",  labelShort: "ی", dayNum: 12, monthNum: 7, isToday: false, dateKey: "1405/07/12" },
+ * //   { label: "دوشنبه",  labelShort: "د", dayNum: 13, monthNum: 7, isToday: false, dateKey: "1405/07/13" },
+ * //   { label: "سه‌شنبه", labelShort: "س", dayNum: 14, monthNum: 7, isToday: true,  dateKey: "1405/07/14" },
+ * //   ...
+ * // ]
+ */
+export function getCurrentWeekShamsi(): WeekDay[] {
+  const today = getTodayJalali();
+  const todayDow = getJalaliDayOfWeek(today.jy, today.jm, today.jd); // 0=Sat … 6=Fri
+
+  // Find Saturday of this week
+  const saturdayGreg = jalaliToGregorian(today.jy, today.jm, today.jd);
+  const saturdayDate = new Date(saturdayGreg.gy, saturdayGreg.gm - 1, saturdayGreg.gd);
+  saturdayDate.setDate(saturdayDate.getDate() - todayDow); // rewind to Saturday
+
+  const todayKey = formatJalali(today);
+
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(saturdayDate);
+    d.setDate(d.getDate() + i);
+    const j = gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    const dow = (i) % 7; // 0=Sat … 6=Fri since we start from Saturday
+    const dateKey = formatJalali(j);
+    return {
+      label:      PERSIAN_WEEK_DAYS[dow],
+      labelShort: PERSIAN_WEEK_DAYS_SHORT[dow],
+      dayNum:     j.jd,
+      monthNum:   j.jm,
+      isToday:    dateKey === todayKey,
+      dateKey,
+    };
+  });
+}

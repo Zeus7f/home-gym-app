@@ -1,17 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="fa" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Home Gym Multi-Tenant Platform — PRD V4.1</title>
-    <meta name="description" content="Enterprise Multi-Tenant • Segmented Coaching • Adaptive AI Coach • Responsive PWA • Supabase Native Backend" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Home Gym Platform — سامانه مدیریت باشگاه ورزشی</title>
+    <meta name="description" content="سامانه هوشمند و عملیاتی مدیریت باشگاه، مربیان، ورزشکاران و حرکات ورزشی" />
     <meta name="theme-color" content="#0D9488" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta property="og:title" content="Home Gym Multi-Tenant Platform" />
-    <meta property="og:description" content="Enterprise multi-tenant coaching and workout operations platform with Supabase native backend." />
-    <meta property="og:type" content="website" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230D9488'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='56' font-weight='bold' fill='white'>H</text></svg>" />
+    <script>
+      // Pre-hydration lang and theme setup to prevent layout/theme flash
+      try {
+        const savedLang = localStorage.getItem('hg_lang') || 'fa';
+        document.documentElement.lang = savedLang;
+        document.documentElement.dir = savedLang === 'fa' ? 'rtl' : 'ltr';
+        const savedTheme = localStorage.getItem('hg_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

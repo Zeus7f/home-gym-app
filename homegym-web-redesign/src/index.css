@@ -1,0 +1,12 @@
+@import url("https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=Lalezar&display=swap");
+html, body { background: #e6ecf0; }
+body { font-family: Vazirmatn, system-ui, sans-serif; color: #24323d; }
+button { font-family: inherit; }
+.font-display { font-family: Lalezar, Vazirmatn, sans-serif; font-weight: 400; }
+.tnum { font-variant-numeric: tabular-nums; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+.thin-scroll::-webkit-scrollbar { width: 6px; }
+.thin-scroll::-webkit-scrollbar-thumb { background: #cfd9e1; border-radius: 9px; }
+@keyframes pulse2 { 0%,100% { filter: brightness(1) } 50% { filter: brightness(1.18) } }
+.live-pulse { animation: pulse2 2.2s ease-in-out infinite; }

@@ -40,6 +40,7 @@ export interface ExerciseItem {
   bodyPart: BodyPart;
   bodyPartFa: string;
   equipment: EquipmentType;
+  equipmentName?: string;
   equipmentFa: string;
   pattern: FmsPattern;
   patternFa: string;
@@ -51,6 +52,13 @@ export interface ExerciseItem {
   defaultSets?: number;
   defaultReps?: number;
   isCustom?: boolean;
+  primaryMuscle?: string;
+  primaryMuscleFa?: string;
+  secondaryMuscles?: string[];
+  secondaryMusclesFa?: string[];
+  source?: string | null;
+  sourceType?: 'image' | 'video' | 'none';
+  videoUrl?: string | null;
 }
 
 export const BODY_PARTS: { id: BodyPart; labelEn: string; labelFa: string }[] = [
@@ -97,7 +105,9 @@ export const EXERCISE_POSITIONS: { id: ExercisePosition; labelEn: string; labelF
   { id: 'plank', labelEn: 'Plank Position', labelFa: 'وضعیت پلانک' }
 ];
 
-export const EXERCISE_CATALOG: ExerciseItem[] = [
+import { RAW_EXERCISE_CATALOG } from './catalogData';
+
+export const FMS_INITIAL_EXERCISES: ExerciseItem[] = [
   // ==========================================
   // FUNCTIONAL MOVEMENT SYSTEMS (FMS) SPECIALIZED
   // ==========================================
@@ -412,3 +422,15 @@ export const EXERCISE_CATALOG: ExerciseItem[] = [
     defaultReps: 45 // seconds
   }
 ];
+
+// Full merged catalog: All 413 CSV exercises + FMS movements for backwards compatibility
+const seenIds = new Set<string>();
+export const EXERCISE_CATALOG: ExerciseItem[] = [];
+
+for (const item of [...RAW_EXERCISE_CATALOG, ...FMS_INITIAL_EXERCISES]) {
+  if (!seenIds.has(item.id)) {
+    seenIds.add(item.id);
+    EXERCISE_CATALOG.push(item);
+  }
+}
+
