@@ -84,13 +84,14 @@ export function OwnerShell() {
         className="hidden md:flex flex-col shrink-0 lg:w-60 md:w-[84px] transition-all duration-200 select-none"
       >
         {/* برند و لوگو */}
-        <div className="lg:px-6 lg:pt-7 lg:pb-6 md:h-20 md:grid md:place-items-center">
-          <div className="hidden lg:block">
-            <div className="font-display text-[32px] leading-none text-white">
+        <div className="md:h-20 md:grid md:place-items-center lg:block lg:h-auto lg:text-start lg:px-5 lg:pt-6 lg:pb-5">
+          <div className="hidden lg:block min-w-0 overflow-hidden">
+            <div className="font-display text-[28px] leading-tight text-white font-bold">
               هوم‌جیم
             </div>
             <div
-              className="mt-1 text-[13px] truncate"
+              className="mt-1 text-[12px] truncate font-medium max-w-[190px]"
+              title={mockStore.gym.name}
               style={{ color: '#b4c8d6' }}
             >
               {mockStore.gym.name}
@@ -98,7 +99,7 @@ export function OwnerShell() {
           </div>
           <span
             style={{ color: 'var(--c-brass)' }}
-            className="lg:hidden font-display text-[30px]"
+            className="lg:hidden font-display text-[28px] font-bold"
           >
             هـ
           </span>
@@ -121,7 +122,7 @@ export function OwnerShell() {
                     : 'transparent',
                   color: isActive ? '#ffffff' : '#dbe5ec',
                 }}
-                className={`w-full flex items-center lg:gap-3 lg:px-3.5 lg:h-11 md:flex-col md:py-2.5 md:gap-1 rounded-xl text-[14px] transition-all cursor-pointer ${
+                className={`w-full flex items-center md:flex-col md:justify-center md:py-2.5 md:gap-1.5 md:h-auto lg:flex-row lg:justify-start lg:gap-3 lg:px-3.5 lg:py-0 lg:h-11 rounded-xl text-[14px] transition-all cursor-pointer ${
                   isActive
                     ? 'font-bold shadow-[inset_-3px_0_0_var(--c-brass)]'
                     : 'hover:bg-white/10'
@@ -133,8 +134,12 @@ export function OwnerShell() {
                   style={{ color: isActive ? 'var(--c-brass)' : 'currentColor' }}
                   className="shrink-0"
                 />
-                <span className="truncate hidden lg:inline">{item.label}</span>
-                <span className="text-[12px] lg:hidden">{item.shortLabel}</span>
+                <span className="hidden lg:inline-block truncate text-[13.5px] font-medium leading-none text-start flex-1">
+                  {item.label}
+                </span>
+                <span className="text-[11px] font-medium leading-none lg:hidden">
+                  {item.shortLabel}
+                </span>
               </button>
             );
           })}
