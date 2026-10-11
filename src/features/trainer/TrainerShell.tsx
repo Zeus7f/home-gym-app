@@ -36,7 +36,8 @@ const TABS: TrainerTabItem[] = [
 ];
 
 export function TrainerShell() {
-  const [activeTab, setActiveTab] = useState<TrainerTabKey>('today');
+  const queryTab = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab') as TrainerTabKey;
+  const [activeTab, setActiveTab] = useState<TrainerTabKey>(queryTab || 'today');
   const [activeSession, setActiveSession] = useState<DailySession | null>(null);
 
   const trainerName = mockStore.currentUser?.displayName || 'مربی';

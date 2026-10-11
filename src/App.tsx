@@ -77,7 +77,18 @@ function App() {
     localStorage.setItem('hg_lang', lang);
   }, [lang]);
 
-  const currentUser = mockStore.currentUser;
+  const searchParams = new URLSearchParams(location.search);
+  const previewRole = searchParams.get('preview_role');
+  const previewUser =
+    previewRole === 'owner'
+      ? mockStore.users.find(u => u.role === 'owner')
+      : previewRole === 'trainer'
+      ? mockStore.users.find(u => u.role === 'trainer')
+      : previewRole === 'member'
+      ? mockStore.users.find(u => u.role === 'member')
+      : null;
+
+  const currentUser = previewUser || mockStore.currentUser;
 
   // If not authenticated → login page
   if (!currentUser) {

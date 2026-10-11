@@ -26,7 +26,8 @@ const TABS: MemberTabItem[] = [
 ];
 
 export function MemberShell() {
-  const [activeTab, setActiveTab] = useState<MemberTabKey>('home');
+  const queryTab = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab') as MemberTabKey;
+  const [activeTab, setActiveTab] = useState<MemberTabKey>(queryTab || 'home');
   const memberName = mockStore.currentUser?.displayName || 'نیلوفر صادقی';
   const todayShamsi = formatJalaliHumanToday();
 
