@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Btn } from '../../../components/ui/Btn';
-import { fa, short, toman } from '../../../lib/format';
+import { num, short, toman } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
+import { displayName } from '../../../lib/displayName';
 import { getTrainers, recordTrainerPayout } from '../../../api/trainers';
 import { getTodaySessions } from '../../../api/sessions';
 import { Trainer, DailySession } from '../../../lib/domain/gymManagement';
@@ -11,6 +13,7 @@ export interface TrainersProps {
 }
 
 export function Trainers({ isMobile = false }: TrainersProps) {
+  const { t, isFa } = useI18n();
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [todaySessions, setTodaySessions] = useState<DailySession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +38,7 @@ export function Trainers({ isMobile = false }: TrainersProps) {
 
   const handlePayout = async (trainerId: string, owed: number) => {
     if (owed <= 0) return;
-    await recordTrainerPayout(trainerId, owed, 'card', 'تسویه حساب دستمزد');
+    await recordTrainerPayout(trainerId, owed, 'card', t.owner.trainers.title);
     const updated = await getTrainers();
     setTrainers(updated);
   };
@@ -46,23 +49,23 @@ export function Trainers({ isMobile = false }: TrainersProps) {
         className="py-12 text-center text-sm"
         style={{ color: 'var(--c-text-muted)' }}
       >
-        در حال بارگذاری لیست مربیان...
+        {t.owner.trainers.loading}
       </div>
     );
   }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {trainers.map(t => {
+      {trainers.map(trainer => {
         const mine = todaySessions.filter(
-          s => s.trainerId === t.id && s.status !== 'cancelled'
+          s => s.trainerId === trainer.id && s.status !== 'cancelled'
         );
-        const cap = t.dailyCapacity || 6;
-        const owed = Math.max(0, t.outstandingCompensation);
+        const cap = trainer.dailyCapacity || 6;
+        const owed = Math.max(0, trainer.outstandingCompensation);
 
         return (
           <div
-            key={t.id}
+            key={trainer.id}
             style={{
               backgroundColor: 'var(--c-surface-1)',
               borderColor: 'var(--c-border)',
@@ -72,19 +75,19 @@ export function Trainers({ isMobile = false }: TrainersProps) {
             <div>
               {/* هدر کارت مربی */}
               <div className="flex items-center gap-3">
-                <Avatar name={t.name} size={48} tone="ink" />
+                <Avatar name={displayName(trainer.name, isFa)} size={48} tone="ink" />
                 <div className="min-w-0">
                   <div
                     className="text-[17px] font-bold truncate"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {t.name}
+                    displayName(trainer.name, isFa)
                   </div>
                   <div
                     className="text-[13px] truncate"
                     style={{ color: 'var(--c-text-muted)' }}
                   >
-                    {t.specialty}
+                    {trainer.specialty}
                   </div>
                 </div>
               </div>
@@ -94,7 +97,8 @@ export function Trainers({ isMobile = false }: TrainersProps) {
                 className="mt-4 text-[14px]"
                 style={{ color: 'var(--c-text-muted)' }}
               >
-                امروز {fa(mine.length)} از {fa(cap)} نوبت
+                {t.owner.trainers.today} {num(mine.length)} {t.owner.trainers.of}{' '}
+                {num(cap)} {t.owner.trainers.slots}
               </div>
 
               <div className="mt-2 flex gap-1">
@@ -127,42 +131,55 @@ export function Trainers({ isMobile = false }: TrainersProps) {
                 className="mt-4 grid grid-cols-2 gap-3 text-[13px] pt-3 border-t"
               >
                 <div>
-                  <div style={{ color: 'var(--c-text-muted)' }}>ساعت کاری</div>
+                  <div style={{ color: 'var(--c-text-muted)' }}>
+                    {t.owner.trainers.workingHours}
+                  </div>
                   <div
                     className="font-semibold mt-0.5"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {t.workingHours || '۰۹:۰۰ تا ۱۵:۰۰'}
+                    {trainer.workingHours || t.owner.trainers.defaultWorkingHours}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ color: 'var(--c-text-muted)' }}>تعرفه هر جلسه</div>
+                  <div style={{ color: 'var(--c-text-muted)' }}>
+                    {t.owner.trainers.sessionRate}
+                  </div>
                   <div
                     className="font-semibold mt-0.5 tnum"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {short(t.sessionRate)} تومان
+                    {short(trainer.sessionRate)} {t.units.toman}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ color: 'var(--c-text-muted)' }}>جلسات تکمیل‌شده</div>
+                  <div style={{ color: 'var(--c-text-muted)' }}>
+                    {t.owner.trainers.completed}
+                  </div>
                   <div
                     className="font-semibold mt-0.5 tnum"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {fa(t.completedSessions)} جلسه
+                    {num(trainer.completedSessions)} {t.owner.trainers.sessions}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ color: 'var(--c-text-muted)' }}>روزهای حضور</div>
+                  <div style={{ color: 'var(--c-text-muted)' }}>
+                    {t.owner.trainers.workingDays}
+                  </div>
                   <div
                     className="font-semibold mt-0.5"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {t.workingDays ? t.workingDays.length + ' روز در هفته' : 'همه‌روزه'}
+                    {trainer.workingDays
+                      ? t.owner.trainers.perWeek.replace(
+                          '{count}',
+                          num(trainer.workingDays.length)
+                        )
+                      : t.owner.trainers.allWeek}
                   </div>
                 </div>
               </div>
@@ -178,7 +195,7 @@ export function Trainers({ isMobile = false }: TrainersProps) {
                   className="text-[13px]"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
-                  مانده طلب
+                  {t.owner.trainers.outstanding}
                 </div>
                 <div
                   style={{ color: 'var(--c-ink)' }}
@@ -190,10 +207,10 @@ export function Trainers({ isMobile = false }: TrainersProps) {
               <Btn
                 v="brass"
                 className="h-9 px-3.5 text-xs font-bold"
-                onClick={() => handlePayout(t.id, owed)}
+                onClick={() => handlePayout(trainer.id, owed)}
                 disabled={owed <= 0}
               >
-                ثبت واریز
+                {t.owner.trainers.recordPayout}
               </Btn>
             </div>
           </div>

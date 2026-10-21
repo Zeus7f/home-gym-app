@@ -1,5 +1,7 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
+import { useI18n } from '../LanguageProvider';
+import { initials } from '../../lib/displayName';
 
 export type AvatarTone = 'mist' | 'ink' | 'brass';
 
@@ -23,7 +25,8 @@ export function Avatar({
   style,
   ...props
 }: AvatarProps) {
-  const initial = name.trim().split(' ')[0]?.[0] ?? '?';
+  const { isFa } = useI18n();
+  const initial = initials(name, isFa);
 
   const toneStyle: React.CSSProperties =
     tone === 'ink'

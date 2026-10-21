@@ -4,8 +4,16 @@ import { Chips } from '../../../components/ui/Chips';
 import { Pill, SessionStatus } from '../../../components/ui/Pill';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Btn } from '../../../components/ui/Btn';
-import { fa } from '../../../lib/format';
-import { getCurrentWeekShamsi, getCurrentHour, WeekDay } from '../../../lib/date/jalali';
+import { useI18n } from '../../../components/LanguageProvider';
+import { displayName } from '../../../lib/displayName';
+import { num } from '../../../lib/format';
+import {
+  getCurrentWeekShamsi,
+  getCurrentHour,
+  PERSIAN_WEEK_DAYS_SHORT,
+  WeekDay,
+} from '../../../lib/date/jalali';
+import { PERSIAN_WEEK_DAYS_SHORT_EN as WEEK_DAYS_SHORT_EN } from '../../../lib/date/jalali';
 import { getSessions, checkInSession, completeSession } from '../../../api/sessions';
 import { DailySession } from '../../../lib/domain/gymManagement';
 
@@ -14,6 +22,7 @@ export interface SchedProps {
 }
 
 export function Sched({ isMobile = false }: SchedProps) {
+  const { t, isFa } = useI18n();
   const weekDays = getCurrentWeekShamsi();
   const [selectedDayKey, setSelectedDayKey] = useState<string>(() => {
     const today = weekDays.find(d => d.isToday);
@@ -54,7 +63,9 @@ export function Sched({ isMobile = false }: SchedProps) {
   const sessionHours: number[] = Array.from(
     new Set<number>(
       filteredSessions.map(s => {
-        const raw = s.time.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString());
+        const raw = s.time.replace(/[\u06F0-\u06F9]/g, d =>
+          String(d.charCodeAt(0) - 0x06f0)
+        );
         const parsed = parseInt(raw.split(':')[0], 10);
         return isNaN(parsed) ? 8 : parsed;
       })
@@ -83,6 +94,9 @@ export function Sched({ isMobile = false }: SchedProps) {
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
           {weekDays.map(day => {
             const isSelected = selectedDayKey === day.dateKey;
+            const dayIndex = PERSIAN_WEEK_DAYS_SHORT.indexOf(day.labelShort);
+            const dayLabel =
+              isFa || dayIndex < 0 ? day.labelShort : WEEK_DAYS_SHORT_EN[dayIndex];
             return (
               <button
                 key={day.dateKey}
@@ -100,10 +114,10 @@ export function Sched({ isMobile = false }: SchedProps) {
                 className={`h-16 ${isMobile ? 'flex-1 min-w-[46px]' : 'w-14'} rounded-xl flex flex-col items-center justify-center border transition-all cursor-pointer`}
               >
                 <span className="text-[13px] opacity-80 leading-none">
-                  {day.labelShort}
+                  {dayLabel}
                 </span>
                 <span className="text-[18px] font-bold tnum mt-1 leading-none">
-                  {fa(day.dayNum)}
+                  {num(day.dayNum)}
                 </span>
                 {day.isToday && (
                   <span
@@ -119,14 +133,15 @@ export function Sched({ isMobile = false }: SchedProps) {
         </div>
 
         {/* فیلتر وضعیت */}
-        <Chips
+        <Chips<'all' | 'wait' | 'done' | 'live'>
           value={filter}
           onChange={setFilter}
+          ariaLabel={t.owner.sched.statusFilter}
           items={[
-            ['all', 'همه'],
-            ['live', 'داخل سالن'],
-            ['wait', 'در انتظار'],
-            ['done', 'تکمیل‌شده'],
+            ['all', t.owner.sched.all],
+            ['live', t.owner.sched.inGym],
+            ['wait', t.owner.sched.waiting],
+            ['done', t.owner.sched.done],
           ]}
         />
       </div>
@@ -136,7 +151,7 @@ export function Sched({ isMobile = false }: SchedProps) {
           className="py-12 text-center text-sm"
           style={{ color: 'var(--c-text-muted)' }}
         >
-          در حال بارگذاری برنامه نوبت‌ها...
+          {t.owner.sched.loading}
         </div>
       )}
 
@@ -145,7 +160,9 @@ export function Sched({ isMobile = false }: SchedProps) {
         <div className="space-y-6">
           {sessionHours.map(hour => {
             const list = filteredSessions.filter(s => {
-              const raw = s.time.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString());
+              const raw = s.time.replace(/[\u06F0-\u06F9]/g, d =>
+                String(d.charCodeAt(0) - 0x06f0)
+              );
               const parsed = parseInt(raw.split(':')[0], 10);
               return (isNaN(parsed) ? 8 : parsed) === hour;
             });
@@ -162,7 +179,7 @@ export function Sched({ isMobile = false }: SchedProps) {
                     }}
                     className="font-display text-[24px] tnum leading-none"
                   >
-                    {fa(hour)}:۰۰
+                    {t.owner.sched.hourFormat.replace('{hour}', num(hour))}
                   </span>
                   {isCurrentNowHour && (
                     <span
@@ -172,7 +189,7 @@ export function Sched({ isMobile = false }: SchedProps) {
                       }}
                       className="h-6 px-2.5 rounded-md text-[13px] font-bold inline-flex items-center"
                     >
-                      الان
+                      {t.owner.sched.now}
                     </span>
                   )}
                   <span
@@ -183,7 +200,10 @@ export function Sched({ isMobile = false }: SchedProps) {
                     className="text-[13px] tnum"
                     style={{ color: 'var(--c-text-muted)' }}
                   >
-                    {fa(list.length)} جلسه
+                    {t.owner.sched.sessionCount.replace(
+                      '{count}',
+                      num(list.length)
+                    )}
                   </span>
                 </div>
 
@@ -217,8 +237,7 @@ export function Sched({ isMobile = false }: SchedProps) {
                         className="p-3.5 rounded-xl border flex items-center gap-3 shadow-2xs"
                       >
                         <Avatar
-                          name={s.memberName}
-                          size={40}
+                          name={displayName(s.memberName, isFa)} size={40}
                           tone={isLive ? 'brass' : isDone ? 'ink' : 'mist'}
                         />
                         <div className="flex-1 min-w-0">
@@ -230,20 +249,20 @@ export function Sched({ isMobile = false }: SchedProps) {
                             }}
                             className={`font-semibold truncate text-[15px] ${isCancel ? 'line-through' : ''}`}
                           >
-                            {s.memberName}
+                            displayName(s.memberName, isFa)
                           </div>
                           <div
                             className="text-[13px] truncate flex items-center gap-1.5"
                             style={{ color: 'var(--c-text-muted)' }}
                           >
-                            <span>{s.trainerName}</span>
+                            <span>{displayName(s.trainerName, isFa)}</span>
                             {s.isDailyOverride && (
                               <span
                                 style={{ color: 'var(--c-brass)' }}
                                 className="inline-flex items-center gap-0.5 text-xs font-semibold"
                               >
                                 <ArrowLeftRight size={12} />
-                                جابجایی امروز
+                                {t.owner.sched.dailyOverride}
                               </span>
                             )}
                           </div>
@@ -256,7 +275,7 @@ export function Sched({ isMobile = false }: SchedProps) {
                             className="h-8 px-3 text-xs"
                             onClick={() => handleCheckIn(s.id)}
                           >
-                            ثبت ورود
+                            {t.owner.sched.checkIn}
                           </Btn>
                         )}
                         {isLive && (
@@ -265,7 +284,7 @@ export function Sched({ isMobile = false }: SchedProps) {
                             className="h-8 px-3 text-xs"
                             onClick={() => handleComplete(s.id)}
                           >
-                            اتمام
+                            {t.owner.sched.finish}
                           </Btn>
                         )}
                         {(isDone || isCancel) && <Pill status={statusKey} />}
@@ -285,7 +304,7 @@ export function Sched({ isMobile = false }: SchedProps) {
               }}
               className="py-12 text-center rounded-2xl border text-sm"
             >
-              جلسه‌ای با این مشخصات برای این روز یافت نشد.
+              {t.owner.sched.empty}
             </div>
           )}
         </div>

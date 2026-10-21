@@ -10,6 +10,8 @@ export interface WorkoutSet {
 }
 
 export interface WorkoutExercise {
+  /** شناسه حرکت در کاتالوگ — برای اتصال به موتورهای تحلیلی (1RM / PR / تعادل عضلانی) */
+  exerciseId?: string;
   name: string;
   part?: string;
   last?: string;
@@ -46,6 +48,12 @@ export type SessionDraftAction =
       exercises?: WorkoutExercise[];
     };
 
+const DEFAULT_STORAGE_KEY = 'hg_session_draft_v1';
+
+/**
+ * پیش‌نویس نمایشی برای حالت «بدون جلسه» (ساخت برنامه آزاد).
+ * در حالت جلسه واقعی، پیش‌نویس از داده‌های همان جلسه مقداردهی می‌شود.
+ */
 export const INITIAL_WORKOUT_DRAFT: WorkoutExercise[] = [
   {
     name: 'پرس سینه هالتر',
@@ -58,7 +66,7 @@ export const INITIAL_WORKOUT_DRAFT: WorkoutExercise[] = [
     ],
   },
   {
-    name: 'اسکات پشت',
+    name: 'اسکوات پشت',
     part: 'پا',
     last: 'هفته قبل: ۳×۸ با ۵۵ کیلو',
     sets: [
@@ -78,7 +86,20 @@ export const INITIAL_WORKOUT_DRAFT: WorkoutExercise[] = [
   },
 ];
 
-const STORAGE_KEY = 'hg_session_draft_v1';
+/**
+ * تعیین پیش‌نویس اولیه:
+ *  - با sessionId: داده‌های واقعی همان جلسه (اگر جلسه خالی باشد، لیست خالی — نه داده نمایشی)
+ *  - بدون sessionId: پیش‌نویس نمایشی برای ساخت برنامه آزاد
+ */
+function resolveInitialExercises(
+  sessionId: string | undefined,
+  initialData?: WorkoutExercise[]
+): WorkoutExercise[] {
+  if (sessionId) {
+    return initialData ?? [];
+  }
+  return initialData ?? INITIAL_WORKOUT_DRAFT;
+}
 
 export function sessionDraftReducer(
   state: WorkoutExercise[],
@@ -153,7 +174,8 @@ export function sessionDraftReducer(
     }
 
     case 'RESET': {
-      return action.exercises || INITIAL_WORKOUT_DRAFT;
+      // آرایه خالی عمداً حفظ می‌شود (جلسه واقعی بدون حرکت ≠ داده نمایشی)
+      return action.exercises ?? INITIAL_WORKOUT_DRAFT;
     }
 
     default:
@@ -163,12 +185,14 @@ export function sessionDraftReducer(
 
 /**
  * هوک مدیریت پیش‌نویس جلسه مربی (useSessionDraft)
- * به همراه پشتیبانی ذخیره خودکار در localStorage جهت پایداری آفلاین (G9)
+ * به همراه پشتیبانی ذخیره خودکار در localStorage به تفکیک جلسه (P0 Bug Fix)
  */
-export function useSessionDraft(initialData?: WorkoutExercise[]) {
+export function useSessionDraft(sessionId?: string, initialData?: WorkoutExercise[]) {
+  const storageKey = sessionId ? `hg_session_draft_${sessionId}` : DEFAULT_STORAGE_KEY;
+
   const [exercises, dispatch] = useReducer(sessionDraftReducer, null, () => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -176,17 +200,17 @@ export function useSessionDraft(initialData?: WorkoutExercise[]) {
     } catch {
       // استفاده از داده‌های پیش‌فرض در صورت خطای خواندن کش
     }
-    return initialData || INITIAL_WORKOUT_DRAFT;
+    return resolveInitialExercises(sessionId, initialData);
   });
 
-  // ذخیره پیش‌نویس در لوکال استوریج برای قابلیت آفلاین
+  // ذخیره پیش‌نویس در لوکال استوریج به تفکیک شناسه جلسه
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(exercises));
+      localStorage.setItem(storageKey, JSON.stringify(exercises));
     } catch {
       // نادیده‌گرفتن خطای سهمیه ذخیره‌سازی
     }
-  }, [exercises]);
+  }, [exercises, storageKey]);
 
   const totalSets = exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
   const doneSets = exercises.reduce(
@@ -220,8 +244,12 @@ export function useSessionDraft(initialData?: WorkoutExercise[]) {
   };
 
   const clearDraft = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    dispatch({ type: 'RESET', exercises: INITIAL_WORKOUT_DRAFT });
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      // ignore
+    }
+    dispatch({ type: 'RESET', exercises: resolveInitialExercises(sessionId, initialData) });
   };
 
   return {

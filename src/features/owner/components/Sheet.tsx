@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useI18n } from '../../../components/LanguageProvider';
 import { cn } from '../../../lib/utils';
 
 export interface SheetProps {
@@ -23,6 +24,8 @@ export function Sheet({
   children,
   className,
 }: SheetProps) {
+  const { t, isFa } = useI18n();
+
   // بستن با Escape
   useEffect(() => {
     if (!open) return;
@@ -36,7 +39,7 @@ export function Sheet({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 overflow-hidden" dir="rtl">
+        <div className="fixed inset-0 z-50 overflow-hidden" dir={isFa ? 'rtl' : 'ltr'}>
           {/* پس‌زمینه نیمه‌شفاف */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -66,6 +69,7 @@ export function Sheet({
             )}
             role="dialog"
             aria-modal="true"
+            aria-label={t.owner.sheet.panel}
           >
             {isMobile && (
               <div

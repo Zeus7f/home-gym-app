@@ -6,7 +6,9 @@ import { Btn } from '../../../components/ui/Btn';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Capacity } from '../../../components/ui/Capacity';
 import { MemberData } from '../components/MemberSheet';
-import { fa, short, toman } from '../../../lib/format';
+import { num, short, toman } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
+import { displayName } from '../../../lib/displayName';
 import { getTodaySessions, completeSession, checkInSession } from '../../../api/sessions';
 import { getMembers } from '../../../api/members';
 import { getTrainers } from '../../../api/trainers';
@@ -19,6 +21,7 @@ export interface DashProps {
 }
 
 export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) {
+  const { t, isFa } = useI18n();
   const [sessions, setSessions] = useState<DailySession[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -77,7 +80,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
       className="p-5 rounded-2xl border shadow-xs"
     >
       <H
-        sub={`${fa(live.length)} نفر الان داخل سالن · ${fa(next.length)} نفر بعدی`}
+        sub={`${num(live.length)} ${t.owner.dash.inGymNow} · ${num(next.length)} ${t.owner.dash.nextUp}`}
         action={
           <button
             type="button"
@@ -85,11 +88,11 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
             style={{ color: 'var(--c-steel)' }}
             className="text-[14px] font-semibold hover:underline cursor-pointer"
           >
-            کل برنامه
+            {t.owner.dash.fullSchedule}
           </button>
         }
       >
-        الان و بعدی
+        {t.owner.dash.nowAndNext}
       </H>
 
       <div className="mt-3">
@@ -113,20 +116,20 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                   className="font-semibold truncate"
                   style={{ color: 'var(--c-deep)' }}
                 >
-                  {s.memberName}
+                  displayName(s.memberName, isFa)
                 </div>
                 <div
                   className="text-[14px] truncate"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
-                  {s.time} · {s.trainerName}
+                  {s.time} · {displayName(s.trainerName, isFa)}
                   {s.isDailyOverride && (
                     <span
                       style={{ color: 'var(--c-brass)' }}
                       className="inline-flex items-center gap-1 font-medium ms-1"
                     >
                       <ArrowLeftRight size={13} />
-                      جابجایی امروز
+                      {t.owner.dash.dailyOverride}
                     </span>
                   )}
                 </div>
@@ -137,7 +140,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                   className="h-9 px-3 text-xs"
                   onClick={() => handleComplete(s.id)}
                 >
-                  اتمام جلسه
+                  {t.owner.dash.completeSession}
                 </Btn>
               ) : (
                 <Btn
@@ -145,7 +148,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                   className="h-9 px-3 text-xs"
                   onClick={() => handleCheckIn(s.id)}
                 >
-                  ثبت ورود
+                  {t.owner.dash.checkIn}
                 </Btn>
               )}
             </div>
@@ -157,7 +160,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
             className="py-6 text-center text-[14px]"
             style={{ color: 'var(--c-text-faint)' }}
           >
-            جلسه فعال یا در انتظاری برای این ساعت ثبت نشده است.
+            {t.owner.dash.noSlotAtHour}
           </div>
         )}
       </div>
@@ -181,32 +184,32 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
             style={{ color: 'var(--c-steel)' }}
             className="text-[14px] font-semibold hover:underline cursor-pointer"
           >
-            مربیان
+            {t.owner.dash.trainers}
           </button>
         }
       >
-        بار مربیان امروز
+        {t.owner.dash.trainerLoadTitle}
       </H>
 
       <div className="mt-4 space-y-4">
-        {trainers.map(t => {
+        {trainers.map(trainer => {
           const trainerSessions = sessions.filter(
-            s => s.trainerId === t.id && s.status !== 'cancelled'
+            s => s.trainerId === trainer.id && s.status !== 'cancelled'
           );
-          const cap = t.dailyCapacity || 6;
+          const cap = trainer.dailyCapacity || 6;
           const pct = Math.min(1, trainerSessions.length / cap);
           const full = trainerSessions.length >= cap;
 
           return (
-            <div key={t.id} className="flex items-center gap-3">
-              <Avatar name={t.name} size={36} tone="mist" />
+            <div key={trainer.id} className="flex items-center gap-3">
+              <Avatar name={displayName(trainer.name, isFa)} size={36} tone="mist" />
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between text-[14px]">
                   <span
                     className="font-semibold truncate"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {t.name}
+                    displayName(trainer.name, isFa)
                   </span>
                   <span
                     style={{
@@ -214,7 +217,12 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                     }}
                     className={`tnum ${full ? 'font-bold' : ''}`}
                   >
-                    {full ? 'تکمیل' : `${fa(cap - trainerSessions.length)} جای خالی`}
+                    {full
+                      ? t.owner.dash.completed
+                      : t.owner.dash.freeSlots.replace(
+                          '{count}',
+                          num(cap - trainerSessions.length)
+                        )}
                   </span>
                 </div>
                 <div
@@ -248,7 +256,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
       }}
       className="p-5 rounded-2xl border shadow-xs"
     >
-      <H sub="۲ جلسه یا کمتر مانده">بسته‌های رو به اتمام</H>
+      <H sub={t.owner.dash.lowPackagesSub}>{t.owner.dash.lowPackagesTitle}</H>
       <div className="mt-2 divide-y divide-rose-200/60 dark:divide-rose-900/40">
         {lowMembers.slice(0, 4).map(m => (
           <button
@@ -275,14 +283,14 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                 className="font-semibold text-[15px]"
                 style={{ color: 'var(--c-deep)' }}
               >
-                {m.name}
+                displayName(m.name, isFa)
               </div>
               {m.outstandingBalance > 0 && (
                 <div
                   className="text-[13px] font-medium"
                   style={{ color: 'var(--c-rubber)' }}
                 >
-                  بدهی {toman(m.outstandingBalance)}
+                  {t.owner.dash.debt} {toman(m.outstandingBalance)}
                 </div>
               )}
             </div>
@@ -290,8 +298,10 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
               style={{ color: 'var(--c-rubber)' }}
               className="font-display text-[26px] leading-none tnum"
             >
-              {fa(m.remainingSessions)}
-              <span className="font-sans text-[13px] ms-1">جلسه</span>
+              {num(m.remainingSessions)}
+              <span className="font-sans text-[13px] ms-1">
+                {t.owner.dash.session}
+              </span>
             </span>
           </button>
         ))}
@@ -301,7 +311,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
             className="py-4 text-center text-sm"
             style={{ color: 'var(--c-text-muted)' }}
           >
-            هیچ ورزشکاری در آستانه اتمام جلسه نیست.
+            {t.owner.dash.noLowMembers}
           </div>
         )}
       </div>
@@ -309,7 +319,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
       {lowMembers.length > 0 && (
         <Btn v="danger" className="mt-3 w-full gap-2">
           <MessageSquare size={16} />
-          پیامک یادآوری تمدید
+          {t.owner.dash.renewSms}
         </Btn>
       )}
     </section>
@@ -327,7 +337,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
       <div className="grid grid-cols-2 gap-4">
         <div>
           <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-            دریافتی امروز
+            {t.owner.dash.collectedToday}
           </div>
           <div
             style={{ color: 'var(--c-ink)' }}
@@ -338,7 +348,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
         </div>
         <div>
           <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-            مطالبات از اعضا
+            {t.owner.dash.receivables}
           </div>
           <div
             style={{ color: 'var(--c-rubber)' }}
@@ -354,7 +364,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
         style={{ color: 'var(--c-steel)' }}
         className="mt-3 text-[14px] font-semibold hover:underline cursor-pointer block"
       >
-        مالی و پرداخت‌ها ←
+        {t.owner.dash.financeCta} ←
       </button>
     </section>
   );
@@ -365,7 +375,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
         className="py-16 text-center text-sm"
         style={{ color: 'var(--c-text-muted)' }}
       >
-        در حال بارگذاری داشبورد...
+        {t.owner.dash.loading}
       </div>
     );
   }
@@ -376,7 +386,12 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
       {isMobile ? (
         <div className="space-y-4">
           <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 py-1">
-            {['+ عضو جدید', 'ثبت پرداخت', 'ثبت ورود سریع', 'واریز مربی'].map(x => (
+            {[
+              `+ ${t.owner.dash.quickMember}`,
+              t.owner.dash.quickPayment,
+              t.owner.dash.quickCheckIn,
+              t.owner.dash.quickPayout,
+            ].map(x => (
               <Btn key={x} v="soft" className="shrink-0 text-xs h-9">
                 {x}
               </Btn>

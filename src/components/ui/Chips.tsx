@@ -16,14 +16,14 @@ export interface ChipsProps<T extends string = string> {
  * Chips — ردیف چیپ‌های فیلتر با قابلیت اسکرول افقی روان.
  *
  * G3: بدون هگز مستقیم — متصل به سیستم توکن‌های طراحی
- * G5: مجهز به نقش‌های معنایی رادیویی جهت دستیابی آسان با کیبورد و اسکرین‌ریدر
+ * G5: مجهز به نقش‌های معنایی رادیویی جهت دسترسی‌پذیری با صفحه‌کلید و صفحه‌خوان
  */
 export function Chips<T extends string = string>({
   items,
   value,
   onChange,
   className,
-  ariaLabel = 'فیلترها',
+  ariaLabel,
 }: ChipsProps<T>) {
   return (
     <div

@@ -3,7 +3,9 @@ import { Plus, Minus } from 'lucide-react';
 import { Seg } from '../../../components/ui/Seg';
 import { Btn } from '../../../components/ui/Btn';
 import { Avatar } from '../../../components/ui/Avatar';
-import { fa } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
+import { displayName } from '../../../lib/displayName';
+import { num } from '../../../lib/format';
 import { getGym } from '../../../api/gym';
 import { getTrainers } from '../../../api/trainers';
 import { Gym, Trainer } from '../../../lib/domain/gymManagement';
@@ -13,15 +15,12 @@ export interface SettingsProps {
 }
 
 export function Settings({ isMobile = false }: SettingsProps) {
+  const { t, lang, setLang, isFa } = useI18n();
   const [gym, setGym] = useState<Gym | null>(null);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [capacity, setCapacity] = useState(30);
   const [hourlyCapacity, setHourlyCapacity] = useState(6);
   const [noShowDeducts, setNoShowDeducts] = useState(true);
-
-  const [lang, setLang] = useState<'fa' | 'en'>(() => {
-    return (localStorage.getItem('hg_lang') as 'fa' | 'en') || 'fa';
-  });
 
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
     return (localStorage.getItem('hg_theme') as 'light' | 'dark' | 'system') || 'system';
@@ -56,9 +55,6 @@ export function Settings({ isMobile = false }: SettingsProps) {
 
   const handleLangChange = (newLang: 'fa' | 'en') => {
     setLang(newLang);
-    localStorage.setItem('hg_lang', newLang);
-    document.documentElement.lang = newLang;
-    document.documentElement.dir = newLang === 'fa' ? 'rtl' : 'ltr';
   };
 
   const Row = ({
@@ -110,10 +106,13 @@ export function Settings({ isMobile = false }: SettingsProps) {
           className="text-[13px] font-bold uppercase tracking-wider mb-2"
           style={{ color: 'var(--c-brass)' }}
         >
-          مشخصات و ظرفیت سالن
+          {t.owner.settings.gymSub}
         </div>
 
-        <Row label="نام باشگاه" subtitle="عنوان نمایش‌داده‌شده در سربرگ">
+        <Row
+          label={t.owner.settings.gymName}
+          subtitle={t.owner.settings.displayHint}
+        >
           <div
             style={{
               backgroundColor: 'var(--c-surface-2)',
@@ -121,11 +120,14 @@ export function Settings({ isMobile = false }: SettingsProps) {
             }}
             className="h-10 px-4 rounded-xl border flex items-center min-w-[220px] text-[14px] font-bold"
           >
-            {gym?.name || 'باشگاه آیرون هیون (Iron Haven)'}
+            {gym?.name || t.owner.settings.gymNamePlaceholder}
           </div>
         </Row>
 
-        <Row label="حداکثر ظرفیت روزانه" subtitle="سقف پذیرش ورزشکار در هر روز">
+        <Row
+          label={t.owner.settings.maxDailyCapacity}
+          subtitle={t.owner.settings.maxDailyCapacityHint}
+        >
           <div className="flex items-center gap-2">
             <Btn
               v="soft"
@@ -138,7 +140,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
               style={{ color: 'var(--c-deep)' }}
               className="w-12 text-center font-bold text-[18px] tnum"
             >
-              {fa(capacity)}
+              {num(capacity)}
             </span>
             <Btn
               v="soft"
@@ -150,7 +152,10 @@ export function Settings({ isMobile = false }: SettingsProps) {
           </div>
         </Row>
 
-        <Row label="ظرفیت همزمان هر ساعت" subtitle="تعداد نوبت‌های مجاز در یک سانس">
+        <Row
+          label={t.owner.settings.slotsPerHour}
+          subtitle={t.owner.settings.slotsPerHourHint}
+        >
           <div className="flex items-center gap-2">
             <Btn
               v="soft"
@@ -163,7 +168,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
               style={{ color: 'var(--c-deep)' }}
               className="w-12 text-center font-bold text-[18px] tnum"
             >
-              {fa(hourlyCapacity)}
+              {num(hourlyCapacity)}
             </span>
             <Btn
               v="soft"
@@ -188,12 +193,12 @@ export function Settings({ isMobile = false }: SettingsProps) {
           className="text-[13px] font-bold uppercase tracking-wider mb-2"
           style={{ color: 'var(--c-brass)' }}
         >
-          قوانین حضور و جلسات
+          {t.owner.settings.rulesSub}
         </div>
 
         <Row
-          label="کسر جلسه در صورت غیبت (No-Show)"
-          subtitle="اگر ورزشکار بدون هماهنگی قبلی حاضر نشود"
+          label={t.owner.settings.noShowDeduct}
+          subtitle={t.owner.settings.noShowHint}
         >
           <button
             type="button"
@@ -204,7 +209,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
                 : 'var(--c-border-strong)',
             }}
             className="relative h-7 w-12 rounded-full transition-colors duration-200 cursor-pointer select-none"
-            aria-label="سیاست غیبت"
+            aria-label={t.owner.settings.noShowPolicyAria}
           >
             <span
               className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all shadow-xs ${
@@ -215,8 +220,8 @@ export function Settings({ isMobile = false }: SettingsProps) {
         </Row>
 
         <Row
-          label="آستانه هشدار تمدید بسته"
-          subtitle="نمایش هشدار رنگی به محض رسیدن به این تعداد"
+          label={t.owner.settings.lowBalanceThreshold}
+          subtitle={t.owner.settings.lowBalanceHint}
         >
           <span
             style={{
@@ -225,7 +230,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
             }}
             className="h-9 px-4 rounded-xl font-bold text-sm inline-flex items-center"
           >
-            ۲ جلسه مانده
+            {t.owner.settings.lowBalanceExample}
           </span>
         </Row>
       </section>
@@ -242,28 +247,36 @@ export function Settings({ isMobile = false }: SettingsProps) {
           className="text-[13px] font-bold uppercase tracking-wider mb-2"
           style={{ color: 'var(--c-brass)' }}
         >
-          شخصی‌سازی ظاهر
+          {t.owner.settings.appearanceSub}
         </div>
 
-        <Row label="زبان سامانه" subtitle="جهت نمایش متون و ارقام">
+        <Row
+          label={t.owner.settings.language}
+          subtitle={t.owner.settings.languageHint}
+        >
           <Seg
             value={lang}
             onChange={v => handleLangChange(v as 'fa' | 'en')}
+            ariaLabel={t.owner.settings.language}
             items={[
-              ['fa', 'فارسی (RTL)'],
-              ['en', 'English'],
+              ['fa', t.owner.settings.persian],
+              ['en', t.owner.settings.english],
             ]}
           />
         </Row>
 
-        <Row label="پوسته نمایشی" subtitle="پشتیبانی از حالت تیره واقعی (G4)">
+        <Row
+          label={t.owner.settings.theme}
+          subtitle={t.owner.settings.themeHint}
+        >
           <Seg
             value={theme}
             onChange={v => handleThemeChange(v as 'light' | 'dark' | 'system')}
+            ariaLabel={t.owner.settings.theme}
             items={[
-              ['light', 'روشن'],
-              ['dark', 'تیره'],
-              ['system', 'خودکار'],
+              ['light', t.owner.settings.light],
+              ['dark', t.owner.settings.dark],
+              ['system', t.owner.settings.auto],
             ]}
           />
         </Row>
@@ -281,25 +294,25 @@ export function Settings({ isMobile = false }: SettingsProps) {
           className="text-[13px] font-bold uppercase tracking-wider mb-2"
           style={{ color: 'var(--c-brass)' }}
         >
-          مربیان و دسترسی‌ها
+          {t.owner.settings.trainersAccess}
         </div>
 
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
-          {trainers.map(t => (
-            <div key={t.id} className="py-3 flex items-center gap-3">
-              <Avatar name={t.name} size={36} tone="ink" />
+          {trainers.map(trainer => (
+            <div key={trainer.id} className="py-3 flex items-center gap-3">
+              <Avatar name={displayName(trainer.name, isFa)} size={36} tone="ink" />
               <div className="flex-1 min-w-0">
                 <div
                   className="font-bold text-[14px]"
                   style={{ color: 'var(--c-deep)' }}
                 >
-                  {t.name}
+                  displayName(trainer.name, isFa)
                 </div>
                 <div
                   className="text-[12px]"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
-                  {t.specialty}
+                  {trainer.specialty}
                 </div>
               </div>
               <span
@@ -309,7 +322,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
                 }}
                 className="text-xs px-2.5 py-1 rounded-md font-medium"
               >
-                مربی
+                {t.owner.members.trainer}
               </span>
             </div>
           ))}
@@ -318,7 +331,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
         <div className="pt-3">
           <Btn v="ghost" className="text-xs gap-1.5 w-full sm:w-auto">
             <Plus size={15} />
-            دعوت مربی جدید
+            {t.owner.settings.inviteTrainer}
           </Btn>
         </div>
       </section>

@@ -3,7 +3,9 @@ import { H } from '../../../components/ui/H';
 import { Seg } from '../../../components/ui/Seg';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Btn } from '../../../components/ui/Btn';
-import { fa, short, toman } from '../../../lib/format';
+import { short } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
+import { displayName } from '../../../lib/displayName';
 import { getMembers, getPaymentRecords } from '../../../api/members';
 import { getTrainers } from '../../../api/trainers';
 import { Member, PaymentRecord, Trainer } from '../../../lib/domain/gymManagement';
@@ -13,6 +15,7 @@ export interface FinanceProps {
 }
 
 export function Finance({ isMobile = false }: FinanceProps) {
+  const { t, isFa } = useI18n();
   const [tab, setTab] = useState<'debt' | 'led'>('debt');
   const [members, setMembers] = useState<Member[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -49,17 +52,17 @@ export function Finance({ isMobile = false }: FinanceProps) {
 
   const stats = [
     {
-      label: 'مجموع دریافتی',
+      label: t.owner.finance.collected,
       val: totalReceived || 29100000,
       color: 'var(--c-ink)',
     },
     {
-      label: 'مطالبات از اعضا',
+      label: t.owner.finance.receivables,
       val: totalReceivables,
       color: 'var(--c-rubber)',
     },
     {
-      label: 'بدهی به مربیان',
+      label: t.owner.finance.owedToTrainers,
       val: totalTrainerDebt,
       color: 'var(--c-brass)',
     },
@@ -74,7 +77,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
       }}
       className="p-5 rounded-2xl border shadow-xs"
     >
-      <H sub="بیشترین بدهی بالاتر">بدهکاران باشگاه</H>
+      <H sub={t.owner.finance.debtorsSub}>{t.owner.finance.debtorsTitle}</H>
       <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
         {debtors
           .sort((a, b) => b.outstandingBalance - a.outstandingBalance)
@@ -86,13 +89,13 @@ export function Finance({ isMobile = false }: FinanceProps) {
                 key={m.id}
                 className="flex items-center gap-3 py-3 border-b last:border-0"
               >
-                <Avatar name={m.name} size={36} tone="mist" />
+                <Avatar name={displayName(m.name, isFa)} size={36} tone="mist" />
                 <div className="flex-1 min-w-0">
                   <div
                     className="font-bold text-[14px]"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {m.name}
+                    displayName(m.name, isFa)
                   </div>
                   <div
                     style={{ backgroundColor: 'var(--c-surface-2)' }}
@@ -117,7 +120,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
 
                 {!isMobile && (
                   <Btn v="ghost" className="h-8 px-3 text-xs">
-                    ثبت دریافت
+                    {t.owner.finance.recordPayment}
                   </Btn>
                 )}
               </div>
@@ -129,7 +132,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
             className="py-6 text-center text-sm"
             style={{ color: 'var(--c-text-muted)' }}
           >
-            هیچ بدهی معوقه‌ای از اعضا وجود ندارد.
+            {t.owner.finance.noDebt}
           </div>
         )}
       </div>
@@ -145,7 +148,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
       }}
       className="p-5 rounded-2xl border shadow-xs"
     >
-      <H>آخرین تراکنش‌های ثبت‌شده</H>
+      <H>{t.owner.finance.lastTransactions}</H>
       <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
         {payments.slice(0, 8).map((p, i) => (
           <div key={p.id || i} className="flex items-center gap-3 py-3">
@@ -163,20 +166,25 @@ export function Finance({ isMobile = false }: FinanceProps) {
                 className="font-bold text-[14px] truncate"
                 style={{ color: 'var(--c-deep)' }}
               >
-                {p.memberName}
+                displayName(p.memberName, isFa)
               </div>
               <div
                 className="text-[13px] truncate"
                 style={{ color: 'var(--c-text-muted)' }}
               >
-                {p.date} · {p.method === 'card' ? 'کارت‌خوان' : p.method === 'cash' ? 'نقدی' : 'انتقال بانکی'}
+                {p.date} ·{' '}
+                {p.method === 'card'
+                  ? t.owner.finance.card
+                  : p.method === 'cash'
+                    ? t.owner.finance.cash
+                    : t.owner.finance.transfer}
               </div>
             </div>
             <span
               style={{ color: 'var(--c-avail-fg)' }}
               className="tnum font-bold text-[15px]"
             >
-              +{short(p.amount)} تومان
+              +{short(p.amount)} {t.owner.finance.toman}
             </span>
           </div>
         ))}
@@ -186,7 +194,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
             className="py-6 text-center text-sm"
             style={{ color: 'var(--c-text-muted)' }}
           >
-            هنوز تراکنشی ثبت نشده است.
+            {t.owner.finance.empty}
           </div>
         )}
       </div>
@@ -199,7 +207,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
         className="py-12 text-center text-sm"
         style={{ color: 'var(--c-text-muted)' }}
       >
-        در حال بارگذاری اطلاعات مالی...
+        {t.owner.finance.loading}
       </div>
     );
   }
@@ -226,7 +234,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
             >
               {short(s.val)}
               <span className="text-[15px] font-sans font-normal ms-1" style={{ color: 'var(--c-text-muted)' }}>
-                تومان
+                {t.owner.finance.toman}
               </span>
             </div>
           </div>
@@ -241,8 +249,8 @@ export function Finance({ isMobile = false }: FinanceProps) {
             value={tab}
             onChange={v => setTab(v as 'debt' | 'led')}
             items={[
-              ['debt', 'بدهکاران'],
-              ['led', 'تراکنش‌ها'],
+              ['debt', t.owner.finance.debtorsTab],
+              ['led', t.owner.finance.ledgerTab],
             ]}
           />
           {tab === 'debt' ? DebtorsCard : LedgerCard}

@@ -202,6 +202,102 @@ export function formatJalaliHumanToday(): string {
 }
 
 /**
+ * Returns the current date as a sortable numeric key (e.g. 14050704).
+ * Used for chronological ordering of records that may use the 'Today' sentinel.
+ */
+export function getTodayJalaliKey(): number {
+  const t = getTodayJalali();
+  return t.jy * 10000 + t.jm * 100 + t.jd;
+}
+
+/** نام ماه‌های جلالی به لاتین — برای نمایش در حالت انگلیسی */
+export const PERSIAN_MONTH_NAMES_EN = [
+  'Farvardin',
+  'Ordibehesht',
+  'Khordad',
+  'Tir',
+  'Mordad',
+  'Shahrivar',
+  'Mehr',
+  'Aban',
+  'Azar',
+  'Dey',
+  'Bahman',
+  'Esfand',
+];
+
+/** نام‌های کوتاه روزهای هفته به لاتین — شنبه تا جمعه */
+export const PERSIAN_WEEK_DAYS_SHORT_EN = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+/** نام‌های کامل روزهای هفته به لاتین — شنبه تا جمعه */
+export const PERSIAN_WEEK_DAYS_EN = [
+  'Saturday',
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+];
+
+/**
+ * قالب‌بندی تاریخ جلالی برای نمایش در رابط کاربری.
+ * - 'Today' → «امروز»
+ * - 'YYYY/MM/DD' → «شنبه ۱۶ مهر»
+ *
+ * @example
+ * formatJalaliDisplay('1405/07/16')  // "پنج‌شنبه ۱۶ مهر"
+ */
+export function formatJalaliDisplay(dateStr: string): string {
+  if (!dateStr) return '';
+  if (dateStr === 'Today') return 'امروز';
+
+  const parsed = parseJalali(dateStr);
+  if (!parsed) return dateStr;
+
+  const dayOfWeek = PERSIAN_WEEK_DAYS[getJalaliDayOfWeek(parsed.jy, parsed.jm, parsed.jd)];
+  const monthName = PERSIAN_MONTH_NAMES[parsed.jm - 1];
+  return `${dayOfWeek} ${parsed.jd} ${monthName}`;
+}
+
+/**
+ * همان قالب‌بندی اما با نام‌های لاتین — برای حالت انگلیسی رابط کاربری.
+ *
+ * @example
+ * formatJalaliDisplayEn('1405/07/16')  // "Thursday 16 Mehr"
+ */
+export function formatJalaliDisplayEn(dateStr: string): string {
+  if (!dateStr) return '';
+  if (dateStr === 'Today') return 'Today';
+
+  const parsed = parseJalali(dateStr);
+  if (!parsed) return dateStr;
+
+  const dayOfWeek = PERSIAN_WEEK_DAYS_EN[getJalaliDayOfWeek(parsed.jy, parsed.jm, parsed.jd)];
+  const monthName = PERSIAN_MONTH_NAMES_EN[parsed.jm - 1];
+  return `${dayOfWeek} ${parsed.jd} ${monthName}`;
+}
+
+/**
+ * قالب‌بندی تاریخ جلالی با زبان فعال رابط کاربری.
+ */
+export function formatJalaliLocalized(dateStr: string, isFa: boolean): string {
+  return isFa ? formatJalaliDisplay(dateStr) : formatJalaliDisplayEn(dateStr);
+}
+
+/**
+ * تاریخ امروز به فرم خوانا — «سه‌شنبه ۲۸ مهر ۱۴۰۵» یا «Tuesday 28 Mehr 1405»
+ */
+export function formatJalaliHumanTodayLocalized(isFa: boolean): string {
+  const today = getTodayJalali();
+  if (isFa) return formatJalaliHuman(today);
+
+  const dayOfWeek = PERSIAN_WEEK_DAYS_EN[getJalaliDayOfWeek(today.jy, today.jm, today.jd)];
+  const monthName = PERSIAN_MONTH_NAMES_EN[today.jm - 1];
+  return `${dayOfWeek} ${today.jd} ${monthName} ${today.jy}`;
+}
+
+/**
  * Returns the current hour (0–23) as a live value.
  * Replaces the hard-coded GYM.now = 20 in the prototype (G7 fix).
  */
@@ -230,7 +326,6 @@ export interface WeekDay {
 /**
  * Returns the 7-day week (Saturday → Friday) that contains today.
  * Replaces the hard-coded DAYS / WEEK arrays in the prototype (G7 fix).
- *
  * @example
  * getCurrentWeekShamsi()
  * // [

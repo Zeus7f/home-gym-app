@@ -4,12 +4,14 @@ import { Sheet } from './Sheet';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Meter } from '../../../components/ui/Meter';
 import { Btn } from '../../../components/ui/Btn';
-import { fa, toman } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
+import { num, toman } from '../../../lib/format';
 
 export interface MemberData {
   id: string;
   name?: string;
-  m?: string; // برای سازگاری با پروتوتایپ
+  // برای سازگاری با پروتوتایپ
+  m?: string;
   phone?: string;
   ph?: string;
   packageName?: string;
@@ -40,18 +42,23 @@ export function MemberSheet({
   onClose,
   isMobile = false,
 }: MemberSheetProps) {
+  const { t } = useI18n();
   if (!member) return null;
 
-  const name = member.name || member.m || 'ورزشکار';
+  const name = member.name || member.m || t.owner.memberSheet.athlete;
   const phone = member.phone || member.ph || '—';
-  const pkg = member.packageName || member.pkg || 'بسته جلسات';
+  const pkg = member.packageName || member.pkg || t.owner.memberSheet.package;
   const total = member.totalSessions ?? member.total ?? 12;
   const used = member.usedSessions ?? member.used ?? 0;
   const remaining = Math.max(0, total - used);
   const price = member.packagePrice ?? member.price ?? 0;
   const paid = member.paidAmount ?? member.paid ?? 0;
   const debt = Math.max(0, price - paid);
-  const trainer = member.trainerName || member.defaultTrainerName || member.tr || 'نامشخص';
+  const trainer =
+    member.trainerName ||
+    member.defaultTrainerName ||
+    member.tr ||
+    t.owner.memberSheet.unknown;
   const exp = member.expirationDate || member.exp || '—';
 
   return (
@@ -78,7 +85,7 @@ export function MemberSheet({
             type="button"
             onClick={onClose}
             className="h-9 w-9 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 grid place-items-center transition-colors"
-            aria-label="بستن پنجره"
+            aria-label={t.owner.memberSheet.close}
           >
             <X size={20} />
           </button>
@@ -95,7 +102,7 @@ export function MemberSheet({
                 {pkg}
               </div>
               <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-                انقضا: {exp}
+                {t.owner.memberSheet.expires}: {exp}
               </div>
             </div>
             <div
@@ -104,9 +111,9 @@ export function MemberSheet({
               }}
               className="font-display text-[44px] leading-none tnum"
             >
-              {fa(remaining)}
+              {num(remaining)}
               <span className="text-[18px]" style={{ color: 'var(--c-text-faint)' }}>
-                {' '}/ {fa(total)}
+                {' '}/ {num(total)}
               </span>
             </div>
           </div>
@@ -122,7 +129,7 @@ export function MemberSheet({
             className="rounded-xl border p-3"
           >
             <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-              مربی پیش‌فرض
+              {t.owner.memberSheet.defaultTrainer}
             </div>
             <div className="font-bold mt-0.5" style={{ color: 'var(--c-deep)' }}>
               {trainer}
@@ -137,7 +144,7 @@ export function MemberSheet({
             className="rounded-xl border p-3"
           >
             <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-              بدهی
+              {t.owner.memberSheet.debt}
             </div>
             <div
               style={{
@@ -145,39 +152,35 @@ export function MemberSheet({
               }}
               className="font-bold tnum mt-0.5"
             >
-              {debt > 0 ? toman(debt) : 'تسویه'}
+              {debt > 0 ? toman(debt) : t.owner.memberSheet.settled}
             </div>
           </div>
         </div>
 
         {/* دکمه‌های عملیات */}
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <Btn v="primary">ثبت دریافت وجه</Btn>
-          <Btn v="brass">تمدید بسته</Btn>
-          <Btn v="ghost">تغییر مربی دائم</Btn>
-          <Btn v="ghost">اصلاح مانده</Btn>
+          <Btn v="primary">{t.owner.memberSheet.recordPayment}</Btn>
+          <Btn v="brass">{t.owner.memberSheet.extendPackage}</Btn>
+          <Btn v="ghost">{t.owner.memberSheet.changeTrainer}</Btn>
+          <Btn v="ghost">{t.owner.memberSheet.adjustBalance}</Btn>
         </div>
 
         {/* آخرین جلسات */}
         <div className="mt-6">
           <div className="text-[15px] font-bold mb-2" style={{ color: 'var(--c-deep)' }}>
-            آخرین جلسات ثبت‌شده
+            {t.owner.memberSheet.recentSessions}
           </div>
-          {[
-            ['۱۲ مهر', 'پرس سینه، اسکات، زیربغل'],
-            ['۱۰ مهر', 'ددلیفت، پرس سرشانه'],
-            ['۷ مهر', 'اسکات، لانج، پلانک'],
-          ].map(([dt, ex]) => (
+          {t.owner.memberSheet.sessionLog.map(session => (
             <div
-              key={dt}
+              key={session.date}
               style={{ borderColor: 'var(--c-surface-2)' }}
               className="flex gap-3 py-3 border-b last:border-0"
             >
               <span className="w-14 text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-                {dt}
+                {session.date}
               </span>
               <span className="text-[15px] flex-1 truncate" style={{ color: 'var(--c-text)' }}>
-                {ex}
+                {session.exercises}
               </span>
             </div>
           ))}

@@ -12,10 +12,12 @@ import {
 } from 'lucide-react';
 import { Stepper } from './Stepper';
 import { Btn } from '../../../components/ui/Btn';
-import { useSessionDraft } from '../hooks/useSessionDraft';
-import { fa, short, toman } from '../../../lib/format';
+import { useSessionDraft, WorkoutExercise } from '../hooks/useSessionDraft';
+import { num } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
 import { completeSession } from '../../../api/sessions';
 import { EXERCISE_CATALOG, ExerciseItem } from '../../../api/exercises';
+import type { SessionExercise } from '../../../lib/domain/gymManagement';
 
 export interface SessionFlowProps {
   memberId?: string;
@@ -23,19 +25,27 @@ export interface SessionFlowProps {
   remainingSessions?: number;
   totalSessions?: number;
   sessionId?: string;
+  trainerId?: string;
+  sessionRate?: number;
+  initialExercises?: WorkoutExercise[];
   onClose: () => void;
   onCompleted?: () => void;
 }
 
 export function SessionFlow({
   memberId,
-  memberName = 'حمید زارعی',
+  memberName = 'Hamid Zarei',
   remainingSessions = 1,
   totalSessions = 12,
   sessionId,
+  trainerId,
+  sessionRate = 150000,
+  initialExercises,
   onClose,
   onCompleted,
 }: SessionFlowProps) {
+  const { t } = useI18n();
+
   const {
     exercises,
     totalSets,
@@ -47,10 +57,12 @@ export function SessionFlow({
     addSet,
     addExercise,
     clearDraft,
-  } = useSessionDraft();
+  } = useSessionDraft(sessionId, initialExercises);
 
   const [openExerciseIndex, setOpenExerciseIndex] = useState<number>(0);
   const [showDoneModal, setShowDoneModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,8 +74,23 @@ export function SessionFlow({
   const handleFinishSession = async () => {
     setIsSubmitting(true);
     try {
+      // نگاشت حرکات و ست‌های ثبت‌شده به SessionExercise جهت ثبت دائمی در دیتابیس (P0 Fix)
+      // شناسه حرکت از کاتالوگ حفظ می‌شود تا داده‌ها به موتورهای تحلیلی (1RM/PR) متصل بمانند.
+      const recordedExercises: SessionExercise[] = exercises.map((ex, idx) => ({
+        id: `sess-ex-${idx}-${Date.now()}`,
+        exerciseId: ex.exerciseId || `ex-${idx}`,
+        name: ex.name,
+        bodyPart: ex.part || t.trainer.session.general,
+        equipment: t.trainer.session.bodyweight,
+        sets: ex.sets.length,
+        reps: ex.sets[0]?.r || 10,
+        weightKg: ex.sets[0]?.w,
+        notes: ex.last,
+        completedSets: ex.sets.map(s => ({ r: s.r, w: s.w, d: s.d })),
+      }));
+
       if (sessionId) {
-        const res = await completeSession(sessionId);
+        const res = await completeSession(sessionId, recordedExercises);
         setCompletionResult({
           remainingSessions: res.remainingSessions,
           message: res.message,
@@ -71,15 +98,16 @@ export function SessionFlow({
       } else {
         setCompletionResult({
           remainingSessions: Math.max(0, remainingSessions - 1),
-          message: 'جلسه با موفقیت ثبت شد.',
+          message: t.trainer.session.completedTitle,
         });
       }
       clearDraft();
       setShowDoneModal(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to complete session:', err);
-      // در صورت خطا، پیش‌نویس پاک نمی‌شود
-      setShowDoneModal(true);
+      // در صورت بروز خطا، پیش‌نویس پاک نمی‌شود و به کاربر پیام خطای صریح داده می‌شود (P0 Fix)
+      setErrorMessage(err?.message || t.trainer.session.errorGeneric);
+      setShowErrorModal(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -93,9 +121,9 @@ export function SessionFlow({
 
   return (
     <motion.div
-      initial={{ x: '-100%' }}
+      initial={{ x: '100%' }}
       animate={{ x: 0 }}
-      exit={{ x: '-100%' }}
+      exit={{ x: '100%' }}
       transition={{ type: 'spring', stiffness: 340, damping: 36 }}
       style={{ backgroundColor: 'var(--c-surface-0)' }}
       className="fixed inset-0 z-50 flex flex-col overflow-hidden select-none"
@@ -111,13 +139,13 @@ export function SessionFlow({
             type="button"
             onClick={onClose}
             className="h-10 w-10 -ms-1 grid place-items-center rounded-xl hover:bg-white/10 transition-colors"
-            aria-label="بازگشت"
+            aria-label={t.trainer.session.back}
           >
             <ChevronRight size={26} />
           </button>
 
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] opacity-80">جلسه جاری تمرین</div>
+            <div className="text-[13px] opacity-80">{t.trainer.session.currentSession}</div>
             <div className="text-[20px] font-extrabold truncate leading-tight">
               {memberName}
             </div>
@@ -128,12 +156,12 @@ export function SessionFlow({
               style={{ color: 'var(--c-brass)' }}
               className="text-[12px] font-semibold"
             >
-              مانده بسته
+              {t.trainer.session.packageLeft}
             </div>
             <div className="font-display text-[24px] leading-none text-white tnum mt-0.5">
-              {fa(remainingSessions)}{' '}
+              {num(remainingSessions)}{' '}
               <span className="text-[13px] font-sans opacity-70">
-                از {fa(totalSessions)}
+                {t.trainer.session.of} {num(totalSessions)}
               </span>
             </div>
           </div>
@@ -153,11 +181,14 @@ export function SessionFlow({
 
         <div className="mt-1.5 flex justify-between text-[13px] opacity-85">
           <span>
-            {fa(doneSets)} از {fa(totalSets)} ست انجام شد ({fa(progressPct)}٪)
+            {t.trainer.session.setsDone
+              .replace('{done}', num(doneSets))
+              .replace('{total}', num(totalSets))
+              .replace('{pct}', num(progressPct))}
           </span>
           <span className="flex items-center gap-1">
             <WifiOff size={13} />
-            پایداری آفلاین فعال
+            {t.trainer.session.offlineStable}
           </span>
         </div>
       </header>
@@ -171,7 +202,7 @@ export function SessionFlow({
 
           return (
             <div
-              key={ex.name}
+              key={`${ex.name}-${ei}`}
               style={{
                 backgroundColor: 'var(--c-surface-1)',
                 borderColor: 'var(--c-border)',
@@ -195,7 +226,7 @@ export function SessionFlow({
                   {isAllDone ? (
                     <Check size={20} strokeWidth={3} />
                   ) : (
-                    `${fa(doneCount)}/${fa(ex.sets.length)}`
+                    `${num(doneCount)}/${num(ex.sets.length)}`
                   )}
                 </span>
 
@@ -210,7 +241,7 @@ export function SessionFlow({
                     className="text-[13px] truncate mt-0.5"
                     style={{ color: 'var(--c-text-muted)' }}
                   >
-                    {ex.last || 'رکورد قبلی ثبت نشده'}
+                    {ex.last || t.trainer.session.noPreviousRecord}
                   </div>
                 </div>
               </button>
@@ -232,7 +263,7 @@ export function SessionFlow({
                       className="rounded-xl p-2.5 flex items-center gap-2 transition-all"
                     >
                       <span className="w-6 text-center text-[14px] font-bold opacity-80 tnum">
-                        {fa(si + 1)}
+                        {num(si + 1)}
                       </span>
 
                       <Stepper
@@ -245,7 +276,7 @@ export function SessionFlow({
 
                       <Stepper
                         v={s.r}
-                        u="تکرار"
+                        u={t.units.reps}
                         step={1}
                         dark={s.d}
                         on={v => updateReps(ei, si, v)}
@@ -254,7 +285,7 @@ export function SessionFlow({
                       <button
                         type="button"
                         onClick={() => toggleSet(ei, si)}
-                        aria-label="تغییر وضعیت انجام ست"
+                        aria-label={t.trainer.session.toggleSet}
                         style={{
                           backgroundColor: s.d
                             ? 'var(--c-brass)'
@@ -276,7 +307,7 @@ export function SessionFlow({
                     className="w-full h-10 text-[14px] font-bold hover:underline cursor-pointer flex items-center justify-center gap-1"
                   >
                     <Plus size={16} />
-                    <span>افزودن ست اضافه</span>
+                    <span>{t.trainer.session.addSet}</span>
                   </button>
                 </div>
               )}
@@ -291,7 +322,7 @@ export function SessionFlow({
           className="w-full h-12 rounded-2xl border-2 border-dashed font-semibold flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer"
         >
           <Search size={17} />
-          <span>افزودن حرکت از کاتالوگ (۴۱۳ حرکت)</span>
+          <span>{t.trainer.session.addFromCatalog}</span>
         </button>
       </div>
 
@@ -310,11 +341,11 @@ export function SessionFlow({
           className="w-full h-14 text-[16px] rounded-xl font-black gap-2"
         >
           {isSubmitting ? (
-            <span>در حال ثبت در دیتابیس...</span>
+            <span>{t.trainer.session.finishing}</span>
           ) : (
             <>
               <Check size={20} strokeWidth={3} />
-              <span>اتمام جلسه و کسر ۱ جلسه از بسته</span>
+              <span>{t.trainer.session.complete}</span>
             </>
           )}
         </Btn>
@@ -361,18 +392,22 @@ export function SessionFlow({
                 className="font-display text-[30px] mt-4"
                 style={{ color: 'var(--c-deep)' }}
               >
-                جلسه با موفقیت ثبت شد
+                {t.trainer.session.completedTitle}
               </div>
 
               <div
                 className="text-[15px] mt-1"
                 style={{ color: 'var(--c-text-muted)' }}
               >
-                مانده جلسات {memberName}:{' '}
+                {t.trainer.session.remainingFor.replace('{name}', memberName)}:{' '}
                 <b style={{ color: 'var(--c-deep)' }}>
-                  {fa(completionResult?.remainingSessions ?? 0)} جلسه
+                  {num(completionResult?.remainingSessions ?? 0)} {t.units.sessions}
                 </b>{' '}
-                · دستمزد شما: <b style={{ color: 'var(--c-avail-fg)' }}>+۱۵۰ هزار تومان</b>
+                · {t.trainer.session.yourPay}:{' '}
+                <b style={{ color: 'var(--c-avail-fg)' }}>
+                  +{num(sessionRate ? Math.round(sessionRate / 1000) : 150)}{' '}
+                  {t.trainer.session.thousandToman}
+                </b>
               </div>
 
               {(completionResult?.remainingSessions ?? 0) <= 2 && (
@@ -382,10 +417,7 @@ export function SessionFlow({
                     color: 'var(--c-rubber)',
                   }}
                   className="mt-4 rounded-xl text-[14px] font-bold py-3 px-4"
-                >
-                  بسته ورزشکار به اتمام رسیده یا کمتر از ۲ جلسه مانده است؛ به مدیر
-                  باشگاه اطلاع داده شد.
-                </div>
+                >{t.trainer.session.lowBalanceWarning}</div>
               )}
 
               <Btn
@@ -393,7 +425,49 @@ export function SessionFlow({
                 onClick={handleModalClose}
                 className="mt-6 w-full h-12 rounded-xl text-[15px]"
               >
-                بازگشت به برنامه امروز
+                {t.trainer.session.backToToday}
+              </Btn>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showErrorModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowErrorModal(false)}
+            className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{ backgroundColor: 'var(--c-surface-1)' }}
+              className="w-full max-w-md rounded-2xl p-6 text-center shadow-2xl border border-red-200 dark:border-red-900/40"
+            >
+              <div
+                style={{
+                  backgroundColor: 'var(--c-status-noshow-bg)',
+                  color: 'var(--c-rubber)',
+                }}
+                className="mx-auto h-14 w-14 rounded-full grid place-items-center mb-4"
+              >
+                <X size={28} strokeWidth={2.5} />
+              </div>
+              <h3 className="font-bold text-[18px]" style={{ color: 'var(--c-deep)' }}>
+                {t.trainer.session.errorTitle}
+              </h3>
+              <p className="text-[14px] mt-2 leading-relaxed" style={{ color: 'var(--c-text-muted)' }}>
+                {errorMessage}
+              </p>
+              <Btn
+                v="soft"
+                onClick={() => setShowErrorModal(false)}
+                className="mt-6 w-full h-11 rounded-xl text-[14px]"
+              >
+                {t.trainer.session.errorAck}
               </Btn>
             </motion.div>
           </motion.div>
@@ -419,9 +493,7 @@ export function SessionFlow({
             <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--c-border)' }}>
               <div className="flex items-center gap-2">
                 <Dumbbell size={18} style={{ color: 'var(--c-steel)' }} />
-                <h3 className="font-bold text-[15px]" style={{ color: 'var(--c-deep)' }}>
-                  انتخاب حرکت از بانک کاتالوگ
-                </h3>
+                <h3 className="font-bold text-[15px]" style={{ color: 'var(--c-deep)' }}>{t.trainer.session.pickerTitle}</h3>
               </div>
               <button
                 type="button"
@@ -442,7 +514,7 @@ export function SessionFlow({
                   type="text"
                   value={pickerSearch}
                   onChange={(e) => setPickerSearch(e.target.value)}
-                  placeholder="جستجوی نام حرکت یا عضله..."
+                  placeholder={t.trainer.session.pickerSearch}
                   className="w-full bg-transparent border-none outline-hidden text-[13px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
                   autoFocus
                 />
@@ -465,9 +537,10 @@ export function SessionFlow({
                     key={item.id}
                     onClick={() => {
                       addExercise({
+                        exerciseId: item.id,
                         name: item.nameFa,
                         part: item.primaryMuscleFa || item.bodyPartFa,
-                        last: 'حرکت اضافه شده در جلسه',
+                        last: t.trainer.session.addedExercise,
                         sets: [
                           { r: 12, w: 20, d: false },
                           { r: 10, w: 22.5, d: false },

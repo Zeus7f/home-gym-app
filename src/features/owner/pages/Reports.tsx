@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { H } from '../../../components/ui/H';
 import { Seg } from '../../../components/ui/Seg';
-import { fa, short } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
+import { displayName } from '../../../lib/displayName';
+import { num, short } from '../../../lib/format';
 import { getCurrentWeekShamsi } from '../../../lib/date/jalali';
 import { getTrainers } from '../../../api/trainers';
 import { Trainer } from '../../../lib/domain/gymManagement';
@@ -11,14 +13,8 @@ export interface ReportsProps {
   isMobile?: boolean;
 }
 
-const SAMPLE_LOGS = [
-  { athlete: 'مهسا فتحی', trainer: 'سارا کریمی', exercises: 'اسکات گابلت ۳×۱۲، لانج ۳×۱۰، پلانک' },
-  { athlete: 'بهراد شریفی', trainer: 'علی محمدی', exercises: 'ددلیفت ۴×۵ با ۹۰، زیربغل ۳×۱۰' },
-  { athlete: 'شیما رستمی', trainer: 'مهدی رحیمی', exercises: 'دوچرخه ۲۰ دقیقه، حرکات اصلاحی کمر' },
-  { athlete: 'پارسا موسوی', trainer: 'علی محمدی', exercises: 'پرس سینه ۳×۸ با ۶۰، پرس سرشانه ۳×۱۰' },
-];
-
 export function Reports({ isMobile = false }: ReportsProps) {
+  const { t, isFa } = useI18n();
   const [tab, setTab] = useState<'week' | 'ex' | 'pay'>('week');
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const weekDays = getCurrentWeekShamsi();
@@ -40,8 +36,8 @@ export function Reports({ isMobile = false }: ReportsProps) {
     // نمونه ارقام مراجعات روزانه
     const counts = [24, 19, 27, 22, 18, 12, 0];
     return {
-      label: d.label,
-      labelShort: d.labelShort,
+      label: t.owner.reports.weekDays[index],
+      labelShort: t.owner.reports.weekDaysShort[index],
       isToday: d.isToday,
       count: counts[index] || 0,
     };
@@ -59,9 +55,9 @@ export function Reports({ isMobile = false }: ReportsProps) {
           value={tab}
           onChange={v => setTab(v as 'week' | 'ex' | 'pay')}
           items={[
-            ['week', 'خلاصه هفتگی'],
-            ['ex', 'تمرینات ثبت‌شده'],
-            ['pay', 'دستمزد مربیان'],
+            ['week', t.owner.reports.tabWeekly],
+            ['ex', t.owner.reports.tabExercises],
+            ['pay', t.owner.reports.tabTrainerPay],
           ]}
         />
       </div>
@@ -75,9 +71,7 @@ export function Reports({ isMobile = false }: ReportsProps) {
           }}
           className="p-5 rounded-2xl border shadow-xs"
         >
-          <H sub="تعداد مراجعین روزانه نسبت به ظرفیت ۳۰ نفره سالن">
-            مراجعات هفته جاری
-          </H>
+          <H sub={t.owner.reports.weeklyTitle}>{t.owner.reports.weeklySub}</H>
 
           {/* نمودار ستونی با Framer Motion */}
           <div
@@ -96,7 +90,7 @@ export function Reports({ isMobile = false }: ReportsProps) {
                     className="text-[13px] font-bold tnum"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {w.count > 0 ? fa(w.count) : ''}
+                    {w.count > 0 ? num(w.count) : ''}
                   </span>
 
                   <motion.div
@@ -138,35 +132,35 @@ export function Reports({ isMobile = false }: ReportsProps) {
           >
             <div>
               <div className="text-[13px]" style={{ color: 'var(--c-text-muted)' }}>
-                کل مراجعات
+                {t.owner.reports.totalVisits}
               </div>
               <div
                 style={{ color: 'var(--c-ink)' }}
                 className="font-display text-[26px] tnum mt-0.5"
               >
-                {fa(totalVisits)}
+                {num(totalVisits)}
               </div>
             </div>
             <div>
               <div className="text-[13px]" style={{ color: 'var(--c-text-muted)' }}>
-                میانگین روزانه
+                {t.owner.reports.dailyAverage}
               </div>
               <div
                 style={{ color: 'var(--c-deep)' }}
                 className="font-display text-[26px] tnum mt-0.5"
               >
-                {fa(avgVisits)}
+                {num(avgVisits)}
               </div>
             </div>
             <div>
               <div className="text-[13px]" style={{ color: 'var(--c-text-muted)' }}>
-                غیبت ثبت‌شده
+                {t.owner.reports.noShows}
               </div>
               <div
                 style={{ color: 'var(--c-rubber)' }}
                 className="font-display text-[26px] tnum mt-0.5"
               >
-                {fa(3)}
+                {num(3)}
               </div>
             </div>
           </div>
@@ -182,9 +176,11 @@ export function Reports({ isMobile = false }: ReportsProps) {
           }}
           className="p-5 rounded-2xl border shadow-xs"
         >
-          <H sub="ثبت آخرین جلسات تمرینی توسط مربیان">گزارش حرکات ورزشی</H>
+          <H sub={t.owner.reports.exercisesSub}>
+            {t.owner.reports.exercisesTitle}
+          </H>
           <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
-            {SAMPLE_LOGS.map(log => (
+            {t.owner.reports.samples.map(log => (
               <div
                 key={log.athlete}
                 className={`py-3.5 ${
@@ -226,33 +222,36 @@ export function Reports({ isMobile = false }: ReportsProps) {
           }}
           className="p-5 rounded-2xl border shadow-xs"
         >
-          <H sub="کارکرد، دستمزد مصوب و مانده طلب مربیان">محاسبه دستمزد</H>
+          <H sub={t.owner.reports.trainerPaySub}>{t.owner.reports.calcPay}</H>
           <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
-            {trainers.map(t => {
-              const gross = t.completedSessions * t.sessionRate;
-              const owed = Math.max(0, gross - t.paidCompensation);
+            {trainers.map(tr => {
+              const gross = tr.completedSessions * tr.sessionRate;
+              const owed = Math.max(0, gross - tr.paidCompensation);
               return (
-                <div key={t.id} className="py-3.5 space-y-1">
+                <div key={tr.id} className="py-3.5 space-y-1">
                   <div className="flex items-center justify-between">
                     <span
                       className="font-bold text-[15px]"
                       style={{ color: 'var(--c-deep)' }}
                     >
-                      {t.name}
+                      displayName(tr.name, isFa)
                     </span>
                     <span
                       style={{ color: 'var(--c-brass)' }}
                       className="tnum font-bold text-[16px]"
                     >
-                      طلب: {short(owed)} تومان
+                      {t.owner.reports.owed}: {short(owed)}{' '}
+                      {t.owner.reports.toman}
                     </span>
                   </div>
                   <div
                     className="text-[13px] tnum"
                     style={{ color: 'var(--c-text-muted)' }}
                   >
-                    {fa(t.completedSessions)} جلسه تکمیل × {short(t.sessionRate)} ={' '}
-                    {short(gross)} تومان · تسویه‌شده: {short(t.paidCompensation)} تومان
+                    {num(tr.completedSessions)} {t.owner.reports.completed} ×{' '}
+                    {short(tr.sessionRate)} = {short(gross)}{' '}
+                    {t.owner.reports.toman} · {t.owner.reports.paid}:{' '}
+                    {short(tr.paidCompensation)} {t.owner.reports.toman}
                   </div>
                 </div>
               );

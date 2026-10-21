@@ -1,6 +1,7 @@
 import React from 'react';
 import { Minus, Plus } from 'lucide-react';
-import { fa } from '../../../lib/format';
+import { num } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
 import { cn } from '../../../lib/utils';
 
 export interface StepperProps {
@@ -31,6 +32,8 @@ export function Stepper({
   dark = false,
   className,
 }: StepperProps) {
+  const { t } = useI18n();
+
   const handleDec = () => {
     on(Math.max(0, Number((v - step).toFixed(1))));
   };
@@ -44,7 +47,7 @@ export function Stepper({
       <button
         type="button"
         onClick={handleDec}
-        aria-label={`کاهش ${u}`}
+        aria-label={t.trainer.stepper.decrease.replace('{unit}', u)}
         style={{
           backgroundColor: dark ? 'rgba(255, 255, 255, 0.15)' : 'var(--c-surface-1)',
           color: dark ? '#ffffff' : 'var(--c-ink)',
@@ -60,7 +63,7 @@ export function Stepper({
           style={{ color: dark ? '#ffffff' : 'var(--c-deep)' }}
           className="font-bold text-[16px] tnum"
         >
-          {fa(v)}
+          {num(v)}
         </div>
         <div
           style={{ color: dark ? 'rgba(255,255,255,0.7)' : 'var(--c-text-muted)' }}
@@ -73,7 +76,7 @@ export function Stepper({
       <button
         type="button"
         onClick={handleInc}
-        aria-label={`افزایش ${u}`}
+        aria-label={t.trainer.stepper.increase.replace('{unit}', u)}
         style={{
           backgroundColor: dark ? 'rgba(255, 255, 255, 0.15)' : 'var(--c-surface-1)',
           color: dark ? '#ffffff' : 'var(--c-ink)',

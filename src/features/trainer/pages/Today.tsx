@@ -2,21 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { Check, Plus } from 'lucide-react';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Btn } from '../../../components/ui/Btn';
+import { Modal } from '../../../components/ui/Modal';
 import { fa } from '../../../lib/format';
-import { getTodaySessions, checkInSession } from '../../../api/sessions';
+import { displayName } from '../../../lib/displayName';
+import { getTodaySessions, checkInSession, getTrainerDailyCapacity, addSessionToToday } from '../../../api/sessions';
 import { getMembers } from '../../../api/members';
+import { getCurrentUser, subscribeToStore } from '../../../api/auth';
 import { DailySession, Member } from '../../../lib/domain/gymManagement';
-import { mockStore } from '../../../lib/supabase/mockStore';
+import { getTodayJalaliString } from '../../../lib/date/jalali';
+import { useI18n } from '../../../components/LanguageProvider';
+import { num } from '../../../lib/format';
 
 export interface TodayProps {
   onOpenSession: (session: DailySession) => void;
 }
 
 export function Today({ onOpenSession }: TodayProps) {
-  const currentTrainerId = mockStore.currentUser?.entityId || 't-1';
+  const { t, isFa } = useI18n();
+  const currentTrainerId = getCurrentUser()?.entityId || 't-ali';
   const [sessions, setSessions] = useState<DailySession[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // دیالوگ افزودن ورزشکار به امروز
+  const [addOpen, setAddOpen] = useState(false);
+  const [addMemberId, setAddMemberId] = useState('');
+  const [addTime, setAddTime] = useState('11:00');
+  const [addError, setAddError] = useState('');
+  const [adding, setAdding] = useState(false);
 
   const loadData = async () => {
     try {
@@ -35,6 +48,10 @@ export function Today({ onOpenSession }: TodayProps) {
 
   useEffect(() => {
     loadData();
+    const unsub = subscribeToStore(() => {
+      loadData();
+    });
+    return unsub;
   }, [currentTrainerId]);
 
   const activeSessions = sessions.filter(s => s.status !== 'cancelled');
@@ -42,7 +59,7 @@ export function Today({ onOpenSession }: TodayProps) {
   const waitSessions = sessions.filter(s => s.status === 'scheduled');
   const doneSessions = sessions.filter(s => s.status === 'completed');
 
-  const maxCapacity = 6;
+  const maxCapacity = getTrainerDailyCapacity(getTodayJalaliString(), currentTrainerId);
 
   const getMemberRemaining = (memberId: string) => {
     const mem = members.find(m => m.id === memberId);
@@ -54,13 +71,51 @@ export function Today({ onOpenSession }: TodayProps) {
     await loadData();
   };
 
+  const handleAddAthlete = async () => {
+    if (!addMemberId) {
+      setAddError(t.trainer.today.errorNoAthlete);
+      return;
+    }
+
+    setAdding(true);
+    setAddError('');
+
+    try {
+      // جلوگیری از ثبت نوبت تکراری برای همان ورزشکار در همان ساعت
+      const duplicate = sessions.find(
+        s => s.memberId === addMemberId && s.time === addTime && s.status !== 'cancelled'
+      );
+      if (duplicate) {
+        setAddError(
+          t.trainer.today.errorDuplicate
+            .replace('{name}', duplicate.memberName)
+            .replace('{time}', addTime)
+        );
+        return;
+      }
+
+      const res = await addSessionToToday(addMemberId, currentTrainerId, addTime);
+      if (!res.success) {
+        setAddError(res.message);
+        return;
+      }
+
+      await loadData();
+      setAddOpen(false);
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : t.trainer.today.errorFailed);
+    } finally {
+      setAdding(false);
+    }
+  };
+
   if (loading) {
     return (
       <div
         className="py-12 text-center text-sm"
         style={{ color: 'var(--c-text-muted)' }}
       >
-        در حال بارگذاری سانس‌های امروز...
+        {t.trainer.today.loading}
       </div>
     );
   }
@@ -78,15 +133,15 @@ export function Today({ onOpenSession }: TodayProps) {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-[13px]" style={{ color: 'var(--c-text-muted)' }}>
-              ظرفیت امروز من
+              {t.trainer.today.capacityTitle}
             </div>
             <div
               style={{ color: 'var(--c-ink)' }}
               className="font-display text-[42px] leading-none tnum mt-1"
             >
-              {fa(activeSessions.length)}{' '}
+              {num(activeSessions.length)}{' '}
               <span className="text-[20px]" style={{ color: 'var(--c-text-faint)' }}>
-                / {fa(maxCapacity)}
+                / {num(maxCapacity)}
               </span>
             </div>
           </div>
@@ -96,21 +151,21 @@ export function Today({ onOpenSession }: TodayProps) {
             style={{ color: 'var(--c-text-muted)' }}
           >
             <div>
-              تکمیل:{' '}
+              {t.trainer.today.completed}:{' '}
               <b style={{ color: 'var(--c-deep)' }} className="tnum font-bold">
-                {fa(doneSessions.length)}
+                {num(doneSessions.length)}
               </b>
             </div>
             <div>
-              در سالن:{' '}
+              {t.trainer.today.inGym}:{' '}
               <b style={{ color: 'var(--c-deep)' }} className="tnum font-bold">
-                {fa(liveSessions.length)}
+                {num(liveSessions.length)}
               </b>
             </div>
             <div>
-              در انتظار:{' '}
+              {t.trainer.today.waiting}:{' '}
               <b style={{ color: 'var(--c-deep)' }} className="tnum font-bold">
-                {fa(waitSessions.length)}
+                {num(waitSessions.length)}
               </b>
             </div>
           </div>
@@ -151,7 +206,7 @@ export function Today({ onOpenSession }: TodayProps) {
           className="text-[14px] font-bold mb-2 flex items-center justify-between"
           style={{ color: 'var(--c-brass)' }}
         >
-          <span>داخل سالن ({fa(liveSessions.length)})</span>
+          <span>{t.trainer.today.liveSection.replace('{count}', num(liveSessions.length))}</span>
           {liveSessions.length > 0 && (
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
           )}
@@ -170,13 +225,14 @@ export function Today({ onOpenSession }: TodayProps) {
               }}
               className="w-full text-right rounded-2xl p-4 flex items-center gap-3.5 shadow-md active:scale-[0.99] transition-transform cursor-pointer"
             >
-              <Avatar name={s.memberName} size={46} tone="brass" />
+              <Avatar name={displayName(s.memberName, isFa)} size={46} tone="brass" />
               <div className="flex-1 min-w-0">
                 <div className="text-[17px] font-extrabold truncate">
-                  {s.memberName}
+                  displayName(s.memberName, isFa)
                 </div>
                 <div className="text-[13px] opacity-80 mt-0.5 truncate">
-                  ساعت {s.time} · مانده {fa(remaining)} جلسه
+                  {t.trainer.today.atTime.replace('{time}', s.time)} ·{' '}
+              {t.trainer.today.remaining.replace('{count}', num(remaining))}
                 </div>
               </div>
               <span
@@ -186,7 +242,7 @@ export function Today({ onOpenSession }: TodayProps) {
                 }}
                 className="h-10 px-3.5 rounded-xl text-[13px] font-extrabold grid place-items-center shrink-0 shadow-xs"
               >
-                ادامه ثبت
+                {t.trainer.today.continueLogging}
               </span>
             </button>
           );
@@ -200,7 +256,7 @@ export function Today({ onOpenSession }: TodayProps) {
             }}
             className="p-4 rounded-xl border text-center text-xs"
           >
-            در حال حاضر ورزشکاری داخل سالن نیست.
+            {t.trainer.today.liveEmpty}
           </div>
         )}
       </div>
@@ -211,7 +267,7 @@ export function Today({ onOpenSession }: TodayProps) {
           className="text-[14px] font-bold mb-2"
           style={{ color: 'var(--c-text-muted)' }}
         >
-          نوبت‌های بعدی ({fa(waitSessions.length)})
+          {t.trainer.today.nextSection.replace('{count}', num(waitSessions.length))}
         </div>
 
         <div className="space-y-2">
@@ -226,19 +282,20 @@ export function Today({ onOpenSession }: TodayProps) {
                 }}
                 className="p-3.5 rounded-xl border flex items-center gap-3 shadow-2xs"
               >
-                <Avatar name={s.memberName} size={40} tone="mist" />
+                <Avatar name={displayName(s.memberName, isFa)} size={40} tone="mist" />
                 <div className="flex-1 min-w-0">
                   <div
                     className="font-bold text-[15px]"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {s.memberName}
+                    displayName(s.memberName, isFa)
                   </div>
                   <div
                     className="text-[13px]"
                     style={{ color: 'var(--c-text-muted)' }}
                   >
-                    ساعت {s.time} · مانده {fa(remaining)} جلسه
+                    {t.trainer.today.atTime.replace('{time}', s.time)} ·{' '}
+              {t.trainer.today.remaining.replace('{count}', num(remaining))}
                   </div>
                 </div>
                 <Btn
@@ -246,7 +303,7 @@ export function Today({ onOpenSession }: TodayProps) {
                   className="h-9 px-3 text-xs"
                   onClick={() => handleCheckIn(s.id)}
                 >
-                  ثبت ورود
+                  {t.trainer.today.checkIn}
                 </Btn>
               </div>
             );
@@ -261,7 +318,7 @@ export function Today({ onOpenSession }: TodayProps) {
             className="text-[14px] font-bold mb-2"
             style={{ color: 'var(--c-text-muted)' }}
           >
-            جلسات تکمیل‌شده ({fa(doneSessions.length)})
+            {t.trainer.today.doneSection.replace('{count}', num(doneSessions.length))}
           </div>
           <div className="space-y-1.5 opacity-80">
             {doneSessions.map(s => (
@@ -275,7 +332,7 @@ export function Today({ onOpenSession }: TodayProps) {
               >
                 <Check size={16} style={{ color: 'var(--c-avail-fg)' }} />
                 <span className="flex-1 font-semibold" style={{ color: 'var(--c-deep)' }}>
-                  {s.memberName}
+                  displayName(s.memberName, isFa)
                 </span>
                 <span className="text-xs tnum" style={{ color: 'var(--c-text-muted)' }}>
                   {s.time}
@@ -287,10 +344,105 @@ export function Today({ onOpenSession }: TodayProps) {
       )}
 
       {/* دکمه افزودن ورزشکار */}
-      <Btn v="soft" className="w-full h-12 text-[14px] font-bold gap-2">
+      <Btn
+        v="soft"
+        className="w-full h-12 text-[14px] font-bold gap-2"
+        onClick={() => {
+          setAddOpen(true);
+          setAddMemberId('');
+          setAddTime('11:00');
+          setAddError('');
+        }}
+      >
         <Plus size={18} />
-        <span>افزودن ورزشکار به امروز</span>
+        <span>{t.trainer.today.addAthlete}</span>
       </Btn>
+
+      {/* مودال افزودن ورزشکار به برنامه امروز */}
+      <Modal
+        isOpen={addOpen}
+        onClose={() => setAddOpen(false)}
+        title={t.trainer.today.addAthleteTitle}
+        description={t.trainer.today.addAthleteDesc}
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label
+              htmlFor="add-athlete"
+              className="block text-[13px] font-bold mb-2"
+              style={{ color: 'var(--c-deep)' }}
+            >
+              {t.trainer.today.addAthleteField}
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {members.map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setAddMemberId(m.id)}
+                  style={{
+                    backgroundColor: addMemberId === m.id ? 'var(--c-ink)' : 'var(--c-surface-2)',
+                    color: addMemberId === m.id ? '#ffffff' : 'var(--c-text-muted)',
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-[13px] font-bold transition-colors cursor-pointer"
+                >
+                  displayName(m.name, isFa)
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="add-time"
+              className="block text-[13px] font-bold mb-2"
+              style={{ color: 'var(--c-deep)' }}
+            >
+              {t.trainer.today.addAthleteTime}
+            </label>
+            <input
+              id="add-time"
+              type="time"
+              value={addTime}
+              onChange={e => setAddTime(e.target.value)}
+              className="w-full h-11 px-3.5 rounded-xl border text-[14px] tnum"
+              style={{
+                backgroundColor: 'var(--c-surface-2)',
+                color: 'var(--c-ink)',
+                borderColor: 'var(--c-border)',
+              }}
+            />
+          </div>
+
+          {addError && (
+            <div
+              style={{
+                backgroundColor: 'var(--c-status-noshow-bg)',
+                color: 'var(--c-rubber)',
+              }}
+              className="rounded-xl text-[13px] font-bold py-2.5 px-3.5"
+              role="alert"
+            >
+              {addError}
+            </div>
+          )}
+
+          <div className="flex gap-2.5 pt-1">
+            <Btn v="soft" className="flex-1" onClick={() => setAddOpen(false)}>
+              {t.actions.cancel}
+            </Btn>
+            <Btn
+              v="primary"
+              className="flex-1"
+              onClick={handleAddAthlete}
+              disabled={!addMemberId || adding}
+            >
+              {adding ? t.trainer.today.submitting : t.trainer.today.submitSlot}
+            </Btn>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

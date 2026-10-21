@@ -12,7 +12,10 @@ import type {
   SessionAdjustmentRecord,
   AuditLog,
   UserAccount,
-  DailyCapacityConfig
+  DailyCapacityConfig,
+  WorkoutProgram,
+  ProgramDay,
+  ProgramExercise
 } from '../domain/gymManagement';
 
 export type {
@@ -26,12 +29,30 @@ export type {
   SessionAdjustmentRecord,
   AuditLog,
   UserAccount,
-  DailyCapacityConfig
+  DailyCapacityConfig,
+  WorkoutProgram,
+  ProgramDay,
+  ProgramExercise
 };
 export type { ExerciseItem } from '../exercises/catalog';
 import { EXERCISE_CATALOG, ExerciseItem } from '../exercises/catalog';
 import { getTodayJalaliString, getTodayJalali } from '../date/jalali';
+import { isWithinCutoff, RESCHEDULE_CUTOFF_HOURS } from '../domain/sessionPolicy';
+import { type StoreResult } from '../domain/storeMessages';
 import { supabase, isLiveSupabase } from './client';
+
+/**
+ * تولید شناسهٔ یکتا.
+ *
+ * `Date.now()` فقط دقت میلی‌ثانیه دارد، بنابراین دو رکورد ساخته‌شده در
+ * یک میلی‌ثانیه شناسهٔ یکسان می‌گیرند (مثلاً دو برنامهٔ تمرینی یا دو ورودی
+ * پیامِ ممیزی). ترکیب زمان با یک شمارندهٔ یکنوا این برخورد را حذف می‌کند.
+ */
+let idCounter = 0;
+function nextId(prefix: string): string {
+  idCounter += 1;
+  return `${prefix}-${Date.now()}-${idCounter}`;
+}
 
 const curJ = getTodayJalali();
 const CURRENT_JY = curJ.jy;
@@ -1205,6 +1226,9 @@ class GymStore {
 
   dailyCapacityConfigs: Record<string, DailyCapacityConfig> = {};
 
+  /** برنامه‌های تمرینی مربیان که به ورزشکاران منتشر می‌شوند */
+  programs: WorkoutProgram[] = [];
+
   activeTrainerId = 't-ali';
   activeMemberId = 'm-reza';
 
@@ -1235,6 +1259,7 @@ class GymStore {
         if (parsed.exercises) this.exercises = parsed.exercises;
         if (parsed.users) this.users = parsed.users;
         if (parsed.dailyCapacityConfigs) this.dailyCapacityConfigs = parsed.dailyCapacityConfigs;
+        if (parsed.programs) this.programs = parsed.programs;
       }
 
       // Restore session
@@ -1265,7 +1290,8 @@ class GymStore {
         auditLogs: this.auditLogs,
         exercises: this.exercises,
         users: this.users,
-        dailyCapacityConfigs: this.dailyCapacityConfigs
+        dailyCapacityConfigs: this.dailyCapacityConfigs,
+        programs: this.programs
       };
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
     } catch (e) {
@@ -1273,9 +1299,11 @@ class GymStore {
     }
   }
 
-  subscribe(fn: () => void) {
+  subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
   }
 
   notify() {
@@ -1289,22 +1317,34 @@ class GymStore {
   // ==========================================
   // AUTHENTICATION & USER MANAGEMENT
   // ==========================================
-  login(username: string, password: string): { success: boolean; message?: string } {
+  login(username: string, password: string): StoreResult {
     const user = this.users.find(
       u => u.username.toLowerCase() === username.trim().toLowerCase()
     );
     if (!user) {
-      return { success: false, message: 'نام کاربری وارد شده یافت نشد.' };
+      return {
+        success: false,
+        messageKey: 'login.userNotFound',
+        message: 'نام کاربری وارد شده یافت نشد.',
+      };
     }
     if (user.password !== password.trim()) {
-      return { success: false, message: 'کلمه عبور وارد شده نادرست است.' };
+      return {
+        success: false,
+        messageKey: 'login.badPassword',
+        message: 'کلمه عبور وارد شده نادرست است.',
+      };
     }
     this.currentUser = user;
     try {
       sessionStorage.setItem(this.SESSION_KEY, user.id);
     } catch (e) {}
     this.notify();
-    return { success: true };
+    return {
+      success: true,
+      messageKey: 'login.success',
+      message: 'ورود با موفقیت انجام شد.',
+    };
   }
 
   logout() {
@@ -1329,7 +1369,7 @@ class GymStore {
     if (!user) return false;
     user.password = newPassword.trim();
     this.auditLogs.unshift({
-      id: 'aud-' + Date.now(),
+      id: nextId('aud'),
       action: 'PASSWORD_RESET',
       entityType: 'UserAccount',
       entityId: userId,
@@ -1344,7 +1384,7 @@ class GymStore {
   createUserAccount(data: Omit<UserAccount, 'id' | 'createdAt'>): UserAccount {
     const newUser: UserAccount = {
       ...data,
-      id: 'u-' + Date.now(),
+      id: nextId('u'),
       createdAt: getTodayJalaliString()
     };
     this.users.unshift(newUser);
@@ -1398,28 +1438,40 @@ class GymStore {
     });
   }
 
+  getSessionById(sessionId: string): DailySession | undefined {
+    return this.todaySessions.find(s => s.id === sessionId) || this.pastSessions.find(s => s.id === sessionId);
+  }
+
   scheduleSessionOnDate(
     date: string,
     time: string,
     memberId: string,
     trainerId: string,
     exercises: SessionExercise[] = []
-  ): { success: boolean; message: string; session?: DailySession } {
+  ): StoreResult & { session?: DailySession } {
     const member = this.members.find(m => m.id === memberId);
     const trainer = this.trainers.find(t => t.id === trainerId);
-    if (!member || !trainer) return { success: false, message: 'ورزشکار یا مربی یافت نشد.' };
+    if (!member || !trainer) {
+      return {
+        success: false,
+        messageKey: 'session.memberOrTrainerNotFound',
+        message: 'ورزشکار یا مربی یافت نشد.',
+      };
+    }
 
     const capacity = this.getTrainerDailyCapacity(date, trainerId);
     const currentSessions = this.getSessionsForDate(date, trainerId);
     if (currentSessions.length >= capacity) {
       return {
         success: false,
-        message: `ظرفیت مربی ${trainer.name} برای تاریخ ${date} تکمیل است (حداکثر ${capacity} نفر).`
+        messageKey: 'session.capacityFull',
+        params: { trainer: trainer.name, date, capacity },
+        message: `ظرفیت مربی ${trainer.name} برای تاریخ ${date} تکمیل است (حداکثر ${capacity} نفر).`,
       };
     }
 
     const newSess: DailySession = {
-      id: 'sess-' + Date.now(),
+      id: nextId('sess'),
       date,
       time,
       memberId: member.id,
@@ -1434,27 +1486,37 @@ class GymStore {
 
     this.todaySessions.push(newSess);
     this.notify();
-    return { success: true, message: 'جلسه با موفقیت در تقویم ثبت شد.', session: newSess };
+    return {
+      success: true,
+      messageKey: 'session.scheduled',
+      message: 'جلسه با موفقیت در تقویم ثبت شد.',
+      session: newSess,
+    };
   }
 
   // ==========================================
   // ATOMIC SESSION COMPLETION (Section 65 & 66)
   // ==========================================
-  completeMemberSession(sessionId: string): {
-    idempotent: boolean;
-    remainingSessions: number;
-    message: string;
-  } {
+  completeMemberSession(
+    sessionId: string,
+    exercises?: SessionExercise[]
+  ): StoreResult & { idempotent: boolean; remainingSessions: number } {
     const session = this.todaySessions.find(s => s.id === sessionId);
     if (!session) throw new Error('SESSION_NOT_FOUND');
 
     // 1. Idempotency Check: Calling twice must not deduct twice
     if (session.status === 'completed') {
       const mem = this.members.find(m => m.id === session.memberId);
+      if (exercises && exercises.length > 0) {
+        session.exercises = exercises;
+        this.notify();
+      }
       return {
+        success: true,
         idempotent: true,
         remainingSessions: mem?.remainingSessions || 0,
-        message: 'این جلسه قبلاً با موفقیت تکمیل شده و جلسه‌ای مجدداً کسر نگردید.'
+        messageKey: 'session.alreadyCompleted',
+        message: 'این جلسه قبلاً با موفقیت تکمیل شده و جلسه‌ای مجدداً کسر نگردید.',
       };
     }
 
@@ -1463,9 +1525,12 @@ class GymStore {
 
     const trainer = this.trainers.find(t => t.id === session.trainerId);
 
-    // 2. Mark session completed
+    // 2. Mark session completed and save recorded exercises
     session.status = 'completed';
     session.completedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (exercises && exercises.length > 0) {
+      session.exercises = exercises;
+    }
 
     // 3. Atomically consume exactly 1 session
     member.usedSessions += 1;
@@ -1480,7 +1545,7 @@ class GymStore {
 
     // 5. Write audit record
     this.auditLogs.unshift({
-      id: 'aud-' + Date.now(),
+      id: nextId('aud'),
       action: 'SESSION_COMPLETED',
       entityType: 'DailySession',
       entityId: sessionId,
@@ -1492,9 +1557,12 @@ class GymStore {
     this.notify();
 
     return {
+      success: true,
       idempotent: false,
       remainingSessions: member.remainingSessions,
-      message: `جلسه با موفقیت تکمیل شد. ۱ جلسه از بسته کسر گردید. مانده فعلی: ${member.remainingSessions} جلسه.`
+      messageKey: 'session.completed',
+      params: { remaining: member.remainingSessions },
+      message: `جلسه با موفقیت تکمیل شد. ۱ جلسه از بسته کسر گردید. مانده فعلی: ${member.remainingSessions} جلسه.`,
     };
   }
 
@@ -1514,7 +1582,7 @@ class GymStore {
     session.isDailyOverride = true; // Daily override flag: Member's default trainer is NOT touched!
 
     this.auditLogs.unshift({
-      id: 'aud-' + Date.now(),
+      id: nextId('aud'),
       action: 'DAILY_TRAINER_REASSIGNMENT',
       entityType: 'DailySession',
       entityId: sessionId,
@@ -1541,7 +1609,7 @@ class GymStore {
     if (session && session.status !== 'completed') {
       session.status = 'cancelled';
       this.auditLogs.unshift({
-        id: 'aud-' + Date.now(),
+        id: nextId('aud'),
         action: 'SESSION_CANCELLED',
         entityType: 'DailySession',
         entityId: sessionId,
@@ -1553,14 +1621,217 @@ class GymStore {
     }
   }
 
-  // Add Member to today's schedule
-  addSessionToToday(memberId: string, trainerId: string, time: string = '11:00') {
+  /**
+   * جابه‌جایی ساعت یک نوبت توسط خود ورزشکار.
+   *
+   * قوانین:
+   *  - نوبت تکمیل‌شده یا لغوشده قابل جابه‌جایی نیست.
+   *  - نوبت باید امروز باشد (نوبت‌های آینده توسط مدیر باشگاه جابه‌جا می‌شوند).
+   *  - حداقل ۴ ساعت فاصله با شروع سانس لازم است؛ در غیر این صورت لغو به مربی ارجاع می‌شود.
+   *  - هیچ جلسه‌ای از اعتبار عضو کسر نمی‌شود.
+   */
+  rescheduleSession(
+    sessionId: string,
+    newTime: string,
+    reason: string = 'درخواست تغییر ساعت توسط ورزشکار',
+    now: Date = new Date()
+  ): StoreResult {
+    const session = this.todaySessions.find(s => s.id === sessionId);
+    if (!session) {
+      return {
+        success: false,
+        messageKey: 'session.notFound',
+        message: 'نوبت موردنظر یافت نشد.',
+      };
+    }
+    if (session.status === 'completed') {
+      return {
+        success: false,
+        messageKey: 'session.completedNotChangeable',
+        message: 'این جلسه تکمیل شده و قابل تغییر نیست.',
+      };
+    }
+    if (session.status === 'cancelled') {
+      return {
+        success: false,
+        messageKey: 'session.alreadyCancelled',
+        message: 'این نوبت لغو شده است.',
+      };
+    }
+    if (session.date !== 'Today') {
+      return {
+        success: false,
+        messageKey: 'session.futureReschedule',
+        message: 'تغییر ساعت نوبت‌های آینده از طریق مدیر باشگاه انجام می‌شود.',
+      };
+    }
+
+    // بررسی مهلت ۴ ساعته
+    if (isWithinCutoff(session.time, now, RESCHEDULE_CUTOFF_HOURS)) {
+      return {
+        success: false,
+        messageKey: 'session.tooSoon',
+        message: 'کمتر از ۴ ساعت تا شروع سانس باقی مانده است. لطفاً مستقیماً با مربی تماس بگیرید.',
+      };
+    }
+
+    // ساعت جدید نباید با سانس دیگری از همان مربی تداخل داشته باشد
+    const conflict = this.todaySessions.find(
+      s =>
+        s.id !== sessionId &&
+        s.trainerId === session.trainerId &&
+        s.status !== 'cancelled' &&
+        s.time === newTime
+    );
+    if (conflict) {
+      return {
+        success: false,
+        messageKey: 'session.timeTaken',
+        params: { time: newTime, trainer: session.trainerName, member: conflict.memberName },
+        message: `ساعت ${newTime} برای ${session.trainerName} قبلاً به ${conflict.memberName} اختصاص داده شده است.`,
+      };
+    }
+
+    const oldTime = session.time;
+    session.time = newTime;
+
+    this.auditLogs.unshift({
+      id: nextId('aud'),
+      action: 'SESSION_RESCHEDULED',
+      entityType: 'DailySession',
+      entityId: sessionId,
+      details: `جابه‌جایی ساعت نوبت ${session.memberName} از ${oldTime} به ${newTime} (${reason}). هیچ جلسه‌ای از اعتبار عضو کسر نشد.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      user: session.memberName,
+    });
+
+    this.notify();
+    return {
+      success: true,
+      messageKey: 'session.rescheduled',
+      params: { oldTime, newTime },
+      message: `ساعت نوبت شما از ${oldTime} به ${newTime} تغییر کرد.`,
+    };
+  }
+
+  /**
+   * لغو نوبت توسط خود ورزشکار.
+   * هیچ جلسه‌ای از اعتبار کسر نمی‌شود، اما مهلت ۴ ساعته رعایت می‌شود.
+   */
+  cancelSessionByMember(
+    sessionId: string,
+    reason: string = 'درخواست لغو توسط ورزشکار',
+    now: Date = new Date()
+  ): StoreResult {
+    const session = this.todaySessions.find(s => s.id === sessionId);
+    if (!session) {
+      return {
+        success: false,
+        messageKey: 'session.notFound',
+        message: 'نوبت موردنظر یافت نشد.',
+      };
+    }
+    if (session.status === 'completed') {
+      return {
+        success: false,
+        messageKey: 'session.completedNotChangeable',
+        message: 'این جلسه تکمیل شده و قابل لغو نیست.',
+      };
+    }
+    if (session.status === 'cancelled') {
+      return {
+        success: false,
+        messageKey: 'session.alreadyCancelled',
+        message: 'این نوبت قبلاً لغو شده است.',
+      };
+    }
+    if (session.date !== 'Today') {
+      return {
+        success: false,
+        messageKey: 'session.futureCancel',
+        message: 'لغو نوبت‌های آینده از طریق مدیر باشگاه انجام می‌شود.',
+      };
+    }
+
+    if (isWithinCutoff(session.time, now, RESCHEDULE_CUTOFF_HOURS)) {
+      return {
+        success: false,
+        messageKey: 'session.tooSoon',
+        message: 'کمتر از ۴ ساعت تا شروع سانس باقی مانده است. لطفاً مستقیماً با مربی تماس بگیرید.',
+      };
+    }
+
+    session.status = 'cancelled';
+
+    this.auditLogs.unshift({
+      id: nextId('aud'),
+      action: 'SESSION_CANCELLED',
+      entityType: 'DailySession',
+      entityId: sessionId,
+      details: `لغو نوبت ${session.memberName} توسط خود ورزشکار (${reason}). هیچ جلسه‌ای از اعتبار عضو کسر نشد.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      user: session.memberName,
+    });
+
+    this.notify();
+    return {
+      success: true,
+      messageKey: 'session.cancelled',
+      message: 'نوبت شما لغو شد. اعتبار جلسه کسر نشد.',
+    };
+  }
+
+  /**
+   * افزودن ورزشکار به برنامه امروز (سانس فوری).
+   * ظرفیت روزانه مربی و تکراری نبودن نوبت بررسی می‌شود.
+   */
+  addSessionToToday(
+    memberId: string,
+    trainerId: string,
+    time: string = '11:00'
+  ): StoreResult & { session?: DailySession } {
     const member = this.members.find(m => m.id === memberId);
     const trainer = this.trainers.find(t => t.id === trainerId);
-    if (!member || !trainer) return;
+    if (!member || !trainer) {
+      return {
+        success: false,
+        messageKey: 'session.memberOrTrainerNotFound',
+        message: 'ورزشکار یا مربی یافت نشد.',
+      };
+    }
+
+    // ظرفیت روزانه مربی
+    const capacity = this.getTrainerDailyCapacity('Today', trainerId);
+    const currentCount = this.getSessionsForDate('Today', trainerId).filter(
+      s => s.status !== 'cancelled'
+    ).length;
+    if (currentCount >= capacity) {
+      return {
+        success: false,
+        messageKey: 'session.capacityFull',
+        params: { trainer: trainer.name, date: 'Today', capacity },
+        message: `ظرفیت امروز ${trainer.name} تکمیل است (حداکثر ${capacity} نوبت).`,
+      };
+    }
+
+    // نوبت تکراری برای همان ورزشکار در همان ساعت
+    const duplicate = this.todaySessions.find(
+      s =>
+        s.memberId === memberId &&
+        s.time === time &&
+        s.status !== 'cancelled'
+    );
+    if (duplicate) {
+      return {
+        success: false,
+        messageKey: 'session.duplicateSlot',
+        params: { member: member.name, time },
+        message: `برای ${member.name} در ساعت ${time} نوبتی ثبت شده است.`,
+      };
+    }
 
     const newSession: DailySession = {
-      id: 'sess-' + Date.now(),
+      id: nextId('sess'),
       date: 'Today',
       time,
       memberId: member.id,
@@ -1574,6 +1845,13 @@ class GymStore {
 
     this.todaySessions.push(newSession);
     this.notify();
+    return {
+      success: true,
+      messageKey: 'session.slotAdded',
+      params: { time, member: member.name },
+      message: `سانس ساعت ${time} برای ${member.name} ثبت شد.`,
+      session: newSession,
+    };
   }
 
   // Add exercise to session
@@ -1583,7 +1861,7 @@ class GymStore {
 
     const newEx: SessionExercise = {
       ...exerciseData,
-      id: 'rec-' + Date.now()
+      id: nextId('rec')
     };
     session.exercises.push(newEx);
     this.notify();
@@ -1615,7 +1893,7 @@ class GymStore {
   ) {
     const newMember: Member = {
       ...data,
-      id: 'm-' + Date.now(),
+      id: nextId('m'),
       usedSessions: 0,
       remainingSessions: data.totalSessions,
       outstandingBalance: Math.max(0, data.packagePrice - data.paidAmount),
@@ -1626,7 +1904,7 @@ class GymStore {
     // Record payment if initial paid amount > 0
     if (data.paidAmount > 0) {
       this.memberPayments.unshift({
-        id: 'pay-' + Date.now(),
+        id: nextId('pay'),
         memberId: newMember.id,
         memberName: newMember.name,
         amount: data.paidAmount,
@@ -1639,7 +1917,7 @@ class GymStore {
 
     if (initialPassword && initialPassword.trim()) {
       this.createUserAccount({
-        username: data.phone || `member_${Date.now().toString().slice(-4)}`,
+        username: data.phone || `member_${nextId('x').split('-').pop()}`,
         password: initialPassword.trim(),
         role: 'member',
         entityId: newMember.id,
@@ -1664,7 +1942,7 @@ class GymStore {
     member.outstandingBalance = Math.max(0, member.packagePrice - member.paidAmount);
 
     this.memberPayments.unshift({
-      id: 'pay-' + Date.now(),
+      id: nextId('pay'),
       memberId: member.id,
       memberName: member.name,
       amount,
@@ -1675,7 +1953,7 @@ class GymStore {
     });
 
     this.auditLogs.unshift({
-      id: 'aud-' + Date.now(),
+      id: nextId('aud'),
       action: 'PAYMENT_RECORDED',
       entityType: 'Member',
       entityId: member.id,
@@ -1700,7 +1978,7 @@ class GymStore {
     member.remainingSessions = Math.max(0, member.totalSessions - member.usedSessions);
 
     this.sessionAdjustments.unshift({
-      id: 'adj-' + Date.now(),
+      id: nextId('adj'),
       memberId: member.id,
       memberName: member.name,
       delta,
@@ -1710,7 +1988,7 @@ class GymStore {
     });
 
     this.auditLogs.unshift({
-      id: 'aud-' + Date.now(),
+      id: nextId('aud'),
       action: 'SESSION_BALANCE_ADJUSTED',
       entityType: 'Member',
       entityId: member.id,
@@ -1729,7 +2007,7 @@ class GymStore {
   ) {
     const newTrainer: Trainer = {
       ...data,
-      id: 't-' + Date.now(),
+      id: nextId('t'),
       completedSessions: 0,
       paidCompensation: 0,
       outstandingCompensation: 0
@@ -1738,7 +2016,7 @@ class GymStore {
 
     if (initialPassword && initialPassword.trim()) {
       this.createUserAccount({
-        username: data.phone || `trainer_${Date.now().toString().slice(-4)}`,
+        username: data.phone || `trainer_${nextId('x').split('-').pop()}`,
         password: initialPassword.trim(),
         role: 'trainer',
         entityId: newTrainer.id,
@@ -1759,7 +2037,7 @@ class GymStore {
     trainer.outstandingCompensation = (trainer.completedSessions * trainer.sessionRate) - trainer.paidCompensation;
 
     this.trainerPayouts.unshift({
-      id: 'tp-' + Date.now(),
+      id: nextId('tp'),
       trainerId: trainer.id,
       trainerName: trainer.name,
       amount,
@@ -1769,7 +2047,7 @@ class GymStore {
     });
 
     this.auditLogs.unshift({
-      id: 'aud-' + Date.now(),
+      id: nextId('aud'),
       action: 'TRAINER_PAYOUT',
       entityType: 'Trainer',
       entityId: trainer.id,
@@ -1787,12 +2065,12 @@ class GymStore {
   addCustomExercise(data: Omit<ExerciseItem, 'id'>): ExerciseItem {
     const newExercise: ExerciseItem = {
       ...data,
-      id: 'ex-custom-' + Date.now(),
+      id: nextId('ex-custom'),
       isCustom: true
     };
     this.exercises.unshift(newExercise);
     this.auditLogs.unshift({
-      id: 'aud-' + Date.now(),
+      id: nextId('aud'),
       action: 'ADD_EXERCISE',
       entityType: 'Exercise',
       entityId: newExercise.id,
@@ -1834,7 +2112,7 @@ class GymStore {
     if (index === -1) return false;
     const removed = this.exercises.splice(index, 1)[0];
     this.auditLogs.unshift({
-      id: 'aud-' + Date.now(),
+      id: nextId('aud'),
       action: 'DELETE_EXERCISE',
       entityType: 'Exercise',
       entityId: id,
@@ -1861,7 +2139,7 @@ class GymStore {
     Object.assign(exercise, updates);
 
     this.auditLogs.unshift({
-      id: 'aud-' + Date.now(),
+      id: nextId('aud'),
       action: 'UPDATE_EXERCISE',
       entityType: 'Exercise',
       entityId: id,
@@ -1898,6 +2176,165 @@ class GymStore {
     }
 
     return exercise;
+  }
+
+  // ==========================================
+  // WORKOUT PROGRAM PUBLISHER (Trainer → Member)
+  // ==========================================
+
+  /** آخرین برنامه منتشرشده یک ورزشکار (اگر وجود داشته باشد) */
+  getPublishedProgramForMember(memberId: string): WorkoutProgram | undefined {
+    return this.programs
+      .filter(p => p.memberId === memberId && p.status === 'published')
+      .sort((a, b) => (a.publishedAt || '').localeCompare(b.publishedAt || ''))
+      .pop();
+  }
+
+  /** همه برنامه‌های یک مربی */
+  getProgramsByTrainer(trainerId: string): WorkoutProgram[] {
+    return this.programs.filter(p => p.trainerId === trainerId);
+  }
+
+  /** برنامه‌های مربی برای یک ورزشکار مشخص */
+  getProgramsForMemberByTrainer(memberId: string, trainerId: string): WorkoutProgram[] {
+    return this.programs.filter(p => p.memberId === memberId && p.trainerId === trainerId);
+  }
+
+  /** ایجاد یا ویرایش برنامه (پیش‌نویس) */
+  saveProgram(
+    data: Omit<WorkoutProgram, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'publishedAt'> & {
+      id?: string;
+      status?: 'draft' | 'published';
+    }
+  ): WorkoutProgram {
+    const now = getTodayJalaliString();
+    const existing = data.id ? this.programs.find(p => p.id === data.id) : undefined;
+
+    if (existing) {
+      Object.assign(existing, {
+        memberId: data.memberId,
+        memberName: data.memberName,
+        trainerId: data.trainerId,
+        trainerName: data.trainerName,
+        title: data.title,
+        description: data.description,
+        days: data.days,
+        updatedAt: now,
+      });
+      this.notify();
+      return existing;
+    }
+
+    const newProgram: WorkoutProgram = {
+      id: nextId('prog'),
+      memberId: data.memberId,
+      memberName: data.memberName,
+      trainerId: data.trainerId,
+      trainerName: data.trainerName,
+      title: data.title,
+      description: data.description,
+      days: data.days,
+      status: data.status || 'draft',
+      createdAt: now,
+      updatedAt: now,
+      publishedAt: data.status === 'published' ? now : undefined,
+    };
+
+    this.programs.unshift(newProgram);
+    this.notify();
+    return newProgram;
+  }
+
+  /**
+   * انتشار برنامه برای ورزشکار.
+   * هر برنامه منتشرشده قبلی برای همان ورزشکار به حالت پیش‌نویس بازمی‌گردد،
+   * تا ورزشکار همیشه فقط یک برنامه فعال داشته باشد.
+   */
+  publishProgram(programId: string): StoreResult {
+    const program = this.programs.find(p => p.id === programId);
+    if (!program) {
+      return {
+        success: false,
+        messageKey: 'program.notFound',
+        message: 'برنامه یافت نشد.',
+      };
+    }
+
+    if (program.days.length === 0) {
+      return {
+        success: false,
+        messageKey: 'program.noDays',
+        message: 'برنامه بدون روز و حرکت قابل انتشار نیست.',
+      };
+    }
+
+    const hasEmptyDay = program.days.some(d => d.items.length === 0);
+    if (hasEmptyDay) {
+      return {
+        success: false,
+        messageKey: 'program.emptyDay',
+        message: 'همه روزهای برنامه باید حداقل یک حرکت داشته باشند.',
+      };
+    }
+
+    for (const other of this.programs) {
+      if (other.id !== program.id && other.memberId === program.memberId && other.status === 'published') {
+        other.status = 'draft';
+      }
+    }
+
+    const now = getTodayJalaliString();
+    program.status = 'published';
+    program.publishedAt = now;
+    program.updatedAt = now;
+
+    this.auditLogs.unshift({
+      id: nextId('aud'),
+      action: 'PROGRAM_PUBLISHED',
+      entityType: 'WorkoutProgram',
+      entityId: program.id,
+      details: `انتشار برنامه تمرینی «${program.title}» برای ${program.memberName} توسط ${program.trainerName} (${program.days.length} روز).`,
+      timestamp: now,
+      user: program.trainerName,
+    });
+
+    this.notify();
+    return {
+      success: true,
+      messageKey: 'program.published',
+      params: { title: program.title, member: program.memberName },
+      message: `برنامه «${program.title}» برای ${program.memberName} منتشر شد.`,
+    };
+  }
+
+  /** بازگرداندن یک برنامه منتشرشده به وضعیت پیش‌نویس */
+  unpublishProgram(programId: string): StoreResult {
+    const program = this.programs.find(p => p.id === programId);
+    if (!program) {
+      return {
+        success: false,
+        messageKey: 'program.notFound',
+        message: 'برنامه یافت نشد.',
+      };
+    }
+    program.status = 'draft';
+    program.publishedAt = undefined;
+    program.updatedAt = getTodayJalaliString();
+    this.notify();
+    return {
+      success: true,
+      messageKey: 'program.unpublished',
+      message: 'برنامه به وضعیت پیش‌نویس بازگشت.',
+    };
+  }
+
+  /** حذف برنامه */
+  deleteProgram(programId: string): boolean {
+    const index = this.programs.findIndex(p => p.id === programId);
+    if (index === -1) return false;
+    this.programs.splice(index, 1);
+    this.notify();
+    return true;
   }
 
   // ==========================================

@@ -108,7 +108,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
             <Badge variant="neutral" size="sm" className="bg-black/70 backdrop-blur-md text-white border-0">
               {lang === 'fa' ? exercise.bodyPartFa : exercise.bodyPart}
             </Badge>
-            <Badge variant="primary" size="sm">
+            <Badge variant="brand" size="sm">
               {lang === 'fa' ? exercise.equipmentFa : exercise.equipment}
             </Badge>
           </div>
@@ -149,7 +149,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
                     variant="ghost"
                     size="sm"
                     onClick={() => onEdit(exercise)}
-                    ariaLabel={lang === 'fa' ? 'ویرایش حرکت' : 'Edit exercise'}
+                    aria-label={lang === 'fa' ? 'ویرایش حرکت' : 'Edit exercise'}
                     className="p-1.5 h-8 w-8 text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 rounded-xl"
                   >
                     <Pencil className="w-3.5 h-3.5" />
@@ -160,7 +160,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
                     variant="ghost"
                     size="sm"
                     onClick={() => onDelete(exercise)}
-                    ariaLabel={lang === 'fa' ? 'حذف حرکت' : 'Delete exercise'}
+                    aria-label={lang === 'fa' ? 'حذف حرکت' : 'Delete exercise'}
                     className="p-1.5 h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

@@ -140,7 +140,11 @@ export default function UIShowcase() {
         >
           <div>
             <div className="text-xs mb-2 font-medium">Segmented Control انتخابی:</div>
-            <Seg items={segItems} value={segVal} onChange={setSegVal} />
+            <Seg<'all' | 'active' | 'debt'>
+              items={segItems}
+              value={segVal}
+              onChange={setSegVal}
+            />
           </div>
           <div>
             <div className="text-xs mb-2 font-medium">چیپ‌های فیلتر کاتالوگ حرکات:</div>

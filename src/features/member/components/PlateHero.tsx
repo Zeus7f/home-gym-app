@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { fa } from '../../../lib/format';
+import { num } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
 import { cn } from '../../../lib/utils';
 
 export interface PlateHeroProps {
@@ -28,6 +29,7 @@ export function PlateHero({
   plateWidth = 8,
   className,
 }: PlateHeroProps) {
+  const { t } = useI18n();
   const safeTotal = Math.max(1, total);
   const safeRemaining = Math.max(0, Math.min(safeTotal, remaining));
   const isLow = safeRemaining <= 2 && safeRemaining > 0;
@@ -38,7 +40,7 @@ export function PlateHero({
       aria-valuenow={safeRemaining}
       aria-valuemin={0}
       aria-valuemax={safeTotal}
-      aria-label={`${fa(safeRemaining)} جلسه باقیمانده از مجموع ${fa(safeTotal)} جلسه`}
+      aria-label={t.member.home.remainingLabel + ': ' + num(safeRemaining) + ' / ' + num(safeTotal)}
       className={cn('flex gap-[3px] items-end select-none', className)}
     >
       {Array.from({ length: safeTotal }, (_, i) => {

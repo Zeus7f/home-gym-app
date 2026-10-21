@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { mockStore } from '../../lib/supabase/mockStore';
+import { login } from '../../api/auth';
+import { useI18n } from '../../components/LanguageProvider';
+import { getGym } from '../../api/gym';
 import { Language, translations } from '../../lib/i18n';
 import { ThemeToggle } from '../../components/ui/ThemeToggle';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
@@ -19,13 +21,16 @@ import {
 } from 'lucide-react';
 
 interface LoginScreenProps {
-  lang: Language;
-  onLanguageChange: (lang: Language) => void;
+  lang?: Language;
+  onLanguageChange?: (lang: Language) => void;
 }
 
 type RoleTab = 'owner' | 'trainer' | 'member';
 
-export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
+export function LoginScreen({ lang: langProp, onLanguageChange: onLangProp }: LoginScreenProps) {
+  const { lang, setLang } = useI18n();
+  const activeLang = langProp ?? lang;
+  const onLanguageChange = onLangProp ?? setLang;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -33,14 +38,22 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const t = translations[lang];
+  const t = translations[activeLang];
+
+  const [gymName, setGymName] = useState('Iron Haven Fitness Club');
+
+  React.useEffect(() => {
+    getGym().then(g => {
+      if (g?.name) setGymName(g.name);
+    });
+  }, []);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       setErrorMsg(
-        lang === 'fa'
-          ? 'لطفاً نام کاربری و کلمه عبور را وارد نمایید.'
+        activeLang === 'fa'
+          ? t.login.errEmpty
           : 'Please enter username and password.'
       );
       return;
@@ -49,14 +62,14 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
     setLoading(true);
     setErrorMsg(null);
 
-    setTimeout(() => {
-      const res = mockStore.login(username, password);
+    setTimeout(async () => {
+      const res = await login(username, password);
       setLoading(false);
       if (!res.success) {
         setErrorMsg(
           res.message ||
-            (lang === 'fa'
-              ? 'نام کاربری یا کلمه عبور اشتباه است.'
+            (activeLang === 'fa'
+              ? t.login.errInvalid
               : 'Invalid credentials.')
         );
       }
@@ -68,8 +81,8 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
     setPassword(pass);
     setErrorMsg(null);
     setLoading(true);
-    setTimeout(() => {
-      mockStore.login(user, pass);
+    setTimeout(async () => {
+      await login(user, pass);
       setLoading(false);
     }, 150);
   }
@@ -112,7 +125,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-serif font-black text-lg tracking-tight text-white">
-                {lang === 'fa' ? mockStore.gym.name : 'Iron Haven Club'}
+                {activeLang === 'fa' ? gymName : 'Iron Haven Club'}
               </span>
               <span
                 style={{
@@ -122,12 +135,12 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                 }}
                 className="px-2 py-0.5 rounded-full text-[10px] font-black border"
               >
-                نسخه ۲.۰
+                {t.login.version}
               </span>
             </div>
             <p className="text-[11px] text-slate-300 font-medium">
-              {lang === 'fa'
-                ? 'سامانه یکپارچه مربی، ورزشکار و مدیریت باشگاه'
+              {activeLang === 'fa'
+                ? t.login.subtitle
                 : 'Integrated Gym Operational Platform'}
             </p>
           </div>
@@ -164,14 +177,14 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
               className="text-2xl font-black pt-1 tracking-tight"
               style={{ color: 'var(--c-deep)' }}
             >
-              {lang === 'fa' ? 'ورود به سامانه باشگاه' : 'Sign In to Portal'}
+              {t.login.title}
             </h1>
             <p
               className="text-xs max-w-xs mx-auto leading-relaxed"
               style={{ color: 'var(--c-text-muted)' }}
             >
-              {lang === 'fa'
-                ? 'برای ورود به داشبورد اختصاصی، اطلاعات حساب خود را وارد کنید.'
+              {activeLang === 'fa'
+                ? t.login.hint
                 : 'Enter your credentials to access your designated workspace.'}
             </p>
           </div>
@@ -197,9 +210,9 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
               <span className="flex items-center gap-1">
                 <Sparkles size={13} style={{ color: 'var(--c-brass)' }} />
-                <span>ورود سریع تستی بر اساس نقش:</span>
+                <span>{t.login.quickAccess}</span>
               </span>
-              <span className="font-mono text-[10px]">رمز همه: 123</span>
+              <span className="font-mono text-[10px]">{t.login.allPasswords}</span>
             </div>
 
             <div
@@ -225,7 +238,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                 className="py-2 px-1.5 rounded-xl text-center text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-1 shadow-2xs"
               >
                 <Shield size={16} style={{ color: selectedRoleTab === 'owner' ? 'var(--c-brass)' : 'inherit' }} />
-                <span>مدیر باشگاه</span>
+                <span>{t.roles.owner}</span>
               </button>
 
               {/* تب مربی */}
@@ -244,7 +257,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                 className="py-2 px-1.5 rounded-xl text-center text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-1 shadow-2xs"
               >
                 <Dumbbell size={16} />
-                <span>مربیان</span>
+                <span>{t.roles.trainer}s</span>
               </button>
 
               {/* تب ورزشکار */}
@@ -263,7 +276,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                 className="py-2 px-1.5 rounded-xl text-center text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-1 shadow-2xs"
               >
                 <UserCheck size={16} />
-                <span>ورزشکار</span>
+                <span>{t.roles.member}</span>
               </button>
             </div>
 
@@ -280,10 +293,10 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                   <div>
                     <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-sky-500" />
-                      <span>حساب مالک باشگاه (حمید رحیمی)</span>
+                      <span>{t.login.ownerAccount}</span>
                     </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">
-                      نام کاربری: <span className="font-mono font-bold text-slate-600 dark:text-slate-300">admin</span>
+                      <span>{t.login.usernameLabel}</span> <span className="font-mono font-bold text-slate-600 dark:text-slate-300">admin</span>
                     </div>
                   </div>
                   <button
@@ -295,7 +308,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                     }}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1"
                   >
-                    <span>ورود مستقیم</span>
+                    <span>{t.login.directLogin}</span>
                     <ArrowRight size={13} className="rtl:rotate-180" />
                   </button>
                 </>
@@ -306,12 +319,12 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                   <div>
                     <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-teal-500" />
-                      <span>حساب مربی (سارا کریمی / علی حسینی)</span>
+                      <span>{t.login.trainerAccount}</span>
                     </div>
                     <div className="text-[11px] text-slate-400 mt-0.5 flex gap-2">
-                      <span>سارا: <b className="font-mono text-slate-600 dark:text-slate-300">sara</b></span>
+                      <span>sara: <b className="font-mono text-slate-600 dark:text-slate-300">sara</b></span>
                       <span>·</span>
-                      <span>علی: <b className="font-mono text-slate-600 dark:text-slate-300">ali</b></span>
+                      <span>ali: <b className="font-mono text-slate-600 dark:text-slate-300">ali</b></span>
                     </div>
                   </div>
                   <button
@@ -323,7 +336,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                     }}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1"
                   >
-                    <span>ورود سارا</span>
+                    <span>{t.login.loginAs(t.login.saraName)}</span>
                     <ArrowRight size={13} className="rtl:rotate-180" />
                   </button>
                 </>
@@ -334,10 +347,11 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                   <div>
                     <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-amber-500" />
-                      <span>حساب ورزشکار (رضا رضایی)</span>
+                      <span>{t.login.memberAccount}</span>
                     </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">
-                      نام کاربری: <span className="font-mono font-bold text-slate-600 dark:text-slate-300">reza</span>
+                      <span>{t.login.usernameLabel}</span>{' '}
+                      <span className="font-mono font-bold text-slate-600 dark:text-slate-300">reza</span>
                     </div>
                   </div>
                   <button
@@ -349,7 +363,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                     }}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1"
                   >
-                    <span>ورود رضا</span>
+                    <span>{t.login.loginAs(t.login.rezaName)}</span>
                     <ArrowRight size={13} className="rtl:rotate-180" />
                   </button>
                 </>
@@ -367,7 +381,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
               }}
               className="absolute px-3 text-[11px] font-medium"
             >
-              یا ورود با نام کاربری و رمز
+              {t.login.orManual}
             </span>
           </div>
 
@@ -380,7 +394,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                 className="block text-xs font-bold"
                 style={{ color: 'var(--c-deep)' }}
               >
-                {lang === 'fa' ? 'نام کاربری' : 'Username'}
+                {t.login.username}
               </label>
               <div
                 style={{
@@ -395,7 +409,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="مثال: admin یا sara یا reza"
+                  placeholder={t.login.usernamePlaceholder}
                   autoComplete="username"
                   required
                   className="w-full bg-transparent border-none outline-hidden text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
@@ -410,7 +424,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                 className="block text-xs font-bold"
                 style={{ color: 'var(--c-deep)' }}
               >
-                {lang === 'fa' ? 'کلمه عبور' : 'Password'}
+                {t.login.password}
               </label>
               <div
                 style={{
@@ -434,7 +448,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                  aria-label="تغییر وضعیت نمایش رمز"
+                  aria-label={t.login.togglePassword}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -453,11 +467,11 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
               className="w-full h-12 rounded-xl border font-black text-sm flex items-center justify-center gap-2 shadow-lg hover:opacity-95 transition-all cursor-pointer mt-2 disabled:opacity-50"
             >
               {loading ? (
-                <span>در حال بررسی اعتبار...</span>
+                <span>{t.login.checking}</span>
               ) : (
                 <>
                   <LogIn size={18} />
-                  <span>{lang === 'fa' ? 'ورود به حساب کاربری' : 'Sign In'}</span>
+                  <span>{t.login.submit}</span>
                 </>
               )}
             </button>
@@ -467,9 +481,7 @@ export function LoginScreen({ lang, onLanguageChange }: LoginScreenProps) {
 
       {/* فوتر پایین صفحه */}
       <footer className="relative z-10 text-center text-xs text-slate-400 py-2">
-        {lang === 'fa'
-          ? 'باشگاه بدنسازی آیرون هیون — سامانه یکپارچه مربی، ورزشکار و مدیریت'
-          : 'Iron Haven Gym Platform — Unified Owner, Trainer & Athlete Management'}
+        t.login.footer
       </footer>
     </div>
   );

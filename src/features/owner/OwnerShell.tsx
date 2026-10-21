@@ -18,8 +18,12 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Btn } from '../../components/ui/Btn';
 import { Sheet } from './components/Sheet';
 import { MemberSheet, MemberData } from './components/MemberSheet';
-import { formatJalaliHumanToday } from '../../lib/date/jalali';
-import { mockStore } from '../../lib/supabase/mockStore';
+import { formatJalaliHumanTodayLocalized } from '../../lib/date/jalali';
+import { getCurrentUser, logout } from '../../api/auth';
+import { useI18n } from '../../components/LanguageProvider';
+import { displayName } from '../../lib/displayName';
+import { getGym } from '../../api/gym';
+import { NotificationBell } from '../../components/ui/NotificationBell';
 
 // صفحات اپ مدیر
 import { Dash } from './pages/Dash';
@@ -42,29 +46,39 @@ export type OwnerTabKey =
 interface NavItem {
   key: OwnerTabKey;
   icon: React.ElementType;
-  shortLabel: string;
-  label: string;
+  /** کلید برچسب کامل در فرهنگ لغت */
+  labelKey: 'dashboard' | 'members' | 'trainers' | 'schedule' | 'finance' | 'reports' | 'settings';
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: 'dash', icon: LayoutDashboard, shortLabel: 'داشبورد', label: 'داشبورد عملیات' },
-  { key: 'sched', icon: CalendarClock, shortLabel: 'برنامه', label: 'برنامه و حضور' },
-  { key: 'mem', icon: Users, shortLabel: 'اعضا', label: 'اعضا و بسته‌ها' },
-  { key: 'tr', icon: Dumbbell, shortLabel: 'مربیان', label: 'مربیان و تسویه' },
-  { key: 'fin', icon: Wallet, shortLabel: 'مالی', label: 'مالی و پرداخت‌ها' },
-  { key: 'rep', icon: FileBarChart, shortLabel: 'گزارش', label: 'گزارش‌های عملکرد' },
-  { key: 'set', icon: SettingsIcon, shortLabel: 'تنظیمات', label: 'تنظیمات باشگاه' },
+  { key: 'dash', icon: LayoutDashboard, labelKey: 'dashboard' },
+  { key: 'sched', icon: CalendarClock, labelKey: 'schedule' },
+  { key: 'mem', icon: Users, labelKey: 'members' },
+  { key: 'tr', icon: Dumbbell, labelKey: 'trainers' },
+  { key: 'fin', icon: Wallet, labelKey: 'finance' },
+  { key: 'rep', icon: FileBarChart, labelKey: 'reports' },
+  { key: 'set', icon: SettingsIcon, labelKey: 'settings' },
 ];
 
 const MOBILE_TABS: OwnerTabKey[] = ['dash', 'sched', 'mem', 'fin'];
 
 export function OwnerShell() {
   const [activeTab, setActiveTab] = useState<OwnerTabKey>('dash');
+  const { t, isFa } = useI18n();
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberData | null>(null);
+  const [gymName, setGymName] = useState('Iron Haven Fitness Club');
 
-  const todayShamsi = formatJalaliHumanToday();
-  const currentTitle = NAV_ITEMS.find(n => n.key === activeTab)?.label || 'داشبورد';
+  const todayShamsi = formatJalaliHumanTodayLocalized(isFa);
+  const currentNav = NAV_ITEMS.find(n => n.key === activeTab);
+  const currentTitle = currentNav ? t.nav.owner[currentNav.labelKey] : t.nav.owner.dashboard;
+  const currentUserName = displayName(getCurrentUser()?.displayName || t.owner.shell.seniorOwner, isFa);
+
+  React.useEffect(() => {
+    getGym().then(g => {
+      if (g?.name) setGymName(g.name);
+    });
+  }, []);
 
   const goToTab = (key: OwnerTabKey) => {
     setActiveTab(key);
@@ -87,21 +101,20 @@ export function OwnerShell() {
         <div className="md:h-20 md:grid md:place-items-center lg:block lg:h-auto lg:text-start lg:px-5 lg:pt-6 lg:pb-5">
           <div className="hidden lg:block min-w-0 overflow-hidden">
             <div className="font-display text-[28px] leading-tight text-white font-bold">
-              هوم‌جیم
+              {t.owner.shell.brand}
             </div>
             <div
               className="mt-1 text-[12px] truncate font-medium max-w-[190px]"
-              title={mockStore.gym.name}
+              title={gymName}
               style={{ color: '#b4c8d6' }}
             >
-              {mockStore.gym.name}
+              {gymName}
             </div>
           </div>
           <span
             style={{ color: 'var(--c-brass)' }}
             className="lg:hidden font-display text-[28px] font-bold"
-          >
-            هـ
+          >{isFa ? 'هـ' : 'HG'}
           </span>
         </div>
 
@@ -135,10 +148,10 @@ export function OwnerShell() {
                   className="shrink-0"
                 />
                 <span className="hidden lg:inline-block truncate text-[13.5px] font-medium leading-none text-start flex-1">
-                  {item.label}
+                  {t.nav.owner[item.labelKey]}
                 </span>
                 <span className="text-[11px] font-medium leading-none lg:hidden">
-                  {item.shortLabel}
+                  {t.nav.ownerShort[item.labelKey]}
                 </span>
               </button>
             );
@@ -150,20 +163,20 @@ export function OwnerShell() {
           style={{ backgroundColor: 'var(--c-deep)' }}
           className="m-3 rounded-xl p-3 flex items-center gap-3 lg:justify-start md:justify-center"
         >
-          <Avatar name={mockStore.currentUser?.displayName || 'مدیر'} size={36} tone="brass" />
+          <Avatar name={currentUserName} size={36} tone="brass" />
           <div className="flex-1 min-w-0 hidden lg:block">
             <div className="text-white text-[13px] font-bold truncate">
-              {mockStore.currentUser?.displayName || 'مدیریت باشگاه'}
+              {currentUserName}
             </div>
             <div className="text-[11px]" style={{ color: '#b4c8d6' }}>
-              مدیر ارشد
+              {t.owner.shell.seniorOwner}
             </div>
           </div>
           <button
             type="button"
-            onClick={() => mockStore.logout()}
+            onClick={() => logout()}
             className="hidden lg:block text-[#b4c8d6] hover:text-white transition-colors"
-            title="خروج"
+            title={t.owner.shell.signOut}
           >
             <LogOut size={16} />
           </button>
@@ -190,7 +203,7 @@ export function OwnerShell() {
               className="text-[21px] font-extrabold truncate"
               style={{ color: 'var(--c-deep)' }}
             >
-              {activeTab === 'dash' ? 'عملیات و مدیریت امروز' : currentTitle}
+              {activeTab === 'dash' ? t.owner.shell.todayOps : currentTitle}
             </h1>
           </div>
 
@@ -205,30 +218,19 @@ export function OwnerShell() {
               <Search size={16} className="text-slate-400" />
               <input
                 type="text"
-                placeholder="جستجو در کل سامانه…"
+                placeholder={t.owner.shell.searchPlaceholder}
                 className="w-full bg-transparent border-none outline-hidden placeholder:text-slate-400"
               />
             </div>
 
-            <button
-              type="button"
-              style={{
-                backgroundColor: 'var(--c-surface-1)',
-                borderColor: 'var(--c-border)',
-              }}
-              className="relative h-10 w-10 rounded-xl border grid place-items-center text-slate-600 hover:bg-slate-50 transition-colors"
-              title="اعلان‌ها"
-            >
-              <Bell size={18} />
-              <span
-                style={{ backgroundColor: 'var(--c-rubber)' }}
-                className="absolute top-2 left-2 h-2 w-2 rounded-full"
-              />
-            </button>
+            <NotificationBell
+              onNavigateTab={t => goToTab(t as OwnerTabKey)}
+              badgeOnlyWhenUrgent
+            />
 
             <Btn v="primary" onClick={() => goToTab('sched')}>
               <Plus size={17} />
-              <span>نوبت‌دهی جدید</span>
+              <span>{t.owner.shell.newBooking}</span>
             </Btn>
           </div>
         </header>
@@ -243,22 +245,21 @@ export function OwnerShell() {
         >
           <div className="min-w-0 flex-1">
             <div className="text-[12px]" style={{ color: 'var(--c-text-muted)' }}>
-              {activeTab === 'dash' ? todayShamsi : mockStore.gym.name}
+              {activeTab === 'dash' ? todayShamsi : gymName}
             </div>
             <div
               className="text-[18px] font-extrabold truncate"
               style={{ color: 'var(--c-deep)' }}
             >
-              {activeTab === 'dash' ? 'عملیات امروز' : currentTitle}
+              {activeTab === 'dash' ? t.owner.shell.todayOps : currentTitle}
             </div>
           </div>
 
-          <button
-            type="button"
-            className="h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-800 grid place-items-center"
-          >
-            <Bell size={17} />
-          </button>
+          <NotificationBell
+            onNavigateTab={t => goToTab(t as OwnerTabKey)}
+            badgeOnlyWhenUrgent
+            className="!h-9 !w-9"
+          />
         </header>
 
         {/* بدنه اسکرول‌پذیر صفحه فعال */}
@@ -312,7 +313,7 @@ export function OwnerShell() {
                 <Icon size={19} strokeWidth={isActive ? 2.2 : 1.8} />
               </span>
               <span className={`text-[12px] ${isActive ? 'font-bold' : ''}`}>
-                {item.shortLabel}
+                {t.nav.ownerShort[item.labelKey]}
               </span>
             </button>
           );
@@ -339,7 +340,7 @@ export function OwnerShell() {
           >
             <MoreHorizontal size={19} />
           </span>
-          <span className="text-[12px]">بیشتر</span>
+          <span className="text-[12px]">{t.owner.shell.more}</span>
         </button>
       </nav>
 
@@ -352,9 +353,7 @@ export function OwnerShell() {
         <div
           className="text-[17px] font-bold mb-3"
           style={{ color: 'var(--c-deep)' }}
-        >
-          بخش‌های تکمیلی
-        </div>
+        >{t.owner.shell.moreSheetTitle}</div>
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {NAV_ITEMS.filter(n => !MOBILE_TABS.includes(n.key)).map(item => {
             const Icon = item.icon;
@@ -374,7 +373,7 @@ export function OwnerShell() {
                 >
                   <Icon size={19} />
                 </span>
-                <span>{item.label}</span>
+                <span>{t.nav.owner[item.labelKey]}</span>
                 <ChevronLeft size={18} className="ms-auto text-slate-400" />
               </button>
             );

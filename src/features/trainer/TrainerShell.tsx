@@ -1,48 +1,107 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
 import {
   CalendarCheck,
   Users,
   History as HistoryIcon,
   BookOpen,
-  Bell,
+  ClipboardList,
+  CalendarDays,
 } from 'lucide-react';
 import { Avatar } from '../../components/ui/Avatar';
-import { formatJalaliHumanToday } from '../../lib/date/jalali';
-import { mockStore } from '../../lib/supabase/mockStore';
-import { DailySession } from '../../lib/domain/gymManagement';
+import { formatJalaliHumanTodayLocalized } from '../../lib/date/jalali';
+import { getCurrentUser } from '../../api/auth';
+import { getMember } from '../../api/members';
+import { getTrainer } from '../../api/trainers';
+import { DailySession, SessionExercise, Member, Trainer } from '../../lib/domain/gymManagement';
+import { normalizeExerciseSets } from '../../lib/domain/sessionSets';
+import { NotificationBell } from '../../components/ui/NotificationBell';
+import { useI18n } from '../../components/LanguageProvider';
+import { displayName } from '../../lib/displayName';
+import type { WorkoutExercise } from './hooks/useSessionDraft';
 
 // صفحات اپ مربی
 import { Today } from './pages/Today';
 import { Athletes } from './pages/Athletes';
 import { History } from './pages/History';
 import { Catalog } from './pages/Catalog';
+import { Programs } from './pages/Programs';
+import { Calendar } from './pages/Calendar';
 import { SessionFlow } from './components/SessionFlow';
 
-export type TrainerTabKey = 'today' | 'mem' | 'hist' | 'cat';
-
+export type TrainerTabKey = 'today' | 'mem' | 'hist' | 'cat' | 'prog' | 'cal';
 interface TrainerTabItem {
   key: TrainerTabKey;
   icon: React.ElementType;
-  label: string;
-  title: string;
+  /** کلید برچسب و عنوان در فرهنگ لغت */
+  labelKey: 'today' | 'members' | 'history' | 'exercises' | 'programs' | 'calendar';
 }
 
 const TABS: TrainerTabItem[] = [
-  { key: 'today', icon: CalendarCheck, label: 'امروز', title: 'ورزشکاران و سانس‌های امروز' },
-  { key: 'mem', icon: Users, label: 'ورزشکاران', title: 'ورزشکاران من' },
-  { key: 'hist', icon: HistoryIcon, label: 'سوابق', title: 'سوابق جلسات و کارکرد' },
-  { key: 'cat', icon: BookOpen, label: 'حرکات', title: 'بانک و کاتالوگ حرکات' },
+  { key: 'today', icon: CalendarCheck, labelKey: 'today' },
+  { key: 'mem', icon: Users, labelKey: 'members' },
+  { key: 'hist', icon: HistoryIcon, labelKey: 'history' },
+  { key: 'cat', icon: BookOpen, labelKey: 'exercises' },
+  { key: 'prog', icon: ClipboardList, labelKey: 'programs' },
+  { key: 'cal', icon: CalendarDays, labelKey: 'calendar' },
 ];
+
+/** نگاشت کلید تب به عنوان صفحه — برای پرهیز از ساخت کلید پویا */
+const TAB_TITLES = {
+  today: 'titleToday',
+  members: 'titleMembers',
+  history: 'titleHistory',
+  exercises: 'titleCatalog',
+  programs: 'titlePrograms',
+  calendar: 'titleCalendar',
+} as const;
+
+/**
+ * تبدیل حرکات ثبت‌شده یک جلسه واقعی به ساختار پیش‌نویس مربی.
+ * شناسه حرکت (exerciseId) حفظ می‌شود تا داده‌ها به کاتالوگ و موتورهای تحلیلی متصل بماند.
+ */
+function toWorkoutExercises(exercises: SessionExercise[]): WorkoutExercise[] {
+  return exercises.map(ex => ({
+    exerciseId: ex.exerciseId,
+    name: ex.name,
+    part: ex.bodyPart,
+    last: ex.notes,
+    sets: normalizeExerciseSets(ex).map(s => ({ r: s.r, w: s.w, d: s.d })),
+  }));
+}
 
 export function TrainerShell() {
   const queryTab = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab') as TrainerTabKey;
   const [activeTab, setActiveTab] = useState<TrainerTabKey>(queryTab || 'today');
   const [activeSession, setActiveSession] = useState<DailySession | null>(null);
+  const [activeMember, setActiveMember] = useState<Member | undefined>(undefined);
+  const [activeTrainer, setActiveTrainer] = useState<Trainer | undefined>(undefined);
 
-  const trainerName = mockStore.currentUser?.displayName || 'مربی';
-  const todayShamsi = formatJalaliHumanToday();
-  const currentTabInfo = TABS.find(t => t.key === activeTab)!;
+  const { t, isFa } = useI18n();
+  const trainerName = displayName(getCurrentUser()?.displayName || t.roles.trainer, isFa);
+  const todayShamsi = formatJalaliHumanTodayLocalized(isFa);
+  const currentTabInfo = TABS.find(t2 => t2.key === activeTab)!;
+
+  // بارگذاری اطلاعات عضو و مربی جلسه فعال (اعتبار باقیمانده و نرخ دستمزد)
+  useEffect(() => {
+    if (!activeSession) {
+      setActiveMember(undefined);
+      setActiveTrainer(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    getMember(activeSession.memberId).then(m => {
+      if (!cancelled) setActiveMember(m);
+    });
+    getTrainer(activeSession.trainerId).then(t => {
+      if (!cancelled) setActiveTrainer(t);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSession?.id, activeSession?.memberId, activeSession?.trainerId]);
 
   return (
     <div
@@ -63,31 +122,17 @@ export function TrainerShell() {
         <Avatar name={trainerName} size={42} tone="ink" />
         <div className="flex-1 min-w-0">
           <div className="text-[12px]" style={{ color: 'var(--c-text-muted)' }}>
-            مربی باشگاه · {todayShamsi}
+            {t.trainer.shell.role} · {todayShamsi}
           </div>
           <div
             className="text-[18px] sm:text-[20px] font-extrabold truncate mt-0.5"
             style={{ color: 'var(--c-deep)' }}
           >
-            {currentTabInfo.title}
+            {t.trainer.shell[TAB_TITLES[currentTabInfo.labelKey]]}
           </div>
         </div>
 
-        <button
-          type="button"
-          style={{
-            backgroundColor: 'var(--c-surface-1)',
-            borderColor: 'var(--c-border)',
-          }}
-          className="relative h-10 w-10 rounded-xl border grid place-items-center text-slate-600 hover:bg-slate-50 transition-colors"
-          title="اعلان‌ها"
-        >
-          <Bell size={18} />
-          <span
-            style={{ backgroundColor: 'var(--c-rubber)' }}
-            className="absolute top-2.5 left-2.5 h-2 w-2 rounded-full"
-          />
-        </button>
+        <NotificationBell onNavigateTab={t => setActiveTab(t as TrainerTabKey)} />
       </header>
 
       {/* ۲. محتوای اسکرول‌پذیر صفحه فعال */}
@@ -100,6 +145,8 @@ export function TrainerShell() {
         {activeTab === 'mem' && <Athletes />}
         {activeTab === 'hist' && <History />}
         {activeTab === 'cat' && <Catalog />}
+        {activeTab === 'prog' && <Programs />}
+        {activeTab === 'cal' && <Calendar />}
       </main>
 
       {/* ۳. منوی ناوبری پایین صفحه (Bottom Tabs) */}
@@ -108,7 +155,7 @@ export function TrainerShell() {
           backgroundColor: 'var(--c-surface-1)',
           borderColor: 'var(--c-border)',
         }}
-        className="fixed sm:sticky bottom-0 inset-x-0 z-30 border-t grid grid-cols-4 pt-1.5 pb-4 select-none shadow-lg max-w-4xl mx-auto"
+        className="fixed sm:sticky bottom-0 inset-x-0 z-30 border-t grid grid-cols-6 pt-1.5 pb-4 select-none shadow-lg max-w-4xl mx-auto"
       >
         {TABS.map(tab => {
           const Icon = tab.icon;
@@ -135,7 +182,7 @@ export function TrainerShell() {
                 <Icon size={20} strokeWidth={isActive ? 2.2 : 1.8} />
               </span>
               <span className={`text-[12px] ${isActive ? 'font-bold' : ''}`}>
-                {tab.label}
+                {t.nav.trainerShort[tab.labelKey]}
               </span>
             </button>
           );
@@ -144,15 +191,22 @@ export function TrainerShell() {
 
       {/* ۴. مدال تمام‌صفحه ثبت جلسه تمرینی (Session Flow) */}
       <AnimatePresence>
-        {activeSession && (
-          <SessionFlow
-            sessionId={activeSession.id}
-            memberId={activeSession.memberId}
-            memberName={activeSession.memberName}
-            onClose={() => setActiveSession(null)}
-            onCompleted={() => setActiveSession(null)}
-          />
-        )}
+        {activeSession && (() => {
+          return (
+            <SessionFlow
+              sessionId={activeSession.id}
+              memberId={activeSession.memberId}
+              memberName={activeSession.memberName}
+              remainingSessions={activeMember?.remainingSessions ?? 12}
+              totalSessions={activeMember?.totalSessions ?? 12}
+              trainerId={activeSession.trainerId}
+              sessionRate={activeTrainer?.sessionRate ?? 150000}
+              initialExercises={toWorkoutExercises(activeSession.exercises)}
+              onClose={() => setActiveSession(null)}
+              onCompleted={() => setActiveSession(null)}
+            />
+          );
+        })()}
       </AnimatePresence>
     </div>
   );

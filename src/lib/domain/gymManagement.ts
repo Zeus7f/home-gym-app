@@ -58,6 +58,7 @@ export interface SessionExercise {
   weightKg?: number;
   durationSeconds?: number;
   notes?: string;
+  completedSets?: { r: number; w: number; d: boolean }[];
 }
 
 export type SessionStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
@@ -134,4 +135,52 @@ export interface DailyCapacityConfig {
   date: string; // YYYY/MM/DD (Jalali)
   gymCapacity?: number;
   trainerCapacities?: Record<string, number>; // trainerId -> capacity for this specific date
+}
+
+// ─────────────────────────────────────────────────────────────
+// WORKOUT PROGRAM PUBLISHER (Trainer → Member)
+// ─────────────────────────────────────────────────────────────
+
+export interface ProgramExercise {
+  /** شناسه حرکت در کاتالوگ باشگاه */
+  exerciseId: string;
+  name: string;
+  /** ناحیه/عضله هدف به فارسی */
+  bodyPart: string;
+  equipment: string;
+  /** تعداد ست پیشنهادی */
+  sets: number;
+  /** حداقل تکرار */
+  repsMin: number;
+  /** حداکثر تکرار */
+  repsMax: number;
+  /** وزنه پیشنهادی به کیلوگرم (اختیاری — برای حرکات وزن بدن خالی) */
+  loadKg?: number;
+  notes?: string;
+}
+
+export interface ProgramDay {
+  id: string;
+  /** عنوان روز، مثلاً «روز ۱ — بالاتنه» */
+  title: string;
+  /** حرکات این روز */
+  items: ProgramExercise[];
+}
+
+export type ProgramStatus = 'draft' | 'published';
+
+export interface WorkoutProgram {
+  id: string;
+  memberId: string;
+  memberName: string;
+  trainerId: string;
+  trainerName: string;
+  title: string;
+  description?: string;
+  days: ProgramDay[];
+  status: ProgramStatus;
+  createdAt: string;
+  updatedAt: string;
+  /** تاریخ انتشار (جلالی) — فقط وقتی status = 'published' */
+  publishedAt?: string;
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useI18n } from './LanguageProvider';
 import { translations, Language } from '../lib/i18n';
 import { Compass, ArrowRight, ArrowLeft, CheckCircle2, Shield, LayoutDashboard, Activity, User, Sparkles, X, ExternalLink } from 'lucide-react';
 

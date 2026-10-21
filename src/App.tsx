@@ -24,7 +24,8 @@ const MemberShell = React.lazy(() =>
 const UIShowcase = React.lazy(() => import('./pages/dev/UIShowcase'));
 import { ThemeToggle } from './components/ui/ThemeToggle';
 import { LanguageToggle } from './components/ui/LanguageToggle';
-import { translations, Language } from './lib/i18n';
+import { LanguageProvider, useI18n } from './components/LanguageProvider';
+import { displayName } from './lib/displayName';
 import {
   LayoutDashboard,
   Activity,
@@ -32,16 +33,19 @@ import {
   Compass,
   Dumbbell,
   LogOut,
+  Eye,
 } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { cn } from './lib/utils';
 
-// ── Root: wraps everything in BrowserRouter ───────────────────
+// ── Root: wraps everything in BrowserRouter + LanguageProvider ──
 export default function Root() {
   return (
     <BrowserRouter>
-      <App />
+      <LanguageProvider>
+        <App />
+      </LanguageProvider>
     </BrowserRouter>
   );
 }
@@ -56,12 +60,38 @@ function RoleRedirect({ role }: { role: 'owner' | 'trainer' | 'member' }) {
   return <Navigate to={defaultPath[role]} replace />;
 }
 
+/**
+ * محافظ نقش — اگر نقش کاربر واردشده با نقش مسیر جاری یکی نباشد،
+ * کاربر به فضای کاری خودش هدایت می‌شود.
+ *
+ * استثنا: مدیر باشگاه می‌تواند فضای کاری مربی و ورزشکار را پیش‌نمایش کند
+ * (قابلیت توسعه‌ای). بقیه نقش‌ها فقط به فضای خودشان دسترسی دارند.
+ *
+ * بدون این محافظ، ورود با نقش دیگر روی URL قبلی (مثلاً /owner)
+ * فضای کاری نقش قبلی را نمایش می‌داد.
+ */
+function RoleGuard({
+  role,
+  authUser,
+  children,
+}: {
+  role: 'owner' | 'trainer' | 'member';
+  authUser: { role: 'owner' | 'trainer' | 'member' } | null;
+  children: React.ReactNode;
+}) {
+  if (!authUser) {
+    return <RoleRedirect role="owner" />;
+  }
+  if (authUser.role !== role && authUser.role !== 'owner') {
+    return <RoleRedirect role={authUser.role} />;
+  }
+  return <>{children}</>;
+}
+
 // ── App shell (needs router context) ─────────────────────────
 function App() {
   const [showJourney, setShowJourney] = useState(false);
-  const [lang, setLang] = useState<Language>(() => {
-    return (localStorage.getItem('hg_lang') as Language) || 'fa';
-  });
+  const { lang, setLang, t, isFa } = useI18n();
   const [, setTick] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
@@ -70,38 +100,48 @@ function App() {
     return mockStore.subscribe(() => setTick(t => t + 1));
   }, []);
 
-  // Sync RTL / lang attribute with DOM
-  useEffect(() => {
-    document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
-    document.documentElement.lang = lang;
-    localStorage.setItem('hg_lang', lang);
-  }, [lang]);
-
   const searchParams = new URLSearchParams(location.search);
   const previewRole = searchParams.get('preview_role');
+
+  /**
+   * کاربر واردشده واقعی (احراز هویت‌شده).
+   * جدا از کاربر پیش‌نمایش نگه داشته می‌شود تا محاسبهٔ نقش‌ها حلقهٔ وابستگی نداشته باشد.
+   */
+  const authUser = mockStore.currentUser;
+
+  /**
+   * پیش‌نمایش نقش — فقط مدیر باشگاه اجازهٔ آن را دارد.
+   *
+   * این پیش‌نمایش هرگز نباید جای ورود را بگیرد: پارامتر ?preview_role در URL
+   * به‌تنهایی نباید کاربر را وارد کند. بنابراین فقط وقتی معتبر است که
+   * کاربر واقعاً به‌عنوان مدیر وارد شده باشد.
+   */
   const previewUser =
-    previewRole === 'owner'
-      ? mockStore.users.find(u => u.role === 'owner')
-      : previewRole === 'trainer'
-      ? mockStore.users.find(u => u.role === 'trainer')
-      : previewRole === 'member'
-      ? mockStore.users.find(u => u.role === 'member')
+    authUser?.role === 'owner' && previewRole
+      ? mockStore.users.find(u => u.role === previewRole) ?? null
       : null;
 
-  const currentUser = previewUser || mockStore.currentUser;
+  const currentUser = previewUser || authUser;
 
   // If not authenticated → login page
   if (!currentUser) {
     return <LoginScreen lang={lang} onLanguageChange={setLang} />;
   }
 
-  const t = translations[lang];
 
   // Owner can switch to trainer/member preview; others are locked
-  const canSwitchRole = currentUser.role === 'owner';
+  // فقط کاربر واقعیِ مدیر می‌تواند نقش‌ها را جابه‌جا کند.
+  // (در حالت پیش‌نمایش، currentUser نقش پیش‌نمایشی‌شده را دارد، پس باید authUser بررسی شود)
+  const canSwitchRole = authUser?.role === 'owner';
 
   function switchTo(role: 'owner' | 'trainer' | 'member') {
-    navigate(`/${role}`);
+    // مدیر باشگاه برای دیدن فضای کاری مربی/ورزشکار باید با یک کاربر واقعی
+    // همان نقش پیش‌نمایش کند، وگرنه فضای کاری خالی نمایش داده می‌شود.
+    if (authUser?.role === 'owner' && role !== 'owner') {
+      navigate(`/${role}?preview_role=${role}`);
+    } else {
+      navigate(`/${role}`);
+    }
   }
 
   return (
@@ -133,9 +173,9 @@ function App() {
                   className="font-black text-base tracking-tight leading-none"
                   style={{ color: 'var(--c-deep)' }}
                 >
-                  {lang === 'fa' ? mockStore.gym.name : 'Iron Haven Club'}
+                  {lang === 'fa' ? mockStore.gym.name : displayName(mockStore.gym.name, isFa) || 'Iron Haven Club'}
                 </span>
-                <Badge variant="primary" size="sm" className="hidden sm:inline-flex">
+                <Badge variant="brand" size="sm" className="hidden sm:inline-flex">
                   {t.appBadge}
                 </Badge>
                 {mockStore.isSupabaseConnected && (
@@ -220,7 +260,7 @@ function App() {
                   className="text-xs font-black block leading-none"
                   style={{ color: 'var(--c-deep)' }}
                 >
-                  {currentUser.displayName}
+                  {displayName(currentUser.displayName, isFa)}
                 </span>
                 <span
                   className="text-[10px] font-bold uppercase tracking-wider leading-none mt-1 block"
@@ -232,12 +272,24 @@ function App() {
                     ? (lang === 'fa' ? 'مربی' : 'Trainer')
                     : (lang === 'fa' ? 'ورزشکار' : 'Member')}
                 </span>
+                {previewUser && (
+                  <span
+                    className="text-[10px] font-bold leading-none mt-1 block"
+                    style={{ color: 'var(--c-brass)' }}
+                  >
+                    {lang === 'fa' ? 'حالت پیش‌نمایش' : 'Preview mode'}
+                  </span>
+                )}
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => mockStore.logout()}
-                ariaLabel={lang === 'fa' ? 'خروج از حساب کاربری' : 'Sign Out'}
+                onClick={() => {
+                  mockStore.logout();
+                  // بازگشت به ریشه تا ورود بعدی با نقش جدید از مسیر درست آغاز شود
+                  navigate('/');
+                }}
+                aria-label={lang === 'fa' ? 'خروج از حساب کاربری' : 'Sign Out'}
                 className="p-2 rounded-xl"
                 style={{ color: 'var(--c-rubber)' }}
               >
@@ -275,6 +327,22 @@ function App() {
         </div>
       )}
 
+      {/* نشان حالت پیش‌نمایش (فقط مدیر باشگاه) */}
+      {previewUser && (
+        <div
+          className="flex items-center justify-center gap-2 px-4 py-2 text-[12px] font-bold"
+          style={{ backgroundColor: 'var(--c-surface-2)', color: 'var(--c-brass)' }}
+          role="status"
+        >
+          <Eye size={14} />
+          <span>
+            {lang === 'fa'
+              ? `شما در حال مشاهده فضای کاری «${t.roles[currentUser.role]}» به‌عنوان ${currentUser.displayName} هستید.`
+              : `Previewing the ${t.roles[currentUser.role]} workspace as ${currentUser.displayName}.`}
+          </span>
+        </div>
+      )}
+
       {/* ── Route views ── */}
       <main className="max-w-7xl mx-auto p-4 sm:p-8">
         <React.Suspense
@@ -296,13 +364,34 @@ function App() {
             <Route path="/" element={<RoleRedirect role={currentUser.role} />} />
 
             {/* Owner workspace */}
-            <Route path="/owner/*" element={<OwnerShell />} />
+            <Route
+              path="/owner/*"
+              element={
+                <RoleGuard role="owner" authUser={authUser}>
+                  <OwnerShell />
+                </RoleGuard>
+              }
+            />
 
             {/* Trainer workspace */}
-            <Route path="/trainer/*" element={<TrainerShell />} />
+            <Route
+              path="/trainer/*"
+              element={
+                <RoleGuard role="trainer" authUser={authUser}>
+                  <TrainerShell />
+                </RoleGuard>
+              }
+            />
 
             {/* Member workspace */}
-            <Route path="/member/*" element={<MemberShell />} />
+            <Route
+              path="/member/*"
+              element={
+                <RoleGuard role="member" authUser={authUser}>
+                  <MemberShell />
+                </RoleGuard>
+              }
+            />
 
             {/* Dev UI Showcase */}
             <Route path="/dev/ui" element={<UIShowcase />} />

@@ -4,7 +4,9 @@ import { Chips } from '../../../components/ui/Chips';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Meter } from '../../../components/ui/Meter';
 import { MemberData } from '../components/MemberSheet';
-import { fa, short, toman } from '../../../lib/format';
+import { num, short, toman } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
+import { displayName } from '../../../lib/displayName';
 import { getMembers } from '../../../api/members';
 import { Member } from '../../../lib/domain/gymManagement';
 
@@ -14,6 +16,7 @@ export interface MembersProps {
 }
 
 export function Members({ onOpenMember, isMobile = false }: MembersProps) {
+  const { t, isFa } = useI18n();
   const [filter, setFilter] = useState<'all' | 'low' | 'debt' | 'exp'>('all');
   const [search, setSearch] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
@@ -66,19 +69,19 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="نام یا شماره تماس…"
+            placeholder={t.owner.members.searchPlaceholder}
             className="w-full bg-transparent border-none outline-hidden text-[14px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
           />
         </div>
 
-        <Chips
+        <Chips<'all' | 'low' | 'debt' | 'exp'>
           value={filter}
           onChange={setFilter}
           items={[
-            ['all', `همه · ${fa(members.length)}`],
-            ['low', 'رو به اتمام'],
-            ['debt', 'بدهکار'],
-            ['exp', 'منقضی'],
+            ['all', `${t.owner.members.filterAll} · ${num(members.length)}`],
+            ['low', t.owner.members.filterLow],
+            ['debt', t.owner.members.filterDebtor],
+            ['exp', t.owner.members.filterExpired],
           ]}
         />
       </div>
@@ -88,7 +91,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
           className="py-12 text-center text-sm"
           style={{ color: 'var(--c-text-muted)' }}
         >
-          در حال بارگذاری لیست اعضا...
+          {t.owner.members.loading}
         </div>
       )}
 
@@ -106,19 +109,19 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
               className="p-4 rounded-xl border transition-all active:scale-[0.99] cursor-pointer shadow-2xs"
             >
               <div className="flex items-center gap-3">
-                <Avatar name={m.name} size={42} tone="ink" />
+                <Avatar name={displayName(m.name, isFa)} size={42} tone="ink" />
                 <div className="flex-1 min-w-0">
                   <div
                     className="font-bold text-[15px]"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    {m.name}
+                    displayName(m.name, isFa)
                   </div>
                   <div
                     className="text-[13px] truncate"
                     style={{ color: 'var(--c-text-muted)' }}
                   >
-                    {m.defaultTrainerName} · {m.packageName}
+                    {displayName(m.defaultTrainerName, isFa)} · {m.packageName}
                   </div>
                 </div>
                 <div
@@ -130,7 +133,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                   }}
                   className="font-display text-[26px] leading-none tnum"
                 >
-                  {fa(m.remainingSessions)}
+                  {num(m.remainingSessions)}
                 </div>
               </div>
 
@@ -143,7 +146,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                   className="mt-2 text-[13px] font-semibold"
                   style={{ color: 'var(--c-rubber)' }}
                 >
-                  بدهی {toman(m.outstandingBalance)}
+                  {t.owner.members.debt} {toman(m.outstandingBalance)}
                 </div>
               )}
             </div>
@@ -173,25 +176,25 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                   className="text-right font-medium px-5 py-3"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
-                  ورزشکار
+                  {t.owner.members.member}
                 </th>
                 <th
                   className="text-right font-medium py-3"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
-                  مربی
+                  {t.owner.members.trainer}
                 </th>
                 <th
                   className="text-right font-medium py-3 w-[34%]"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
-                  مانده بسته
+                  {t.owner.members.packageLeft}
                 </th>
                 <th
                   className="text-right font-medium py-3"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
-                  بدهی
+                  {t.owner.members.debt}
                 </th>
                 <th className="py-3 px-5" />
               </tr>
@@ -206,13 +209,13 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                 >
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <Avatar name={m.name} size={38} tone="ink" />
+                      <Avatar name={displayName(m.name, isFa)} size={38} tone="ink" />
                       <div>
                         <div
                           className="font-bold text-[15px]"
                           style={{ color: 'var(--c-deep)' }}
                         >
-                          {m.name}
+                          displayName(m.name, isFa)
                         </div>
                         <div
                           className="text-[13px] tnum"
@@ -225,7 +228,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                   </td>
 
                   <td className="py-3 text-[14px]" style={{ color: 'var(--c-text)' }}>
-                    {m.defaultTrainerName}
+                    {displayName(m.defaultTrainerName, isFa)}
                   </td>
 
                   <td className="py-3 pe-6">
@@ -242,7 +245,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                         }}
                         className="w-14 tnum text-[13px] font-bold text-left"
                       >
-                        {fa(m.remainingSessions)}/{fa(m.totalSessions)}
+                        {num(m.remainingSessions)}/{num(m.totalSessions)}
                       </span>
                     </div>
                   </td>
@@ -256,7 +259,9 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                         {short(m.outstandingBalance)}
                       </span>
                     ) : (
-                      <span style={{ color: 'var(--c-text-faint)' }}>تسویه</span>
+                      <span style={{ color: 'var(--c-text-faint)' }}>
+                        {t.owner.members.settled}
+                      </span>
                     )}
                   </td>
 
@@ -273,7 +278,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
               className="py-12 text-center text-sm"
               style={{ color: 'var(--c-text-muted)' }}
             >
-              عضوی با این مشخصات یافت نشد.
+              {t.owner.members.empty}
             </div>
           )}
         </div>

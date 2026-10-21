@@ -2,68 +2,174 @@ import React, { useState, useMemo } from 'react';
 import { Search, Play, Image as ImageIcon, Dumbbell, X, Film, CheckCircle2 } from 'lucide-react';
 import { Chips } from '../../../components/ui/Chips';
 import { EXERCISE_CATALOG, ExerciseItem } from '../../../api/exercises';
-import { fa } from '../../../lib/format';
+import { num } from '../../../lib/format';
+import { useI18n } from '../../../components/LanguageProvider';
 
-const CATS = [
-  'همه',
-  'سینه',
-  'پشت',
-  'پا',
-  'سرشانه',
-  'بازو',
-  'شکم',
-  'هوازی',
-  'فیله کمر',
-  'ساق پا',
-] as const;
+/**
+ * دسته‌بندی عضلات.
+ *
+ * کلیدها مستقل از زبان‌اند و منطق تطبیق روی داده‌های انگلیسی کاتالوگ
+ * انجام می‌شود تا فیلتر در هر دو زبان نتیجهٔ یکسان بدهد.
+ */
+const CATS: Array<{
+  key: string;
+  fa: string;
+  en: string;
+  match: (item: ExerciseItem) => boolean;
+}> = [
+  { key: 'all', fa: 'همه', en: 'All', match: () => true },
+  {
+    key: 'chest',
+    fa: 'سینه',
+    en: 'Chest',
+    match: i => i.bodyPart === 'chest',
+  },
+  {
+    key: 'back',
+    fa: 'پشت',
+    en: 'Back',
+    match: i =>
+      i.bodyPart === 'back' ||
+      ['Upper Back', 'Lats', 'Traps'].includes(i.primaryMuscle || ''),
+  },
+  {
+    key: 'legs',
+    fa: 'پا',
+    en: 'Legs',
+    match: i =>
+      i.bodyPart === 'legs' ||
+      ['Quadriceps', 'Hamstrings', 'Glutes', 'Calves'].includes(
+        i.primaryMuscle || ''
+      ),
+  },
+  {
+    key: 'shoulders',
+    fa: 'سرشانه',
+    en: 'Shoulders',
+    match: i => i.bodyPart === 'shoulders',
+  },
+  {
+    key: 'arms',
+    fa: 'بازو',
+    en: 'Arms',
+    match: i =>
+      i.bodyPart === 'arms' ||
+      ['Biceps', 'Triceps', 'Forearms'].includes(i.primaryMuscle || ''),
+  },
+  {
+    key: 'core',
+    fa: 'شکم',
+    en: 'Core',
+    match: i => i.bodyPart === 'core' || i.primaryMuscle === 'Abdominals',
+  },
+  {
+    key: 'cardio',
+    fa: 'هوازی',
+    en: 'Cardio',
+    match: i => i.bodyPart === 'cardio' || i.primaryMuscle === 'Cardio',
+  },
+  {
+    key: 'lowerback',
+    fa: 'فیله کمر',
+    en: 'Lower Back',
+    match: i => i.primaryMuscle === 'Lower Back',
+  },
+  {
+    key: 'calves',
+    fa: 'ساق پا',
+    en: 'Calves',
+    match: i => i.primaryMuscle === 'Calves',
+  },
+];
 
-const EQUIPMENTS = [
-  'همه',
-  'هالتر',
-  'دمبل',
-  'دستگاه',
-  'وزن بدن',
-  'کش تمرینی',
-  'کتل‌بل',
-  'تی‌آر‌ایکس',
-] as const;
+const EQUIPMENTS: Array<{
+  key: string;
+  fa: string;
+  en: string;
+  match: (item: ExerciseItem) => boolean;
+}> = [
+  { key: 'all', fa: 'همه', en: 'All', match: () => true },
+  {
+    key: 'barbell',
+    fa: 'هالتر',
+    en: 'Barbell',
+    match: i => i.equipment === 'barbell',
+  },
+  {
+    key: 'dumbbell',
+    fa: 'دمبل',
+    en: 'Dumbbell',
+    match: i => i.equipment === 'dumbbell',
+  },
+  {
+    key: 'machine',
+    fa: 'دستگاه',
+    en: 'Machine',
+    match: i => i.equipment === 'machine' || i.equipment === 'cable',
+  },
+  {
+    key: 'bodyweight',
+    fa: 'وزن بدن',
+    en: 'Bodyweight',
+    match: i => i.equipment === 'bodyweight',
+  },
+  {
+    key: 'band',
+    fa: 'کش تمرینی',
+    en: 'Band',
+    match: i => i.equipment === 'band',
+  },
+  {
+    key: 'kettlebell',
+    fa: 'کتل‌بل',
+    en: 'Kettlebell',
+    match: i => i.equipment === 'kettlebell',
+  },
+  {
+    key: 'trx',
+    fa: 'تی‌آر‌ایکس',
+    en: 'Suspension',
+    match: i => i.equipment === 'foam_roller',
+  },
+];
 
 export function Catalog() {
-  const [selectedCat, setSelectedCat] = useState<string>('همه');
-  const [selectedEq, setSelectedEq] = useState<string>('همه');
+  const { t, isFa } = useI18n();
+  const [selectedCat, setSelectedCat] = useState<string>('all');
+  const [selectedEq, setSelectedEq] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [selectedExercise, setSelectedExercise] = useState<ExerciseItem | null>(null);
   const [visibleCount, setVisibleCount] = useState<number>(24);
 
+  const exName = (e: ExerciseItem) => (isFa ? e.nameFa : e.name) || e.nameFa;
+  const exMuscle = (e: ExerciseItem) =>
+    (isFa ? e.primaryMuscleFa : e.primaryMuscle) || e.bodyPartFa;
+  const exEquipment = (e: ExerciseItem) =>
+    (isFa ? e.equipmentFa : e.equipmentName) || e.equipmentFa;
+
+  const catLabel = (c: (typeof CATS)[number]) => (isFa ? c.fa : c.en);
+  const eqLabel = (e: (typeof EQUIPMENTS)[number]) => (isFa ? e.fa : e.en);
+
   // Filter exercises
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const cat = CATS.find(c => c.key === selectedCat) ?? CATS[0];
+    const eq = EQUIPMENTS.find(e => e.key === selectedEq) ?? EQUIPMENTS[0];
 
     return EXERCISE_CATALOG.filter((item) => {
       // فیلتر دسته‌بندی عضله
-      if (selectedCat !== 'همه') {
-        const matchCat =
-          item.bodyPartFa.includes(selectedCat) ||
-          item.primaryMuscleFa?.includes(selectedCat) ||
-          (selectedCat === 'پشت' && (item.bodyPart === 'back' || item.primaryMuscle === 'Upper Back' || item.primaryMuscle === 'Lats')) ||
-          (selectedCat === 'بازو' && (item.primaryMuscle === 'Biceps' || item.primaryMuscle === 'Triceps' || item.primaryMuscle === 'Forearms')) ||
-          (selectedCat === 'پا' && (item.primaryMuscle === 'Quadriceps' || item.primaryMuscle === 'Hamstrings' || item.primaryMuscle === 'Glutes' || item.primaryMuscle === 'Calves'));
-        if (!matchCat) return false;
-      }
+      if (!cat.match(item)) return false;
 
       // فیلتر تجهیزات
-      if (selectedEq !== 'همه') {
-        const matchEq =
-          item.equipmentFa.includes(selectedEq) ||
-          (selectedEq === 'وزن بدن' && (item.equipment === 'bodyweight' || item.equipmentFa === 'وزن بدن'));
-        if (!matchEq) return false;
-      }
+      if (!eq.match(item)) return false;
 
       // جستجو
       if (q) {
         const inFa = item.nameFa?.toLowerCase().includes(q);
         const inEn = item.name?.toLowerCase().includes(q);
-        const inMuscle = item.primaryMuscleFa?.toLowerCase().includes(q) || item.primaryMuscle?.toLowerCase().includes(q);
+        const inMuscle =
+          item.primaryMuscleFa?.toLowerCase().includes(q) ||
+          item.primaryMuscle?.toLowerCase().includes(q);
         const inEq = item.equipmentFa?.toLowerCase().includes(q);
         if (!inFa && !inEn && !inMuscle && !inEq) return false;
       }
@@ -94,7 +200,7 @@ export function Catalog() {
             setSearch(e.target.value);
             setVisibleCount(24);
           }}
-          placeholder="جستجوی نام فارسی، انگلیسی یا عضله هدف در بین ۴۱۳ حرکت…"
+          placeholder={t.trainer.catalog.searchPlaceholder}
           className="w-full bg-transparent border-none outline-hidden text-[14px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
         />
         {search && (
@@ -102,7 +208,7 @@ export function Catalog() {
             onClick={() => setSearch('')}
             className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
           >
-            پاک کردن
+            {isFa ? 'پاک کردن' : 'Clear'}
           </button>
         )}
       </div>
@@ -115,20 +221,20 @@ export function Catalog() {
             setSelectedCat(cat);
             setVisibleCount(24);
           }}
-          items={CATS.map((x) => [x, x])}
+          items={CATS.map((x) => [x.key, catLabel(x)] as const)}
         />
 
         {/* فیلتر تجهیزات جانبی */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[12px] no-scrollbar">
-          <span className="text-slate-400 shrink-0 me-1">ابزار:</span>
+          <span className="text-slate-400 shrink-0 me-1">{t.trainer.catalog.toolLabel}</span>
           {EQUIPMENTS.map((eq) => {
-            const isActive = selectedEq === eq;
+            const isActive = selectedEq === eq.key;
             return (
               <button
-                key={eq}
+                key={eq.key}
                 type="button"
                 onClick={() => {
-                  setSelectedEq(eq);
+                  setSelectedEq(eq.key);
                   setVisibleCount(24);
                 }}
                 style={{
@@ -138,7 +244,7 @@ export function Catalog() {
                 }}
                 className="px-2.5 py-1 rounded-lg border text-xs font-medium shrink-0 transition-colors cursor-pointer"
               >
-                {eq}
+                {eqLabel(eq)}
               </button>
             );
           })}
@@ -148,10 +254,12 @@ export function Catalog() {
       {/* تعداد نتایج */}
       <div className="flex justify-between items-center text-[12px] text-slate-500 px-1">
         <span>
-          نمایش {fa(visibleItems.length)} از {fa(filtered.length)} حرکت یافته‌شده
+          {t.trainer.catalog.showing
+            .replace('{shown}', num(visibleItems.length))
+            .replace('{total}', num(filtered.length))}
         </span>
         {filtered.length > 0 && (
-          <span className="text-[11px] text-slate-400">بانک حرکات: ۴۱۳ تمرین با مدیا</span>
+          <span className="text-[11px] text-slate-400">{t.trainer.catalog.bankNote}</span>
         )}
       </div>
 
@@ -178,7 +286,7 @@ export function Catalog() {
               {ex.source && ex.sourceType === 'image' ? (
                 <img
                   src={ex.source}
-                  alt={ex.nameFa}
+                  alt={exName(ex)}
                   loading="lazy"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   onError={(e) => {
@@ -216,7 +324,7 @@ export function Catalog() {
                     <rect x="21" y="1" width="4" height="18" rx="1" fill="currentColor" />
                     <rect x="26" y="4" width="4" height="12" rx="1" fill="currentColor" />
                   </svg>
-                  <span className="text-[10px] text-slate-400">نمایش گرافیکی</span>
+                  <span className="text-[10px] text-slate-400">{t.trainer.catalog.mediaGraphic}</span>
                 </div>
               )}
 
@@ -224,13 +332,13 @@ export function Catalog() {
               {ex.sourceType === 'video' && (
                 <div className="absolute top-2 start-2 px-1.5 py-0.5 rounded-md bg-black/65 text-white text-[10px] flex items-center gap-1 backdrop-blur-xs">
                   <Film size={10} />
-                  <span>ویدیو</span>
+                  <span>{t.trainer.catalog.mediaVideo}</span>
                 </div>
               )}
               {ex.sourceType === 'image' && (
                 <div className="absolute top-2 start-2 px-1.5 py-0.5 rounded-md bg-black/65 text-white text-[10px] flex items-center gap-1 backdrop-blur-xs">
                   <ImageIcon size={10} />
-                  <span>تصویر</span>
+                  <span>{t.trainer.catalog.mediaImage}</span>
                 </div>
               )}
             </div>
@@ -241,9 +349,9 @@ export function Catalog() {
                 <div
                   className="font-bold text-[13px] sm:text-[14px] leading-snug line-clamp-2"
                   style={{ color: 'var(--c-deep)' }}
-                  title={ex.nameFa}
+                  title={exName(ex)}
                 >
-                  {ex.nameFa}
+                  {exName(ex)}
                 </div>
                 <div
                   dir="ltr"
@@ -262,13 +370,13 @@ export function Catalog() {
                   }}
                   className="px-2 py-0.5 rounded-md font-medium truncate max-w-[90px]"
                 >
-                  {ex.primaryMuscleFa || ex.bodyPartFa}
+                  {exMuscle(ex)}
                 </span>
                 <span
                   style={{ color: 'var(--c-text-muted)' }}
                   className="truncate max-w-[80px]"
                 >
-                  {ex.equipmentFa}
+                  {exEquipment(ex)}
                 </span>
               </div>
             </div>
@@ -284,8 +392,8 @@ export function Catalog() {
             className="col-span-2 md:col-span-3 lg:col-span-4 py-16 text-center rounded-2xl border text-sm space-y-2"
           >
             <Dumbbell className="w-10 h-10 mx-auto text-slate-400 opacity-60" />
-            <div className="font-bold text-slate-700 dark:text-slate-300">حرکتی با این مشخصات یافت نشد</div>
-            <div className="text-xs text-slate-400">لطفاً فیلترها یا عبارت جستجو را تغییر دهید.</div>
+            <div className="font-bold text-slate-700 dark:text-slate-300">{t.trainer.catalog.notFound}</div>
+            <div className="text-xs text-slate-400">{t.trainer.catalog.notFoundHint}</div>
           </div>
         )}
       </div>
@@ -303,7 +411,7 @@ export function Catalog() {
             }}
             className="px-6 py-2.5 rounded-xl border text-[13px] font-bold hover:shadow-xs transition-shadow cursor-pointer"
           >
-            نمایش ۲۴ حرکت دیگر ({fa(filtered.length - visibleCount)} باقیمانده)
+            {t.trainer.catalog.loadMore.replace('{count}', num(24))} ({num(filtered.length - visibleCount)} {t.actions.none === 'هیچ' ? 'باقیمانده' : 'left'})
           </button>
         </div>
       )}
@@ -338,13 +446,13 @@ export function Catalog() {
               ) : selectedExercise.source && selectedExercise.sourceType === 'image' ? (
                 <img
                   src={selectedExercise.source}
-                  alt={selectedExercise.nameFa}
+                  alt={exName(selectedExercise)}
                   className="w-full h-full object-contain"
                 />
               ) : (
                 <div className="text-center text-slate-400 p-8 space-y-2">
                   <Dumbbell className="w-12 h-12 mx-auto opacity-40 text-slate-300" />
-                  <div className="text-sm font-medium">پیش‌نمایش گرافیکی استاندارد</div>
+                  <div className="text-sm font-medium">{t.trainer.catalog.mediaGraphic}</div>
                 </div>
               )}
 
@@ -352,7 +460,7 @@ export function Catalog() {
                 type="button"
                 onClick={() => setSelectedExercise(null)}
                 className="absolute top-3 end-3 w-8 h-8 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black transition-colors cursor-pointer"
-                aria-label="بستن"
+                aria-label={t.actions.close}
               >
                 <X size={16} />
               </button>
@@ -365,7 +473,7 @@ export function Catalog() {
                   className="text-lg font-black"
                   style={{ color: 'var(--c-deep)' }}
                 >
-                  {selectedExercise.nameFa}
+                  {exName(selectedExercise)}
                 </h3>
                 <p dir="ltr" className="text-xs text-slate-400 font-mono text-end mt-0.5">
                   {selectedExercise.name}
@@ -381,7 +489,10 @@ export function Catalog() {
                   }}
                   className="px-3 py-1 rounded-lg font-bold"
                 >
-                  عضله اصلی: {selectedExercise.primaryMuscleFa || selectedExercise.bodyPartFa}
+                  {t.trainer.catalog.primaryMuscle.replace(
+                    '{value}',
+                    exMuscle(selectedExercise)
+                  )}
                 </span>
 
                 <span
@@ -391,12 +502,18 @@ export function Catalog() {
                   }}
                   className="px-3 py-1 rounded-lg font-medium"
                 >
-                  تجهیزات: {selectedExercise.equipmentFa}
+                  {t.trainer.catalog.equipment.replace(
+                    '{value}',
+                    exEquipment(selectedExercise)
+                  )}
                 </span>
 
                 {selectedExercise.secondaryMusclesFa && selectedExercise.secondaryMusclesFa.length > 0 && (
                   <span className="px-3 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium">
-                    عضلات کمکی: {selectedExercise.secondaryMusclesFa.join('، ')}
+                    {t.trainer.catalog.secondaryMuscles.replace(
+                      '{value}',
+                      selectedExercise.secondaryMusclesFa.join('، ')
+                    )}
                   </span>
                 )}
               </div>
@@ -411,7 +528,7 @@ export function Catalog() {
               >
                 <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200">
                   <CheckCircle2 size={15} style={{ color: 'var(--c-steel)' }} />
-                  <span>راهنمای فنی اجرای حرکت:</span>
+                  <span>{t.trainer.catalog.howTo}:</span>
                 </div>
                 <p style={{ color: 'var(--c-text-muted)' }}>
                   {selectedExercise.instructionsFa}
@@ -429,7 +546,7 @@ export function Catalog() {
                   }}
                   className="w-full py-2.5 rounded-xl font-bold text-sm cursor-pointer shadow-xs"
                 >
-                  متوجه شدم
+                  {t.trainer.catalog.close}
                 </button>
               </div>
             </div>

@@ -2,76 +2,96 @@
  * src/lib/format.ts
  * Number and currency formatting utilities.
  * G3/G7 fix: all number display goes through these helpers — no raw .toLocaleString in components.
+ *
+ * The active locale is set once by the LanguageProvider, so every call site
+ * automatically renders Persian or Latin digits depending on the UI language.
  */
 
+export type FormatLocale = 'fa' | 'en';
+
+let activeLocale: FormatLocale = 'fa';
+
+/** تنظیم محل نمایش اعداد — توسط LanguageProvider صدا زده می‌شود. */
+export function setFormatLocale(locale: FormatLocale) {
+  activeLocale = locale;
+}
+
+/** محل نمایش فعال. */
+export function getFormatLocale(): FormatLocale {
+  return activeLocale;
+}
+
+function localeTag(locale: FormatLocale = activeLocale): string {
+  return locale === 'fa' ? 'fa-IR' : 'en-US';
+}
+
 // ---------------------------------------------------------------
-// Core Persian number formatter
+// Core number formatter
 // ---------------------------------------------------------------
 
 /**
- * Format a number using Persian (Farsi) digits.
+ * Format a number using the active locale (Persian or Latin digits).
  * Handles NaN, Infinity, negative numbers, and zero safely.
  *
  * @example
- * fa(1403)    // "۱٬۴۰۳"
- * fa(-5)      // "‎-۵"
- * fa(0)       // "۰"
+ * num(1403)    // "۱٬۴۰۳" in fa, "1,403" in en
+ * num(-5)      // "‎-۵" in fa, "-5" in en
  */
-export function fa(n: number | string): string {
-  const num = typeof n === 'string' ? parseFloat(n) : n;
-  if (!isFinite(num)) return '۰';
-  return new Intl.NumberFormat('fa-IR').format(num);
+export function num(n: number | string): string {
+  const value = typeof n === 'string' ? parseFloat(n) : n;
+  if (!isFinite(value)) return activeLocale === 'fa' ? '۰' : '0';
+  return new Intl.NumberFormat(localeTag()).format(value);
 }
 
 /**
- * Format a large number in abbreviated Persian form.
- *   ≥ 1,000,000 → "X.X م"  (میلیون)
- *   ≥ 1,000     → "X هزار"
- *   < 1,000     → full fa() number
- *
- * @example
- * short(1500000)  // "۱.۵ م"
- * short(4200000)  // "۴.۲ م"
- * short(350000)   // "۳۵۰ هزار"
- * short(-200000)  // "-۲۰۰ هزار"
- * short(0)        // "۰"
+ * @deprecated نام قدیمی `fa` به معنی «فارسی» بود؛ اکنون نمایش با زبان فعال هماهنگ است.
+ * از {@link num} استفاده کنید.
+ */
+export const fa = num;
+
+/**
+ * Format a large number in abbreviated form (localized).
+ *   ≥ 1,000,000 → "X.X م" (fa) / "X.XM" (en)
+ *   ≥ 1,000     → "X هزار" (fa) / "XK" (en)
+ *   < 1,000     → full num() number
  */
 export function short(n: number): string {
-  if (!isFinite(n)) return '۰';
+  if (!isFinite(n)) return activeLocale === 'fa' ? '۰' : '0';
   const abs = Math.abs(n);
   const sign = n < 0 ? '-' : '';
+
   if (abs >= 1_000_000) {
-    // Round to one decimal million
     const millions = Math.round(abs / 100_000) / 10;
-    return sign + fa(millions) + ' م';
+    return activeLocale === 'fa'
+      ? sign + num(millions) + ' م'
+      : sign + num(millions) + 'M';
   }
   if (abs >= 1_000) {
-    return sign + fa(Math.round(abs / 1_000)) + ' هزار';
+    return activeLocale === 'fa'
+      ? sign + num(Math.round(abs / 1_000)) + ' هزار'
+      : sign + num(Math.round(abs / 1_000)) + 'K';
   }
-  return fa(n);
+  return num(n);
 }
 
 /**
  * Format a number as a Toman currency string.
  *
  * @example
- * toman(4800000)   // "۴٬۸۰۰٬۰۰۰ تومان"
- * toman(-1200000)  // "‎-۱٬۲۰۰٬۰۰۰ تومان"
- * toman(0)         // "۰ تومان"
+ * toman(4800000)   // "۴٬۸۰۰٬۰۰۰ تومان" in fa, "4,800,000 Toman" in en
  */
 export function toman(n: number): string {
-  return fa(n) + ' تومان';
+  return activeLocale === 'fa' ? num(n) + ' تومان' : num(n) + ' Toman';
 }
 
 /**
  * Format a number as abbreviated Toman (for compact displays).
  *
  * @example
- * shortToman(4800000)  // "۴.۸ م تومان"
- * shortToman(350000)   // "۳۵۰ هزار تومان"
+ * shortToman(4800000)   // "۴.۸ م تومان" in fa, "4.8M Toman" in en
  */
 export function shortToman(n: number): string {
-  return short(n) + ' تومان';
+  return short(n) + (activeLocale === 'fa' ? ' تومان' : ' Toman');
 }
 
 // ---------------------------------------------------------------

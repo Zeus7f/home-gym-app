@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
-import { fa } from '../../lib/format';
+import { num } from '../../lib/format';
+import { useI18n } from '../LanguageProvider';
 import { getCurrentHour } from '../../lib/date/jalali';
 import { SessionStatus } from './Pill';
 
@@ -31,14 +32,6 @@ export interface CapacityProps {
 
 const ORDER: SessionStatus[] = ['done', 'live', 'wait', 'noshow'];
 
-const SEG_LABELS: Record<SessionStatus, string> = {
-  done: 'تکمیل',
-  live: 'داخل سالن',
-  wait: 'در راه',
-  cancel: 'لغو',
-  noshow: 'غیبت',
-};
-
 const SEG_COLORS: Record<SessionStatus, string> = {
   done: 'var(--c-seg-done)',
   live: 'var(--c-seg-live)',
@@ -63,7 +56,10 @@ function normalizeStatus(st?: string): SessionStatus {
 function parseHour(item: CapacitySessionItem): number {
   if (typeof item.h === 'number') return item.h;
   if (item.time) {
-    const raw = item.time.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString());
+    // تبدیل ارقام فارسی به لاتین برای خواندن ساعت
+    const raw = item.time.replace(/[\u06F0-\u06F9]/g, d =>
+      String.fromCharCode(48 + (d.charCodeAt(0) - 0x06f0))
+    );
     const parsed = parseInt(raw.split(':')[0], 10);
     if (!isNaN(parsed)) return parsed;
   }
@@ -95,6 +91,7 @@ export function Capacity({
   currentHour,
   className,
 }: CapacityProps) {
+  const { t } = useI18n();
   const activeNowHour = currentHour ?? getCurrentHour();
 
   // فیلتر موارد غیرلغوشده
@@ -118,7 +115,8 @@ export function Capacity({
   const occupied = activeSessions.length;
   const free = Math.max(0, totalCapacity - occupied);
   const percentage = Math.round((occupied / totalCapacity) * 100);
-  const hoursRange = Array.from({ length: 15 }, (_, i) => 8 + i); // ۸:۰۰ تا ۲۲:۰۰
+  // ۸:۰۰ تا ۲۲:۰۰
+  const hoursRange = Array.from({ length: 15 }, (_, i) => 8 + i);
 
   return (
     <section
@@ -131,13 +129,13 @@ export function Capacity({
         compact ? 'p-4' : 'p-6',
         className
       )}
-      aria-label="شاخص ظرفیت باشگاه"
+      aria-label={t.owner.capacity.ariaLabel}
     >
       {/* هدر ویجت */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-            ظرفیت امروز باشگاه
+            {t.owner.capacity.todayTitle}
           </div>
           <div className="flex items-baseline gap-2 mt-1">
             <span
@@ -147,13 +145,13 @@ export function Capacity({
                 compact ? 'text-[52px]' : 'text-[68px]'
               )}
             >
-              {fa(occupied)}
+              {num(occupied)}
             </span>
             <span
               style={{ color: 'var(--c-text-faint)' }}
               className={cn('font-display', compact ? 'text-[24px]' : 'text-[30px]')}
             >
-              / {fa(totalCapacity)} نفر
+              / {t.owner.capacity.totalOf.replace('{count}', num(totalCapacity))}
             </span>
           </div>
         </div>
@@ -170,10 +168,10 @@ export function Capacity({
               style={{ backgroundColor: 'var(--c-avail-dot)' }}
               className="h-2 w-2 rounded-full"
             />
-            <span>{fa(free)} جای خالی</span>
+            <span>{t.owner.capacity.freeSlots.replace('{count}', num(free))}</span>
           </div>
           <div className="text-[14px] mt-2" style={{ color: 'var(--c-text-muted)' }}>
-            {fa(percentage)}٪ پر شده
+            {t.owner.capacity.filled.replace('{count}', num(percentage))}
           </div>
         </div>
       </div>
@@ -231,13 +229,13 @@ export function Capacity({
               className="text-[14px] truncate"
               style={{ color: 'var(--c-text-muted)' }}
             >
-              {SEG_LABELS[k]}
+              {t.owner.capacity.status[k]}
             </span>
             <span
               className="text-[15px] font-bold tnum"
               style={{ color: 'var(--c-deep)' }}
             >
-              {fa(counts[k])}
+              {num(counts[k])}
             </span>
           </div>
         ))}
@@ -255,13 +253,13 @@ export function Capacity({
               className="text-[14px] truncate"
               style={{ color: 'var(--c-text-muted)' }}
             >
-              خالی
+              {t.owner.capacity.free}
             </span>
             <span
               className="text-[15px] font-bold tnum"
               style={{ color: 'var(--c-deep)' }}
             >
-              {fa(free)}
+              {num(free)}
             </span>
           </div>
         )}
@@ -274,10 +272,10 @@ export function Capacity({
       >
         <div className="flex items-center justify-between mb-3">
           <span className="text-[14px] font-semibold" style={{ color: 'var(--c-deep)' }}>
-            شلوغی ساعت به ساعت
+            {t.owner.capacity.hourlyTitle}
           </span>
           <span className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-            هر ساعت {fa(hourCap)} جا
+            {t.owner.capacity.perHour.replace('{count}', num(hourCap))}
           </span>
         </div>
 
@@ -340,7 +338,7 @@ export function Capacity({
                     compact && h % 2 !== 0 && 'opacity-0'
                   )}
                 >
-                  {fa(h)}
+                  {num(h)}
                 </span>
               </div>
             );

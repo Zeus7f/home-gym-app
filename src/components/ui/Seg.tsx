@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
+import { useI18n } from '../LanguageProvider';
 
 export interface SegProps<T extends string = string> {
   /** آرایه‌ای از تاپل‌های [کلید, عنوان] */
@@ -26,12 +27,14 @@ export function Seg<T extends string = string>({
   onChange,
   full = false,
   className,
-  ariaLabel = 'انتخاب گزینه',
+  ariaLabel,
 }: SegProps<T>) {
+  const { t } = useI18n();
+  const label = ariaLabel ?? t.actions.chooseOption;
   return (
     <div
       role="tablist"
-      aria-label={ariaLabel}
+      aria-label={label}
       style={{
         backgroundColor: 'var(--c-surface-2)',
         borderRadius: 'var(--radius-md)',

@@ -1,7 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Play, Image as ImageIcon, Dumbbell, X, Film, CheckCircle2, ChevronDown, Sparkles } from 'lucide-react';
-import { fa } from '../../../lib/format';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, Play, Image as ImageIcon, Dumbbell, X, Film, CheckCircle2, ChevronDown, Sparkles, CalendarClock } from 'lucide-react';
+import { num } from '../../../lib/format';
 import { EXERCISE_CATALOG, ExerciseItem } from '../../../api/exercises';
+import { getPublishedProgram } from '../../../api/programs';
+import { getCurrentUser, subscribeToStore } from '../../../api/auth';
+import { useI18n } from '../../../components/LanguageProvider';
+import type { WorkoutProgram } from '../../../api/programs';
 
 interface MemberWorkoutItem {
   catalogId: string;
@@ -13,15 +17,16 @@ interface MemberWorkoutItem {
   sets: Array<{ reps: number | string; weight: number | string }>;
 }
 
-// Workout plan using verified items from the new 413 catalog
-const MEMBER_CURRENT_PLAN: MemberWorkoutItem[] = [
+/**
+ * برنامهٔ پایهٔ پیشنهادی — فقط زمانی نمایش داده می‌شود که مربی هنوز
+ * برنامه‌ای منتشر نکرده باشد. شناسه‌ها به کاتالوگ اشاره می‌کنند تا نام و
+ * رسانهٔ حرکت مطابق زبان فعال نمایش داده شود.
+ */
+const MEMBER_BASE_PLAN: Array<
+  Omit<MemberWorkoutItem, 'name' | 'muscle' | 'equipment' | 'sourceUrl' | 'sourceType'>
+> = [
   {
     catalogId: 'ex-bench-press-dumbbell',
-    name: 'پرس سینه دمبل',
-    muscle: 'سینه و بالاتنه',
-    equipment: 'دمبل',
-    sourceUrl: 'https://pump-app.s3.eu-west-2.amazonaws.com/exercise-assets/02891201-Dumbbell-Bench-Press_Chest.mp4',
-    sourceType: 'video',
     sets: [
       { reps: 12, weight: 16 },
       { reps: 10, weight: 18 },
@@ -30,11 +35,6 @@ const MEMBER_CURRENT_PLAN: MemberWorkoutItem[] = [
   },
   {
     catalogId: 'ex-bent-over-row-dumbbell',
-    name: 'زیربغل دمبل خم (اره‌ای)',
-    muscle: 'پشت و زیربغل',
-    equipment: 'دمبل',
-    sourceUrl: 'https://pump-app.s3.eu-west-2.amazonaws.com/exercise-assets/02931201-Dumbbell-Bent-Over-Row_Back.mp4',
-    sourceType: 'video',
     sets: [
       { reps: 12, weight: 14 },
       { reps: 12, weight: 14 },
@@ -43,11 +43,6 @@ const MEMBER_CURRENT_PLAN: MemberWorkoutItem[] = [
   },
   {
     catalogId: 'ex-bulgarian-split-squat',
-    name: 'اسکات بلغاری با دمبل',
-    muscle: 'پا و چهارسر ران',
-    equipment: 'دمبل',
-    sourceUrl: 'https://pump-app.s3.eu-west-2.amazonaws.com/exercise-assets/22901101-Dumbbell-Bulgarian-Split-Squat-(female)_Thighs_small.jpg',
-    sourceType: 'image',
     sets: [
       { reps: 10, weight: 10 },
       { reps: 10, weight: 12 },
@@ -56,11 +51,6 @@ const MEMBER_CURRENT_PLAN: MemberWorkoutItem[] = [
   },
   {
     catalogId: 'ex-hammer-curl-dumbbell',
-    name: 'جلو بازو چکشی دمبل',
-    muscle: 'دست و جلو بازو',
-    equipment: 'دمبل',
-    sourceUrl: 'https://pump-app.s3.eu-west-2.amazonaws.com/exercise-assets/02941201-Dumbbell-Biceps-Curl_Upper-Arms.mp4',
-    sourceType: 'video',
     sets: [
       { reps: 12, weight: 8 },
       { reps: 12, weight: 10 },
@@ -69,31 +59,36 @@ const MEMBER_CURRENT_PLAN: MemberWorkoutItem[] = [
   },
   {
     catalogId: 'ex-plank',
-    name: 'پلانک شکم ثابت روی ساعد',
-    muscle: 'شکم و مرکز بدن',
-    equipment: 'وزن بدن',
-    sourceUrl: 'https://images.unsplash.com/photo-1566241142559-40e1dab266c6?w=600&auto=format&fit=crop&q=80',
-    sourceType: 'image',
     sets: [
-      { reps: '۴۵ ثانیه', weight: '-' },
-      { reps: '۴۵ ثانیه', weight: '-' },
-      { reps: '۶۰ ثانیه', weight: '-' },
+      { reps: 45, weight: '-' },
+      { reps: 45, weight: '-' },
+      { reps: 60, weight: '-' },
     ],
   },
 ];
 
 export function Exercises() {
+  const { t, isFa } = useI18n();
   const [activeTab, setActiveTab] = useState<'my_routine' | 'all_catalog'>('my_routine');
   const [selectedDemo, setSelectedDemo] = useState<ExerciseItem | null>(null);
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [selectedMuscle, setSelectedMuscle] = useState<string>('همه');
+  const [version, setVersion] = useState(0);
+  const [program, setProgram] = useState<WorkoutProgram | undefined>(undefined);
+
+  const memberId = getCurrentUser()?.entityId || 'm-reza';
+
+  useEffect(() => {
+    const unsub = subscribeToStore(() => setVersion(v => v + 1));
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    getPublishedProgram(memberId).then(setProgram);
+  }, [memberId, version]);
 
   const filteredCatalog = useMemo(() => {
     const q = catalogSearch.trim().toLowerCase();
     return EXERCISE_CATALOG.filter((item) => {
-      if (selectedMuscle !== 'همه' && !item.bodyPartFa.includes(selectedMuscle) && !item.primaryMuscleFa?.includes(selectedMuscle)) {
-        return false;
-      }
       if (q) {
         const inFa = item.nameFa?.toLowerCase().includes(q);
         const inEn = item.name?.toLowerCase().includes(q);
@@ -102,7 +97,24 @@ export function Exercises() {
       }
       return true;
     }).slice(0, 30);
-  }, [catalogSearch, selectedMuscle]);
+  }, [catalogSearch]);
+
+  /** برنامهٔ پایه با نام و رسانهٔ کاتالوگ، مطابق زبان فعال */
+  const basePlan = useMemo<MemberWorkoutItem[]>(
+    () =>
+      MEMBER_BASE_PLAN.map(item => {
+        const ex = EXERCISE_CATALOG.find(x => x.id === item.catalogId);
+        return {
+          ...item,
+          name: (isFa ? ex?.nameFa : ex?.name) || ex?.nameFa || item.catalogId,
+          muscle: (isFa ? ex?.primaryMuscleFa : ex?.primaryMuscle) || ex?.bodyPartFa || '',
+          equipment: (isFa ? ex?.equipmentFa : ex?.equipmentName) || ex?.equipmentFa || '',
+          sourceUrl: ex?.source ?? null,
+          sourceType: ex?.sourceType ?? 'none',
+        };
+      }),
+    [isFa]
+  );
 
   const handleOpenDemo = (catalogId: string) => {
     const found = EXERCISE_CATALOG.find((x) => x.id === catalogId);
@@ -110,6 +122,12 @@ export function Exercises() {
       setSelectedDemo(found);
     }
   };
+
+  /** تعداد کل حرکات در برنامه منتشرشده */
+  const programExerciseCount = useMemo(
+    () => (program?.days ?? []).reduce((sum, d) => sum + d.items.length, 0),
+    [program]
+  );
 
   return (
     <div className="space-y-4">
@@ -130,7 +148,10 @@ export function Exercises() {
           }}
           className="flex-1 py-2 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
         >
-          برنامه تمرینی من ({fa(MEMBER_CURRENT_PLAN.length)} حرکت)
+          {t.member.exercises.myProgram.replace(
+            '{count}',
+            num(program ? programExerciseCount : basePlan.length)
+          )}
         </button>
         <button
           type="button"
@@ -142,124 +163,227 @@ export function Exercises() {
           className="flex-1 py-2 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
         >
           <Sparkles size={14} />
-          بانک ۴۱۳ حرکت باشگاه
+          {t.member.exercises.catalogTab}
         </button>
       </div>
 
       {activeTab === 'my_routine' ? (
-        <div className="space-y-3.5">
-          <div
-            className="text-[13px] font-medium flex justify-between items-center"
-            style={{ color: 'var(--c-text-muted)' }}
-          >
-            <span>آخرین برنامه ثبت‌شده توسط سارا کریمی · دوشنبه ۱۳ مهر</span>
-            <span className="text-[11px] text-slate-400">کلیک روی هر حرکت برای ویدیو</span>
-          </div>
+        program ? (
+          /* برنامه منتشرشده توسط مربی */
+          <div className="space-y-4">
+            <div
+              className="text-[13px] font-medium flex justify-between items-center gap-2"
+              style={{ color: 'var(--c-text-muted)' }}
+            >
+              <span className="flex items-center gap-1.5 min-w-0">
+                <CalendarClock size={14} className="shrink-0" />
+                <span className="truncate">
+                  {t.member.exercises.publishedBy.replace('{trainer}', program.trainerName)}
+                </span>
+              </span>
+              <span className="text-[11px] text-slate-400 shrink-0">{t.member.exercises.clickForVideo}</span>
+            </div>
 
-          {MEMBER_CURRENT_PLAN.map((ex) => (
-            <section
-              key={ex.name}
-              onClick={() => handleOpenDemo(ex.catalogId)}
+            {program.days.map(day => (
+              <section
+                key={day.id}
+                style={{
+                  backgroundColor: 'var(--c-surface-1)',
+                  borderColor: 'var(--c-border)',
+                }}
+                className="p-4 rounded-2xl border shadow-xs"
+                aria-label={day.title}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-[15px]" style={{ color: 'var(--c-deep)' }}>
+                    {day.title}
+                  </h3>
+                  <span
+                    style={{ backgroundColor: 'var(--c-surface-2)', color: 'var(--c-text-muted)' }}
+                    className="px-2 py-0.5 rounded-md text-[11px] font-medium shrink-0"
+                  >
+                    {t.member.exercises.dayExercises.replace('{count}', num(day.items.length))}
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-2.5">
+                  {day.items.map((item, idx) => (
+                    <div
+                      key={`${item.exerciseId}-${idx}`}
+                      onClick={() => handleOpenDemo(item.exerciseId)}
+                      style={{
+                        backgroundColor: 'var(--c-surface-2)',
+                        borderColor: 'var(--c-border)',
+                      }}
+                      className="p-3 rounded-xl border flex items-center gap-3 hover:border-slate-400 dark:hover:border-slate-600 transition-colors cursor-pointer group"
+                    >
+                      <span
+                        style={{ backgroundColor: 'var(--c-surface-1)', color: 'var(--c-steel)' }}
+                        className="h-10 w-10 rounded-xl grid place-items-center shrink-0"
+                      >
+                        <Dumbbell size={17} />
+                      </span>
+
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="font-bold text-[14px] truncate"
+                          style={{ color: 'var(--c-deep)' }}
+                        >
+                          {item.name}
+                        </div>
+                        <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--c-text-muted)' }}>
+                          {t.member.exercises.targetMuscle.replace('{value}', item.bodyPart)} · {item.equipment}
+                        </div>
+                      </div>
+
+                      <div className="text-left shrink-0">
+                        <div className="text-[12px] font-bold tnum" style={{ color: 'var(--c-ink)' }}>
+                          {num(item.sets)} × {num(item.repsMin)}-{num(item.repsMax)}
+                        </div>
+                        {item.loadKg !== undefined && (
+                          <div className="text-[11px] tnum" style={{ color: 'var(--c-text-muted)' }}>
+                            {num(item.loadKg)} {t.units.kg}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          /* حالت بدون برنامه منتشرشده */
+          <div className="space-y-3.5">
+            <div
               style={{
                 backgroundColor: 'var(--c-surface-1)',
                 borderColor: 'var(--c-border)',
               }}
-              className="p-3.5 sm:p-4 rounded-2xl border shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group"
-              aria-label={`حرکت ${ex.name}`}
+              className="p-8 rounded-2xl border text-center"
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  {/* پیش‌نمایش بندانگشتی ویدیو/تصویر */}
-                  <div
-                    style={{ backgroundColor: 'var(--c-surface-2)' }}
-                    className="w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-slate-200/50 dark:border-slate-800 flex items-center justify-center relative"
-                  >
-                    {ex.sourceUrl && ex.sourceType === 'image' ? (
-                      <img
-                        src={ex.sourceUrl}
-                        alt={ex.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
-                      />
-                    ) : ex.sourceUrl && ex.sourceType === 'video' ? (
-                      <div className="w-full h-full bg-slate-900 flex items-center justify-center relative">
-                        <video
+              <Dumbbell size={26} className="mx-auto" style={{ color: 'var(--c-steel)' }} />
+              <p className="mt-3 text-[15px] font-bold" style={{ color: 'var(--c-deep)' }}>
+                {t.member.exercises.emptyTitle}
+              </p>
+              <p className="mt-1 text-[13px] leading-6" style={{ color: 'var(--c-text-muted)' }}>
+                {t.member.exercises.emptyBody}
+              </p>
+            </div>
+
+            <div
+              className="text-[13px] font-medium flex justify-between items-center"
+              style={{ color: 'var(--c-text-muted)' }}
+            >
+              <span>{t.member.exercises.basePlan}</span>
+              <span className="text-[11px] text-slate-400">{t.member.exercises.clickForVideo}</span>
+            </div>
+
+            {basePlan.map((ex) => (
+              <section
+                key={ex.name}
+                onClick={() => handleOpenDemo(ex.catalogId)}
+                style={{
+                  backgroundColor: 'var(--c-surface-1)',
+                  borderColor: 'var(--c-border)',
+                }}
+                className="p-3.5 sm:p-4 rounded-2xl border shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group"
+                aria-label={ex.name}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    {/* پیش‌نمایش بندانگشتی ویدیو/تصویر */}
+                    <div
+                      style={{ backgroundColor: 'var(--c-surface-2)' }}
+                      className="w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-slate-200/50 dark:border-slate-800 flex items-center justify-center relative"
+                    >
+                      {ex.sourceUrl && ex.sourceType === 'image' ? (
+                        <img
                           src={ex.sourceUrl}
-                          muted
-                          playsInline
-                          className="w-full h-full object-cover opacity-80"
+                          alt={ex.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
                         />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                          <Play size={14} className="fill-white text-white ms-0.5" />
+                      ) : ex.sourceUrl && ex.sourceType === 'video' ? (
+                        <div className="w-full h-full bg-slate-900 flex items-center justify-center relative">
+                          <video
+                            src={ex.sourceUrl}
+                            muted
+                            playsInline
+                            className="w-full h-full object-cover opacity-80"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <Play size={14} className="fill-white text-white ms-0.5" />
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <Dumbbell size={20} style={{ color: 'var(--c-steel)' }} />
-                    )}
-                  </div>
-
-                  <div>
-                    <h3
-                      className="font-bold text-[15px] sm:text-[16px] group-hover:text-sky-600 transition-colors"
-                      style={{ color: 'var(--c-deep)' }}
-                    >
-                      {ex.name}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span
-                        className="text-[12px]"
-                        style={{ color: 'var(--c-text-muted)' }}
-                      >
-                        عضله هدف: {ex.muscle}
-                      </span>
-                      <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500">
-                        {ex.equipment}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 font-medium shrink-0 flex items-center gap-1">
-                  <span>ویدیو و آموزش</span>
-                </div>
-              </div>
-
-              {/* شبکه ست‌های انجام‌شده */}
-              <div className="mt-3.5 grid grid-cols-3 gap-2">
-                {ex.sets.map((set, i) => (
-                  <div
-                    key={i}
-                    style={{ backgroundColor: 'var(--c-surface-2)' }}
-                    className="rounded-xl py-2 px-2 text-center"
-                  >
-                    <div
-                      className="text-[11px]"
-                      style={{ color: 'var(--c-text-muted)' }}
-                    >
-                      ست {fa(i + 1)}
-                    </div>
-                    <div
-                      className="font-bold tnum text-[13px] sm:text-[14px] mt-0.5"
-                      style={{ color: 'var(--c-deep)' }}
-                    >
-                      {typeof set.reps === 'number' ? fa(set.reps) : set.reps}
-                      {set.weight !== '-' && (
-                        <span
-                          className="text-[11px] font-normal ms-1"
-                          style={{ color: 'var(--c-text-muted)' }}
-                        >
-                          × {fa(set.weight)}kg
-                        </span>
+                      ) : (
+                        <Dumbbell size={20} style={{ color: 'var(--c-steel)' }} />
                       )}
                     </div>
+
+                    <div>
+                      <h3
+                        className="font-bold text-[15px] sm:text-[16px] group-hover:text-sky-600 transition-colors"
+                        style={{ color: 'var(--c-deep)' }}
+                      >
+                        {ex.name}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span
+                          className="text-[12px]"
+                          style={{ color: 'var(--c-text-muted)' }}
+                        >
+                          {t.member.exercises.targetMuscle.replace('{value}', ex.muscle)}
+                        </span>
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500">
+                          {ex.equipment}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+
+                  <div className="text-xs text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 font-medium shrink-0 flex items-center gap-1">
+                    <span>{t.member.exercises.videoAndGuide}</span>
+                  </div>
+                </div>
+
+                {/* شبکه ست‌های انجام‌شده */}
+                <div className="mt-3.5 grid grid-cols-3 gap-2">
+                  {ex.sets.map((set, i) => (
+                    <div
+                      key={i}
+                      style={{ backgroundColor: 'var(--c-surface-2)' }}
+                      className="rounded-xl py-2 px-2 text-center"
+                    >
+                      <div
+                        className="text-[11px]"
+                        style={{ color: 'var(--c-text-muted)' }}
+                      >
+                        {t.member.exercises.setLabel.replace('{n}', num(i + 1))}
+                      </div>
+                      <div
+                        className="font-bold tnum text-[13px] sm:text-[14px] mt-0.5"
+                        style={{ color: 'var(--c-deep)' }}
+                      >
+                        {typeof set.reps === 'number' ? num(set.reps) : set.reps}
+                        {set.weight !== '-' && (
+                          <span
+                            className="text-[11px] font-normal ms-1"
+                            style={{ color: 'var(--c-text-muted)' }}
+                          >
+                            × {num(set.weight)}{t.units.kg}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        )
       ) : (
         /* تب جستجو در تمام بانک ۴۱۳ حرکت */
         <div className="space-y-3.5">
@@ -275,7 +399,7 @@ export function Exercises() {
               type="text"
               value={catalogSearch}
               onChange={(e) => setCatalogSearch(e.target.value)}
-              placeholder="جستجو در تمام ۴۱۳ حرکت (سینه، اسکات، دمبل، هالتر…)…"
+              placeholder={t.member.exercises.catalogSearch}
               className="w-full bg-transparent border-none outline-hidden text-[14px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
             />
           </div>
@@ -380,7 +504,7 @@ export function Exercises() {
               ) : (
                 <div className="text-center text-slate-400 p-8 space-y-2">
                   <Dumbbell className="w-12 h-12 mx-auto opacity-40 text-slate-300" />
-                  <div className="text-sm font-medium">نمایش تصویری حرکت</div>
+                  <div className="text-sm font-medium">{t.member.exercises.graphicOnly}</div>
                 </div>
               )}
 
@@ -388,7 +512,7 @@ export function Exercises() {
                 type="button"
                 onClick={() => setSelectedDemo(null)}
                 className="absolute top-3 end-3 w-8 h-8 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black transition-colors cursor-pointer"
-                aria-label="بستن"
+                aria-label={t.member.exercises.close}
               >
                 <X size={16} />
               </button>
@@ -415,7 +539,10 @@ export function Exercises() {
                   }}
                   className="px-3 py-1 rounded-lg font-bold"
                 >
-                  عضله اصلی: {selectedDemo.primaryMuscleFa || selectedDemo.bodyPartFa}
+                  {t.member.exercises.primaryMuscle.replace(
+                  '{value}',
+                  selectedDemo.primaryMuscleFa || selectedDemo.bodyPartFa
+                )}
                 </span>
 
                 <span
@@ -425,7 +552,7 @@ export function Exercises() {
                   }}
                   className="px-3 py-1 rounded-lg font-medium"
                 >
-                  تجهیزات: {selectedDemo.equipmentFa}
+                  {t.member.exercises.equipment.replace('{value}', selectedDemo.equipmentFa)}
                 </span>
               </div>
 
@@ -438,7 +565,7 @@ export function Exercises() {
               >
                 <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200">
                   <CheckCircle2 size={15} style={{ color: 'var(--c-steel)' }} />
-                  <span>توضیح مربی برای اجرای صحیح:</span>
+                  <span>{t.member.exercises.trainerNote}:</span>
                 </div>
                 <p style={{ color: 'var(--c-text-muted)' }}>
                   {selectedDemo.instructionsFa}
@@ -454,7 +581,7 @@ export function Exercises() {
                 }}
                 className="w-full py-2.5 rounded-xl font-bold text-sm cursor-pointer"
               >
-                بستن و ادامه تمرین
+                {t.member.exercises.closeAndContinue}
               </button>
             </div>
           </div>

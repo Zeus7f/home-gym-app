@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { Home as HomeIcon, CalendarDays, Dumbbell, History as HistoryIcon, Bell } from 'lucide-react';
-import { mockStore } from '../../lib/supabase/mockStore';
-import { formatJalaliHumanToday } from '../../lib/date/jalali';
+import { Home as HomeIcon, CalendarDays, Dumbbell, History as HistoryIcon } from 'lucide-react';
+import { getCurrentUser } from '../../api/auth';
+import { useI18n } from '../../components/LanguageProvider';
+import { displayName } from '../../lib/displayName';
+import { formatJalaliHumanTodayLocalized } from '../../lib/date/jalali';
+import { NotificationBell } from '../../components/ui/NotificationBell';
 
 // صفحات اپ ورزشکار
 import { Home } from './pages/Home';
@@ -14,24 +17,33 @@ export type MemberTabKey = 'home' | 'ses' | 'ex' | 'hist';
 interface MemberTabItem {
   key: MemberTabKey;
   icon: React.ElementType;
-  label: string;
-  title: string;
+  /** کلید برچسب در فرهنگ لغت */
+  labelKey: 'home' | 'sessions' | 'exercises' | 'history';
 }
 
 const TABS: MemberTabItem[] = [
-  { key: 'home', icon: HomeIcon, label: 'خانه', title: 'داشبورد ورزشکار' },
-  { key: 'ses', icon: CalendarDays, label: 'جلسات', title: 'جلسات و نوبت‌های من' },
-  { key: 'ex', icon: Dumbbell, label: 'تمرینات', title: 'تمرین امروز' },
-  { key: 'hist', icon: HistoryIcon, label: 'سوابق', title: 'سوابق و رکوردهای من' },
+  { key: 'home', icon: HomeIcon, labelKey: 'home' },
+  { key: 'ses', icon: CalendarDays, labelKey: 'sessions' },
+  { key: 'ex', icon: Dumbbell, labelKey: 'exercises' },
+  { key: 'hist', icon: HistoryIcon, labelKey: 'history' },
 ];
+
+/** نگاشت کلید تب به عنوان صفحه */
+const TAB_TITLES = {
+  home: 'titleHome',
+  sessions: 'titleSessions',
+  exercises: 'titleExercises',
+  history: 'titleHistory',
+} as const;
 
 export function MemberShell() {
   const queryTab = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab') as MemberTabKey;
   const [activeTab, setActiveTab] = useState<MemberTabKey>(queryTab || 'home');
-  const memberName = mockStore.currentUser?.displayName || 'نیلوفر صادقی';
-  const todayShamsi = formatJalaliHumanToday();
+  const { t, isFa } = useI18n();
+  const memberName = displayName(getCurrentUser()?.displayName || 'Niloofar Bahrami', isFa);
+  const todayShamsi = formatJalaliHumanTodayLocalized(isFa);
 
-  const currentTabInfo = TABS.find(t => t.key === activeTab)!;
+  const currentTabInfo = TABS.find(tab => tab.key === activeTab)!;
 
   return (
     <div
@@ -58,21 +70,11 @@ export function MemberShell() {
               className="text-[18px] sm:text-[20px] font-extrabold truncate mt-0.5"
               style={{ color: 'var(--c-deep)' }}
             >
-              {currentTabInfo.title}
+              {t.member.shell[TAB_TITLES[currentTabInfo.labelKey]]}
             </div>
           </div>
 
-          <button
-            type="button"
-            style={{
-              backgroundColor: 'var(--c-surface-1)',
-              borderColor: 'var(--c-border)',
-            }}
-            className="h-10 w-10 rounded-xl border grid place-items-center text-slate-600 hover:bg-slate-50 transition-colors"
-            aria-label="اعلان‌ها"
-          >
-            <Bell size={18} />
-          </button>
+          <NotificationBell onNavigateTab={t => setActiveTab(t as MemberTabKey)} />
         </header>
       )}
 
@@ -121,7 +123,7 @@ export function MemberShell() {
                 <Icon size={20} strokeWidth={isActive ? 2.2 : 1.8} />
               </span>
               <span className={`text-[12px] ${isActive ? 'font-bold' : ''}`}>
-                {tab.label}
+                {t.nav.memberShort[tab.labelKey]}
               </span>
             </button>
           );
