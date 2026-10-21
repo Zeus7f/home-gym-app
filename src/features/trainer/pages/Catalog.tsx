@@ -146,6 +146,8 @@ export function Catalog() {
     (isFa ? e.primaryMuscleFa : e.primaryMuscle) || e.bodyPartFa;
   const exEquipment = (e: ExerciseItem) =>
     (isFa ? e.equipmentFa : e.equipmentName) || e.equipmentFa;
+  const exSecondary = (e: ExerciseItem) =>
+    (isFa ? e.secondaryMusclesFa : e.secondaryMuscles) ?? e.secondaryMusclesFa ?? [];
 
   const catLabel = (c: (typeof CATS)[number]) => (isFa ? c.fa : c.en);
   const eqLabel = (e: (typeof EQUIPMENTS)[number]) => (isFa ? e.fa : e.en);
@@ -508,11 +510,11 @@ export function Catalog() {
                   )}
                 </span>
 
-                {selectedExercise.secondaryMusclesFa && selectedExercise.secondaryMusclesFa.length > 0 && (
+                {exSecondary(selectedExercise).length > 0 && (
                   <span className="px-3 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium">
                     {t.trainer.catalog.secondaryMuscles.replace(
                       '{value}',
-                      selectedExercise.secondaryMusclesFa.join('، ')
+                      exSecondary(selectedExercise).join(isFa ? '، ' : ', ')
                     )}
                   </span>
                 )}

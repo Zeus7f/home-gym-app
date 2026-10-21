@@ -202,10 +202,15 @@ export function isJalaliToday(dateStr: string): boolean {
 }
 
 // Format to human-readable string: "شنبه ۱ مهر ۱۴۰۳"
+/** تبدیل ارقام لاتین به فارسی — بدون جداکنندهٔ هزارگان، مناسب سال و روز. */
+export function toPersianDigits(value: string | number): string {
+  return String(value).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+}
+
 export function formatJalaliHuman(j: JalaliDate): string {
   const dayOfWeek = PERSIAN_WEEK_DAYS[getJalaliDayOfWeek(j.jy, j.jm, j.jd)];
   const monthName = PERSIAN_MONTH_NAMES[j.jm - 1];
-  return `${dayOfWeek} ${j.jd} ${monthName} ${j.jy}`;
+  return `${dayOfWeek} ${toPersianDigits(j.jd)} ${monthName} ${toPersianDigits(j.jy)}`;
 }
 
 // Format today as human-readable — replaces hard-coded GYM.date (G7 fix)
@@ -270,7 +275,7 @@ export function formatJalaliDisplay(dateStr: string): string {
 
   const dayOfWeek = PERSIAN_WEEK_DAYS[getJalaliDayOfWeek(parsed.jy, parsed.jm, parsed.jd)];
   const monthName = PERSIAN_MONTH_NAMES[parsed.jm - 1];
-  return `${dayOfWeek} ${parsed.jd} ${monthName}`;
+  return `${dayOfWeek} ${toPersianDigits(parsed.jd)} ${monthName}`;
 }
 
 /**
