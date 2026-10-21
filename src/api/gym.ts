@@ -12,6 +12,11 @@ export async function getGym(): Promise<Gym> {
   return gymStore.gym;
 }
 
+/** نام باشگاه فعال (هم‌زمان، برای پوسته) */
+export function getGymName(): string {
+  return gymStore.gym.name;
+}
+
 /**
  * ذخیرهٔ تنظیمات عملیاتی باشگاه (B-13).
  * ظرفیت روزانه و هم‌زمان بلافاصله در قوانین رزرو اعمال می‌شوند.

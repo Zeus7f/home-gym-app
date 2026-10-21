@@ -58,6 +58,8 @@ export interface BookingLimits {
   memberName: string;
   /** اجازهٔ ثبت برای تاریخ گذشته (پیش‌فرض: خیر) */
   allowPastDate?: boolean;
+  /** ورزشکاری که مربی ساخته و مدیر هنوز بسته‌اش را تعیین نکرده رزرو ندارد */
+  memberPackagePending?: boolean;
 }
 
 /**
@@ -83,6 +85,10 @@ export function validateBooking(
 ): BookingCheck {
   const { today } = limits;
   const date = canonicalDate(req.date, today);
+
+  if (limits.memberPackagePending) {
+    return { ok: false, messageKey: 'session.packagePending', params: { member: limits.memberName } };
+  }
 
   if (!limits.allowPastDate && compareJalaliDates(date, today, today) < 0) {
     return { ok: false, messageKey: 'session.pastDate', params: { date } };
@@ -149,9 +155,12 @@ export function validateBooking(
  */
 export function checkCompletable(
   session: Pick<DailySession, 'status'>,
-  member: Pick<Member, 'remainingSessions' | 'expirationDate'>,
+  member: Pick<Member, 'remainingSessions' | 'expirationDate' | 'packagePending'>,
   today: string
 ): BookingCheck {
+  if (member.packagePending) {
+    return { ok: false, messageKey: 'session.packagePending', params: {} };
+  }
   if (session.status !== 'scheduled' && session.status !== 'in_progress') {
     return { ok: false, messageKey: 'session.notCompletable', params: { status: session.status } };
   }

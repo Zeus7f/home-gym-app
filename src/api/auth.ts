@@ -7,7 +7,7 @@ import { gymStore } from './_client';
 import { localizeResult, translateStoreMessage } from './_messages';
 import type { UserAccount } from '../lib/domain/gymManagement';
 import * as supabaseAuth from '../lib/auth/supabaseAuth';
-import { MIN_PASSWORD_LENGTH, USERNAME_PATTERN } from '../lib/auth/accountMapping';
+import { openGym, stopSync } from '../lib/data/cloudSync';
 
 /**
  * هویت داده‌ای فعال برای صفحات.
@@ -34,37 +34,59 @@ export function isAuthReady(): boolean {
 }
 
 /**
+ * پس از تأیید هویت در حالت Supabase: دادهٔ باشگاه کاربر از ابر بار می‌شود.
+ * مدیر کل باشگاه ندارد و فهرست باشگاه‌ها را در پنل خودش می‌خواند.
+ */
+async function enterSession(user: UserAccount | null): Promise<{ success: boolean; message?: string }> {
+  if (!user) {
+    stopSync();
+    gymStore.setAuthenticatedUser(null);
+    return { success: false };
+  }
+  if (user.gymId) {
+    const error = await openGym(user.gymId);
+    if (error) {
+      await supabaseAuth.signOut();
+      gymStore.setAuthenticatedUser(null);
+      return { success: false, message: translateStoreMessage('login.authUnavailable') };
+    }
+  }
+  gymStore.setAuthenticatedUser(user);
+  return { success: true, message: translateStoreMessage('login.success') };
+}
+
+/**
  * B-01: بازیابی نشست Supabase هنگام بارگذاری و همگام ماندن با خروج در تب‌های دیگر.
  * @returns تابع لغو اشتراک
  */
 export function initAuth(): () => void {
   if (!isServerAuth()) return () => {};
   supabaseAuth
-    .restoreSession(gymStore.gym.id)
-    .then(user => gymStore.setAuthenticatedUser(user))
-    .catch(() => gymStore.setAuthenticatedUser(null));
+    .restoreSession()
+    .then(user => enterSession(user))
+    .catch(() => enterSession(null));
   return supabaseAuth.onSignedOut(() => {
-    if (gymStore.currentUser) gymStore.setAuthenticatedUser(null);
+    if (gymStore.currentUser) void enterSession(null);
   });
 }
 
-/** ورود با نام کاربری و کلمه عبور. */
+/** ورود با شمارهٔ موبایل (یا نام کاربری) و کلمه عبور. */
 export async function login(
   username: string,
   password: string
 ): Promise<{ success: boolean; message?: string }> {
   if (!isServerAuth()) return localizeResult(gymStore.login(username, password));
 
-  const outcome = await supabaseAuth.signIn(username, password, gymStore.gym.id);
+  const outcome = await supabaseAuth.signIn(username, password);
   if ('messageKey' in outcome) {
     return { success: false, message: translateStoreMessage(outcome.messageKey) };
   }
-  gymStore.setAuthenticatedUser(outcome.user);
-  return { success: true, message: translateStoreMessage('login.success') };
+  return enterSession(outcome.user);
 }
 
 /** خروج از حساب کاربری. */
 export async function logout(): Promise<void> {
+  stopSync();
   gymStore.logout();
   if (isServerAuth()) await supabaseAuth.signOut();
 }
@@ -72,42 +94,6 @@ export async function logout(): Promise<void> {
 /** انتخاب کاربر فعال (برای تعویض نقش در حالت دمو). */
 export async function setCurrentUser(userId: string): Promise<void> {
   gymStore.setCurrentUser(userId);
-}
-
-/**
- * B-01: ساخت حساب ورود برای مربی یا عضو (فقط مدیر باشگاه).
- * در حالت Supabase رمز به Edge Function manage-account می‌رود و در مرورگر ذخیره نمی‌شود.
- * در دموی محلی حساب قبلاً با addTrainer/addMember در استور ساخته شده است.
- */
-export async function createLoginAccount(input: {
-  role: 'trainer' | 'member';
-  entityId: string;
-  username: string;
-  password: string;
-  fullName: string;
-  phone?: string;
-}): Promise<{ success: boolean; message: string }> {
-  if (!isServerAuth()) {
-    return { success: true, message: translateStoreMessage('account.created') };
-  }
-  const username = input.username.trim().toLowerCase();
-  if (!USERNAME_PATTERN.test(username)) {
-    return { success: false, message: translateStoreMessage('account.invalidUsername') };
-  }
-  if (input.password.length < MIN_PASSWORD_LENGTH) {
-    return { success: false, message: translateStoreMessage('account.weakPassword') };
-  }
-  const result = await supabaseAuth.provisionAccount({
-    username,
-    password: input.password,
-    fullName: input.fullName,
-    role: input.role,
-    appEntityId: input.entityId,
-    phone: input.phone,
-  });
-  return 'messageKey' in result
-    ? { success: false, message: translateStoreMessage(result.messageKey) }
-    : { success: true, message: translateStoreMessage('account.created') };
 }
 
 /**

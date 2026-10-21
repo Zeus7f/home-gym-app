@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-  useNavigate,
-  useLocation,
-} from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { mockStore } from './lib/supabase/mockStore';
 import { LoginScreen } from './features/auth/LoginScreen';
 import { initAuth, isAuthReady, logout } from './api/auth';
+import { can, HOME_PATH, type AppRole } from './lib/auth/permissions';
 import { UserJourneyGuide } from './components/UserJourneyGuide';
+import { ShellChromeProvider, type ShellChrome } from './components/shell/AppShell';
+import { LanguageProvider, useI18n } from './components/LanguageProvider';
 
 // Lazy loading roles for code-splitting (Phase 7 - Hardening)
+const AdminShell = React.lazy(() =>
+  import('./features/admin/AdminShell').then(m => ({ default: m.AdminShell }))
+);
 const OwnerShell = React.lazy(() =>
   import('./features/owner/OwnerShell').then(m => ({ default: m.OwnerShell }))
 );
@@ -23,22 +22,6 @@ const MemberShell = React.lazy(() =>
   import('./features/member/MemberShell').then(m => ({ default: m.MemberShell }))
 );
 const UIShowcase = React.lazy(() => import('./pages/dev/UIShowcase'));
-import { ThemeToggle } from './components/ui/ThemeToggle';
-import { LanguageToggle } from './components/ui/LanguageToggle';
-import { LanguageProvider, useI18n } from './components/LanguageProvider';
-import { displayName } from './lib/displayName';
-import {
-  LayoutDashboard,
-  Activity,
-  User,
-  Compass,
-  Dumbbell,
-  LogOut,
-  Eye,
-} from 'lucide-react';
-import { Button } from './components/ui/Button';
-import { Badge } from './components/ui/Badge';
-import { cn } from './lib/utils';
 
 // ── Root: wraps everything in BrowserRouter + LanguageProvider ──
 export default function Root() {
@@ -52,24 +35,16 @@ export default function Root() {
 }
 
 // ── Role-based redirect guard ─────────────────────────────────
-function RoleRedirect({ role }: { role: 'owner' | 'trainer' | 'member' }) {
-  const defaultPath: Record<string, string> = {
-    owner:   '/owner',
-    trainer: '/trainer',
-    member:  '/member',
-  };
-  return <Navigate to={defaultPath[role]} replace />;
+function RoleRedirect({ role }: { role: AppRole }) {
+  return <Navigate to={HOME_PATH[role]} replace />;
 }
 
 /**
  * محافظ نقش — اگر نقش کاربر واردشده با نقش مسیر جاری یکی نباشد،
  * کاربر به فضای کاری خودش هدایت می‌شود.
  *
- * استثنا: مدیر باشگاه می‌تواند فضای کاری مربی و ورزشکار را پیش‌نمایش کند
- * (قابلیت توسعه‌ای). بقیه نقش‌ها فقط به فضای خودشان دسترسی دارند.
- *
- * بدون این محافظ، ورود با نقش دیگر روی URL قبلی (مثلاً /owner)
- * فضای کاری نقش قبلی را نمایش می‌داد.
+ * استثنا: نقش‌هایی که `role.preview` دارند (مدیر باشگاه و مدیر کل) می‌توانند
+ * فضای کاری نقش‌های پایین‌تر را با یک هویت پیش‌نمایش ببینند.
  */
 function RoleGuard({
   role,
@@ -77,30 +52,52 @@ function RoleGuard({
   previewRole,
   children,
 }: {
-  role: 'owner' | 'trainer' | 'member';
-  authUser: { role: 'owner' | 'trainer' | 'member' } | null;
-  /** نقش کاربر پیش‌نمایش فعال (فقط برای مدیر) */
-  previewRole?: 'owner' | 'trainer' | 'member' | null;
+  role: AppRole;
+  authUser: { role: AppRole } | null;
+  /** نقش کاربر پیش‌نمایش فعال */
+  previewRole?: AppRole | null;
   children: React.ReactNode;
 }) {
-  if (!authUser) {
-    return <RoleRedirect role="owner" />;
-  }
-  if (authUser.role !== role && authUser.role !== 'owner') {
+  if (!authUser) return <Navigate to="/" replace />;
+  if (authUser.role === role) return <>{children}</>;
+  if (!can(authUser.role, 'role.preview') || role === 'super_admin') {
     return <RoleRedirect role={authUser.role} />;
   }
-  // B-07: مدیر فقط با هویت پیش‌نمایشِ همان نقش وارد فضای مربی/ورزشکار می‌شود؛
-  // وگرنه صفحه با شناسهٔ مدیر داده می‌خواند و خالی یا نادرست می‌شد.
-  if (authUser.role === 'owner' && role !== 'owner' && previewRole !== role) {
-    return <Navigate to={`/${role}?preview_role=${role}`} replace />;
+  // B-07: پیش‌نمایش فقط با هویتِ همان نقش؛ وگرنه صفحه با شناسهٔ مدیر داده می‌خواند.
+  if (previewRole !== role) {
+    return <Navigate to={`${HOME_PATH[role]}?preview_role=${role}`} replace />;
   }
   return <>{children}</>;
 }
 
-// ── App shell (needs router context) ─────────────────────────
+/** نقش‌هایی که هر نقش می‌تواند به‌عنوان آن‌ها مشاهده کند */
+function viewAsRolesFor(role: AppRole | undefined, hasGym: boolean): AppRole[] {
+  if (role === 'owner') return ['trainer', 'member'];
+  if (role === 'super_admin' && hasGym) return ['owner', 'trainer', 'member'];
+  return [];
+}
+
+function PageLoader() {
+  const { t } = useI18n();
+  return (
+    <div
+      className="min-h-dvh flex flex-col items-center justify-center select-none"
+      style={{ background: 'var(--c-surface-0)', color: 'var(--c-text-muted)' }}
+      role="status"
+    >
+      <div
+        style={{ borderColor: 'var(--c-ink)' }}
+        className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin mb-3"
+      />
+      <span className="text-[14px] font-bold">{t.actions.loading}</span>
+    </div>
+  );
+}
+
+// ── App (needs router context) ───────────────────────────────
 function App() {
   const [showJourney, setShowJourney] = useState(false);
-  const { lang, setLang, t, isFa } = useI18n();
+  const { lang, setLang } = useI18n();
   const [, setTick] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
@@ -112,25 +109,22 @@ function App() {
   // B-01: بازیابی نشست Supabase Auth (در دموی محلی کاری انجام نمی‌دهد)
   useEffect(() => initAuth(), []);
 
-  const searchParams = new URLSearchParams(location.search);
-  const previewRole = searchParams.get('preview_role');
+  const previewRole = new URLSearchParams(location.search).get('preview_role') as AppRole | null;
 
   /**
    * کاربر واردشده واقعی (احراز هویت‌شده).
    * جدا از کاربر پیش‌نمایش نگه داشته می‌شود تا محاسبهٔ نقش‌ها حلقهٔ وابستگی نداشته باشد.
    */
   const authUser = mockStore.currentUser;
+  const viewAsRoles = viewAsRolesFor(authUser?.role, !!mockStore.adminGymId);
 
   /**
-   * پیش‌نمایش نقش — فقط مدیر باشگاه اجازهٔ آن را دارد.
-   *
-   * این پیش‌نمایش هرگز نباید جای ورود را بگیرد: پارامتر ?preview_role در URL
-   * به‌تنهایی نباید کاربر را وارد کند. بنابراین فقط وقتی معتبر است که
-   * کاربر واقعاً به‌عنوان مدیر وارد شده باشد.
+   * پیش‌نمایش نقش — فقط برای نقش‌هایی که `role.preview` دارند، و فقط با یک حساب
+   * واقعی از همان باشگاه. پارامتر ?preview_role به‌تنهایی کسی را وارد نمی‌کند.
    */
   const previewUser =
-    authUser?.role === 'owner' && previewRole && previewRole !== 'owner'
-      ? mockStore.users.find(u => u.role === previewRole) ?? null
+    authUser && previewRole && viewAsRoles.includes(previewRole)
+      ? mockStore.gymUsers.find(u => u.role === previewRole && u.isActive !== false) ?? null
       : null;
 
   // B-07: هویت داده‌ای پیش‌نمایش پیش از رندر فرزندان در استور تنظیم می‌شود
@@ -139,324 +133,82 @@ function App() {
 
   const currentUser = previewUser || authUser;
 
-  // If not authenticated → login page (پس از مشخص شدن وضعیت نشست، تا صفحهٔ ورود چشمک نزند)
   if (!currentUser) {
-    if (!isAuthReady()) {
-      return (
-        <div
-          className="min-h-screen flex flex-col items-center justify-center select-none"
-          style={{ background: 'var(--c-surface-0)', color: 'var(--c-text-muted)' }}
-        >
-          <div
-            style={{ borderColor: 'var(--c-ink)' }}
-            className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin mb-3"
-          />
-          <span className="text-[14px] font-bold">{t.actions.loading}</span>
-        </div>
-      );
-    }
+    // پس از مشخص شدن وضعیت نشست، تا صفحهٔ ورود چشمک نزند
+    if (!isAuthReady()) return <PageLoader />;
     return <LoginScreen lang={lang} onLanguageChange={setLang} />;
   }
 
-
-  // Owner can switch to trainer/member preview; others are locked
-  // فقط کاربر واقعیِ مدیر می‌تواند نقش‌ها را جابه‌جا کند.
-  // (در حالت پیش‌نمایش، currentUser نقش پیش‌نمایشی‌شده را دارد، پس باید authUser بررسی شود)
-  const canSwitchRole = authUser?.role === 'owner';
-
-  function switchTo(role: 'owner' | 'trainer' | 'member') {
-    // مدیر باشگاه برای دیدن فضای کاری مربی/ورزشکار باید با یک کاربر واقعی
-    // همان نقش پیش‌نمایش کند، وگرنه فضای کاری خالی نمایش داده می‌شود.
-    if (authUser?.role === 'owner' && role !== 'owner') {
-      navigate(`/${role}?preview_role=${role}`);
-    } else {
-      navigate(`/${role}`);
-    }
-  }
+  const chrome: ShellChrome = {
+    user: authUser!,
+    acting: currentUser,
+    previewing: !!previewUser,
+    viewAsRoles,
+    onViewAs: role => navigate(`${HOME_PATH[role]}?preview_role=${role}`),
+    onExitPreview: () => navigate(HOME_PATH[authUser!.role]),
+    onShowGuide: () => setShowJourney(true),
+    onLogout: () => {
+      void logout();
+      // بازگشت به ریشه تا ورود بعدی با نقش جدید از مسیر درست آغاز شود
+      navigate('/');
+    },
+  };
 
   return (
-    <div
-      className="min-h-screen transition-colors duration-200"
-      style={{ background: 'var(--c-surface-0)', color: 'var(--c-text)' }}
-    >
-      {/* ── Header ── */}
-      <header
-        className="sticky top-0 z-40 border-b backdrop-blur-xl px-4 sm:px-8 py-3"
-        style={{
-          background: 'color-mix(in srgb, var(--c-surface-1) 85%, transparent)',
-          borderColor: 'var(--c-border)',
-        }}
-      >
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <ShellChromeProvider value={chrome}>
+      <React.Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Default → redirect based on logged-in role */}
+          <Route path="/" element={<RoleRedirect role={currentUser.role} />} />
 
-          {/* Brand */}
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-md"
-              style={{ background: 'var(--c-ink)' }}
-            >
-              <Dumbbell className="w-5 h-5 stroke-[2.4] text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span
-                  className="font-black text-base tracking-tight leading-none"
-                  style={{ color: 'var(--c-deep)' }}
-                >
-                  {lang === 'fa' ? mockStore.gym.name : displayName(mockStore.gym.name, isFa) || 'Iron Haven Club'}
-                </span>
-                <Badge variant="brand" size="sm" className="hidden sm:inline-flex">
-                  {t.appBadge}
-                </Badge>
-                {/* B-03: نشان صادقانهٔ وضعیت ابر — فقط خواندن جزئی، نه همگام‌سازی کامل */}
-                {mockStore.supabaseSyncStatus !== 'off' && (
-                  <span
-                    className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border"
-                    style={
-                      mockStore.supabaseSyncStatus === 'partial'
-                        ? {
-                            background: 'var(--c-surface-2)',
-                            color: 'var(--c-brass)',
-                            borderColor: 'var(--c-brass)',
-                          }
-                        : {
-                            background: 'var(--c-status-noshow-bg)',
-                            color: 'var(--c-rubber)',
-                            borderColor: 'var(--c-rubber)',
-                          }
-                    }
-                    title={
-                      mockStore.supabaseSyncStatus === 'partial'
-                        ? t.cloudSync.partialHint.replace(
-                            '{tables}',
-                            mockStore.supabaseSyncedTables.join(', ')
-                          )
-                        : t.cloudSync.errorHint
-                    }
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ background: 'currentColor' }}
-                      aria-hidden="true"
-                    />
-                    <span>
-                      {mockStore.supabaseSyncStatus === 'partial'
-                        ? t.cloudSync.partial
-                        : t.cloudSync.error}
-                    </span>
-                  </span>
-                )}
-              </div>
-              <p
-                className="text-[10px] font-semibold tracking-wider uppercase leading-none mt-1"
-                style={{ color: 'var(--c-text-faint)' }}
-              >
-                {t.appSubtitle}
-              </p>
-            </div>
-          </div>
+          <Route
+            path="/admin/*"
+            element={
+              <RoleGuard role="super_admin" authUser={authUser}>
+                <AdminShell />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/owner/*"
+            element={
+              <RoleGuard role="owner" authUser={authUser} previewRole={previewUser?.role}>
+                <OwnerShell />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/trainer/*"
+            element={
+              <RoleGuard role="trainer" authUser={authUser} previewRole={previewUser?.role}>
+                <TrainerShell />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/member/*"
+            element={
+              <RoleGuard role="member" authUser={authUser} previewRole={previewUser?.role}>
+                <MemberShell />
+              </RoleGuard>
+            }
+          />
 
-          {/* Role switcher — owner only, dev convenience */}
-          {canSwitchRole && (
-            <div
-              className="hidden md:flex items-center p-1 rounded-2xl border shadow-inner"
-              style={{ background: 'var(--c-surface-2)', borderColor: 'var(--c-border)' }}
-            >
-              {(['owner', 'trainer', 'member'] as const).map(role => {
-                const Icon = role === 'owner' ? LayoutDashboard : role === 'trainer' ? Activity : User;
-                const label = t.roles[role];
-                const isActive = location.pathname.startsWith(`/${role}`);
-                return (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => switchTo(role)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                    style={
-                      isActive
-                        ? { background: 'var(--c-ink)', color: '#fff' }
-                        : { color: 'var(--c-text-muted)' }
-                    }
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* Dev UI Showcase */}
+          <Route path="/dev/ui" element={<UIShowcase />} />
 
-          {/* Right tools */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowJourney(true)}
-              className="font-bold"
-              style={{ color: 'var(--c-steel)', borderColor: 'var(--c-border)' }}
-            >
-              <Compass className="w-4 h-4 me-1.5" />
-              <span className="hidden sm:inline">{t.userJourney.button}</span>
-            </Button>
+          {/* Catch-all */}
+          <Route path="*" element={<RoleRedirect role={currentUser.role} />} />
+        </Routes>
+      </React.Suspense>
 
-            <LanguageToggle currentLang={lang} onLanguageChange={setLang} />
-            <ThemeToggle />
-
-            <div
-              className="flex items-center gap-2.5 border-s ps-3"
-              style={{ borderColor: 'var(--c-border)' }}
-            >
-              <div className="text-end hidden lg:block">
-                <span
-                  className="text-xs font-black block leading-none"
-                  style={{ color: 'var(--c-deep)' }}
-                >
-                  {displayName(currentUser.displayName, isFa)}
-                </span>
-                <span
-                  className="text-[10px] font-bold uppercase tracking-wider leading-none mt-1 block"
-                  style={{ color: 'var(--c-steel)' }}
-                >
-                  {t.roles[currentUser.role]}
-                </span>
-                {previewUser && (
-                  <span
-                    className="text-[10px] font-bold leading-none mt-1 block"
-                    style={{ color: 'var(--c-brass)' }}
-                  >
-                    {t.previewMode}
-                  </span>
-                )}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  void logout();
-                  // بازگشت به ریشه تا ورود بعدی با نقش جدید از مسیر درست آغاز شود
-                  navigate('/');
-                }}
-                aria-label={t.signOut}
-                className="p-2 rounded-xl"
-                style={{ color: 'var(--c-rubber)' }}
-              >
-                <LogOut className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile role switcher (owner only, dev mode) */}
-      {canSwitchRole && (
-        <div
-          className="md:hidden flex items-center justify-around border-b p-2 text-xs font-bold"
-          style={{ background: 'var(--c-surface-2)', borderColor: 'var(--c-border)' }}
-        >
-          {(['owner', 'trainer', 'member'] as const).map(role => {
-            const isActive = location.pathname.startsWith(`/${role}`);
-            return (
-              <button
-                key={role}
-                type="button"
-                onClick={() => switchTo(role)}
-                className="px-3 py-1.5 rounded-xl transition cursor-pointer"
-                style={
-                  isActive
-                    ? { background: 'var(--c-ink)', color: '#fff' }
-                    : { color: 'var(--c-text-muted)' }
-                }
-              >
-                {t.roles[role]}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* نشان حالت پیش‌نمایش (فقط مدیر باشگاه) */}
-      {previewUser && (
-        <div
-          className="flex items-center justify-center gap-2 px-4 py-2 text-[12px] font-bold"
-          style={{ backgroundColor: 'var(--c-surface-2)', color: 'var(--c-brass)' }}
-          role="status"
-        >
-          <Eye size={14} />
-          <span>
-            {lang === 'fa'
-              ? `شما در حال مشاهده فضای کاری «${t.roles[currentUser.role]}» به‌عنوان ${displayName(currentUser.displayName, isFa)} هستید.`
-              : `Previewing the ${t.roles[currentUser.role]} workspace as ${displayName(currentUser.displayName, isFa)}.`}
-          </span>
-        </div>
-      )}
-
-      {/* ── Route views ── */}
-      <main className="max-w-7xl mx-auto p-4 sm:p-8">
-        <React.Suspense
-          fallback={
-            <div
-              className="py-24 text-center select-none"
-              style={{ color: 'var(--c-text-muted)' }}
-            >
-              <div
-                style={{ borderColor: 'var(--c-ink)' }}
-                className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin mx-auto mb-3"
-              />
-              <span className="text-[14px] font-bold">{t.actions.loading}</span>
-            </div>
-          }
-        >
-          <Routes>
-            {/* Default → redirect based on logged-in role */}
-            <Route path="/" element={<RoleRedirect role={currentUser.role} />} />
-
-            {/* Owner workspace */}
-            <Route
-              path="/owner/*"
-              element={
-                <RoleGuard role="owner" authUser={authUser}>
-                  <OwnerShell />
-                </RoleGuard>
-              }
-            />
-
-            {/* Trainer workspace */}
-            <Route
-              path="/trainer/*"
-              element={
-                <RoleGuard role="trainer" authUser={authUser} previewRole={previewUser?.role}>
-                  <TrainerShell />
-                </RoleGuard>
-              }
-            />
-
-            {/* Member workspace */}
-            <Route
-              path="/member/*"
-              element={
-                <RoleGuard role="member" authUser={authUser} previewRole={previewUser?.role}>
-                  <MemberShell />
-                </RoleGuard>
-              }
-            />
-
-            {/* Dev UI Showcase */}
-            <Route path="/dev/ui" element={<UIShowcase />} />
-
-            {/* Catch-all */}
-            <Route path="*" element={<RoleRedirect role={currentUser.role} />} />
-          </Routes>
-        </React.Suspense>
-      </main>
-
-      {/* User journey guide */}
       {showJourney && (
         <UserJourneyGuide
           lang={lang}
           onClose={() => setShowJourney(false)}
-          onSelectRole={role => navigate(`/${role}`)}
+          onSelectRole={role => navigate(can(authUser?.role, 'role.preview') && authUser?.role !== role ? `/${role}?preview_role=${role}` : `/${role}`)}
         />
       )}
-    </div>
+    </ShellChromeProvider>
   );
 }

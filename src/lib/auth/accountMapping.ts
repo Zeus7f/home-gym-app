@@ -52,8 +52,8 @@ export type ProfileMappingError = 'login.noProfile' | 'login.inactive';
 
 /**
  * پروفایل Supabase → حساب کاربری برنامه.
- * entityId به دادهٔ محلی اشاره می‌کند (app_entity_id) تا صفحات مربی و عضو
- * همان رکوردی را بخوانند که مدیر ساخته است. مدیر به باشگاه پیوند می‌خورد.
+ * entityId برای مربی و عضو شناسهٔ رکوردشان در app_records است (app_entity_id)
+ * و برای مدیر، شناسهٔ باشگاه. مدیر کل باشگاه ندارد (gymId خالی).
  */
 export function profileToUserAccount(
   profile: ProfileRow | null,
@@ -65,9 +65,13 @@ export function profileToUserAccount(
   let role: UserAccount['role'];
   let entityId: string | null;
   switch (profile.role) {
+    case 'super_admin':
+      role = 'super_admin';
+      entityId = '';
+      break;
     case 'gym_owner':
       role = 'owner';
-      entityId = profile.app_entity_id ?? gymId;
+      entityId = gymId;
       break;
     case 'trainer':
     case 'member':
@@ -75,20 +79,22 @@ export function profileToUserAccount(
       entityId = profile.app_entity_id;
       break;
     default:
-      // super_admin رابط کاربری در این برنامه ندارد
       return { ok: false, messageKey: 'login.noProfile' };
   }
-  if (!entityId || !profile.tenant_id) return { ok: false, messageKey: 'login.noProfile' };
+  if (role !== 'super_admin' && (!entityId || !profile.tenant_id || !gymId)) {
+    return { ok: false, messageKey: 'login.noProfile' };
+  }
 
   return {
     ok: true,
     user: {
       id: profile.id,
-      username: profile.username ?? '',
+      username: profile.username ?? profile.phone ?? '',
       // رمز هرگز در مرورگر نگه داشته نمی‌شود
       password: '',
       role,
-      entityId,
+      entityId: entityId ?? '',
+      gymId: role === 'super_admin' ? undefined : gymId,
       displayName: profile.full_name,
       phone: profile.phone ?? undefined,
     },

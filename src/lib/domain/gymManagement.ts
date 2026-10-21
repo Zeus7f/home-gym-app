@@ -1,3 +1,5 @@
+import type { AppRole } from '../auth/permissions';
+
 // Simplified Domain Models for Gym Management Platform
 // PRD Refactor: Gym -> Owner -> Trainers -> Members -> Daily Attendance -> Sessions -> Exercises -> Financials -> Reports
 
@@ -9,6 +11,9 @@ export interface Gym {
   noShowDeductsSession: boolean;
   /** حداکثر جلسهٔ هم‌زمان در کل باشگاه (در هر سانس) — توسط validator رزرو اعمال می‌شود */
   hourlyCapacity?: number;
+  /** باشگاه غیرفعال (توسط مدیر کل): حساب‌هایش اجازهٔ ورود ندارند */
+  isActive?: boolean;
+  createdAt?: string;
 }
 
 export interface Member {
@@ -29,6 +34,10 @@ export interface Member {
   expirationDate: string;
   status: 'active' | 'inactive' | 'expired';
   registrationDate: string;
+  /** ساختهٔ مربی و منتظر تعیین بسته توسط مدیر — تا آن موقع رزرو ندارد */
+  packagePending?: boolean;
+  /** شناسهٔ مربی‌ای که ورزشکار را ساخته (اگر مدیر نساخته باشد) */
+  createdByTrainerId?: string;
 }
 
 export interface Trainer {
@@ -125,8 +134,12 @@ export interface UserAccount {
   id: string;
   username: string;
   password: string;
-  role: 'owner' | 'trainer' | 'member';
-  entityId: string; // 'gym-1', 't-ali', 'm-reza', etc.
+  role: AppRole;
+  entityId: string; // 'gym-1', 't-ali', 'm-reza', etc. — برای سوپر ادمین خالی
+  /** باشگاهی که حساب به آن تعلق دارد؛ سوپر ادمین باشگاه ندارد */
+  gymId?: string;
+  /** حساب غیرفعال اجازهٔ ورود ندارد */
+  isActive?: boolean;
   displayName: string;
   phone?: string;
   avatarUrl?: string;

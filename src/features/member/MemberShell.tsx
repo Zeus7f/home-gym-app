@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Home as HomeIcon, CalendarDays, Dumbbell, History as HistoryIcon } from 'lucide-react';
 import { getCurrentUser } from '../../api/auth';
 import { useI18n } from '../../components/LanguageProvider';
 import { displayName } from '../../lib/displayName';
 import { formatJalaliHumanTodayLocalized } from '../../lib/date/jalali';
-import { NotificationBell } from '../../components/ui/NotificationBell';
+import { AppShell, type ShellNavItem } from '../../components/shell/AppShell';
+import { useTabParam } from '../../lib/useTabParam';
+import { getGymName } from '../../api/gym';
+import { getCurrentMember } from '../../api/members';
 import { resolveTab } from '../../lib/navigation';
 
 // صفحات اپ ورزشکار
@@ -47,98 +50,49 @@ const TAB_TITLES = {
 } as const;
 
 export function MemberShell() {
-  const queryTab = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab');
-  const [activeTab, setActiveTab] = useState<MemberTabKey>(toMemberTab(queryTab));
+  const [activeTab, setTab] = useTabParam(toMemberTab);
   const { t, isFa } = useI18n();
-  const memberName = displayName(getCurrentUser()?.displayName || 'Niloofar Bahrami', isFa);
   const todayShamsi = formatJalaliHumanTodayLocalized(isFa);
-
   const currentTabInfo = TABS.find(tab => tab.key === activeTab)!;
+  const user = getCurrentUser();
+  const memberName = displayName(user?.displayName || '', isFa);
+
+  const nav: ShellNavItem[] = TABS.map(tab => ({
+    key: tab.key,
+    icon: tab.icon,
+    label: t.nav.memberShort[tab.labelKey],
+  }));
 
   return (
-    <div
-      style={{
-        backgroundColor: 'var(--c-surface-0)',
-        borderColor: 'var(--c-border)',
-      }}
-      className="relative min-h-[calc(100vh-80px)] flex flex-col rounded-2xl overflow-hidden border shadow-xs select-none max-w-4xl mx-auto"
+    <AppShell
+      nav={nav}
+      activeKey={activeTab}
+      onNavigate={setTab}
+      title={t.member.shell[TAB_TITLES[currentTabInfo.labelKey]]}
+      subtitle={activeTab === 'home' ? `${memberName} · ${todayShamsi}` : todayShamsi}
+      context={getGymName()}
     >
-      {/* سربرگ تب‌های ثانویه (جلسات، تمرینات، سوابق) */}
-      {activeTab !== 'home' && (
-        <header
-          style={{
-            backgroundColor: 'var(--c-surface-1)',
-            borderColor: 'var(--c-border)',
-          }}
-          className="pt-5 px-4 sm:px-6 pb-3.5 border-b flex items-center justify-between gap-3.5 shrink-0"
-        >
-          <div>
-            <div className="text-[12px]" style={{ color: 'var(--c-text-muted)' }}>
-              {memberName} · {todayShamsi}
-            </div>
-            <div
-              className="text-[18px] sm:text-[20px] font-extrabold truncate mt-0.5"
-              style={{ color: 'var(--c-deep)' }}
-            >
-              {t.member.shell[TAB_TITLES[currentTabInfo.labelKey]]}
-            </div>
-          </div>
+      <PendingPackageBanner />
+      {activeTab === 'home' && <Home onNavigateTab={setTab} />}
+      {activeTab === 'ses' && <Sessions />}
+      {activeTab === 'ex' && <Exercises />}
+      {activeTab === 'hist' && <History />}
+    </AppShell>
+  );
+}
 
-          <NotificationBell onNavigateTab={raw => setActiveTab(toMemberTab(raw))} />
-        </header>
-      )}
-
-      {/* محتوای فعال صفحه */}
-      <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 pb-24 thin-scroll">
-        {activeTab === 'home' && <Home onNavigateTab={raw => setActiveTab(toMemberTab(raw))} />}
-        {activeTab === 'ses' && <Sessions />}
-        {activeTab === 'ex' && <Exercises />}
-        {activeTab === 'hist' && <History />}
-      </main>
-
-      {/* منوی ناوبری پایین صفحه (Bottom Tabs) */}
-      <nav
-        style={{
-          backgroundColor: 'var(--c-surface-1)',
-          borderColor: 'var(--c-border)',
-        }}
-        className="fixed sm:sticky bottom-0 inset-x-0 z-30 border-t grid grid-cols-4 pt-1.5 pb-4 select-none shadow-lg max-w-4xl mx-auto"
-        role="tablist"
-        aria-label="منوی اصلی ورزشکار"
-      >
-        {TABS.map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.key;
-
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                color: isActive ? 'var(--c-ink)' : 'var(--c-text-muted)',
-              }}
-              className="flex flex-col items-center gap-1 cursor-pointer transition-colors"
-            >
-              <span
-                style={{
-                  backgroundColor: isActive
-                    ? 'var(--c-surface-3)'
-                    : 'transparent',
-                }}
-                className="h-8 w-14 rounded-full grid place-items-center transition-all"
-              >
-                <Icon size={20} strokeWidth={isActive ? 2.2 : 1.8} />
-              </span>
-              <span className={`text-[12px] ${isActive ? 'font-bold' : ''}`}>
-                {t.nav.memberShort[tab.labelKey]}
-              </span>
-            </button>
-          );
-        })}
-      </nav>
+/** ورزشکاری که مربی ساخته و بسته‌اش هنوز تعیین نشده */
+function PendingPackageBanner() {
+  const { t } = useI18n();
+  const member = getCurrentMember();
+  if (!member?.packagePending) return null;
+  return (
+    <div
+      role="status"
+      className="mb-4 rounded-2xl border px-4 py-3 text-[14px] font-semibold"
+      style={{ backgroundColor: 'var(--c-status-live-bg)', color: 'var(--c-status-live-fg)', borderColor: 'var(--c-brass)' }}
+    >
+      {t.accounts.memberPendingBanner}
     </div>
   );
 }

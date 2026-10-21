@@ -18,6 +18,11 @@
   --c-rubber-dark: #a8381f;
   --c-chalk:  #f7f9fb;   /* page background */
 
+  /* Brand chrome (sidebar, login brand panel) and headings — stay dark/legible in both themes */
+  --c-chrome:   #06314e;
+  --c-chrome-2: #041d2c;
+  --c-heading:  #041d2c;
+
   /* Neutral surface scale */
   --c-surface-0: #f7f9fb;   /* page bg = chalk */
   --c-surface-1: #ffffff;   /* card bg */
@@ -109,6 +114,10 @@
   --c-text:       #f0f4f7;
   --c-text-muted: #7d9aac;
   --c-text-faint: #4f6273;
+
+  --c-chrome:   #0c2233;
+  --c-chrome-2: #08161f;
+  --c-heading:  #f0f4f7;
 
   /* Brand stays recognisable but lightened */
   --c-ink:    #3a7fb5;

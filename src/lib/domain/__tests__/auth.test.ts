@@ -88,8 +88,11 @@ export function runAuthTests() {
     const unlinked = profileToUserAccount(profile({ role: 'member', app_entity_id: null }), 'gym-1');
     assert(!unlinked.ok, 'member without a linked record is refused');
 
-    const superAdmin = profileToUserAccount(profile({ role: 'super_admin', tenant_id: null }), 'gym-1');
-    assert(!superAdmin.ok, 'super_admin has no UI here and is refused');
+    const superAdmin = profileToUserAccount(profile({ role: 'super_admin', tenant_id: null, app_entity_id: null }), '');
+    assert(superAdmin.ok && superAdmin.user.role === 'super_admin' && !superAdmin.user.gymId, 'super_admin maps to the platform admin without a gym');
+
+    const noGym = profileToUserAccount(profile(), '');
+    assert(!noGym.ok, 'gym staff without a gym are refused');
 
     // ── استور در حالت Supabase ───────────────────────────────
     gymStore.authMode = 'supabase';
@@ -104,7 +107,7 @@ export function runAuthTests() {
     gymStore.setCurrentUser('u-owner');
     assert(gymStore.currentUser === null, 'setCurrentUser cannot impersonate under Supabase Auth');
 
-    const t = gymStore.addTrainer(
+    const added = gymStore.addTrainer(
       {
         name: 'Coach Z',
         phone: '09125550000',
@@ -116,7 +119,7 @@ export function runAuthTests() {
       } as any,
       'secret-password'
     );
-    const acct = gymStore.users.find(u => u.entityId === t.id);
+    const acct = gymStore.users.find(u => u.entityId === added.trainer?.id);
     assert(!!acct && acct.password === '', 'trainer password is not stored locally under Supabase Auth');
 
     gymStore.setAuthenticatedUser(tr.ok ? tr.user : null);
@@ -147,11 +150,13 @@ export function runAuthTests() {
     }
 
     const login = readFileSync(join(process.cwd(), 'src/features/auth/LoginScreen.tsx'), 'utf8');
-    assert(/\{demoAuth && \(/.test(login), 'demo quick sign-in is hidden under Supabase Auth');
+    assert(/\{demo && \(/.test(login) && login.includes("const demo = !isServerAuth()"), 'demo quick sign-in is hidden under Supabase Auth');
 
     const fn = readFileSync(join(process.cwd(), 'supabase/functions/manage-account/index.ts'), 'utf8');
-    assert(fn.includes("caller.role !== 'gym_owner'"), 'manage-account only serves gym owners');
-    assert(fn.includes(".eq('tenant_id', caller.tenant_id)"), 'set-password is scoped to the caller tenant');
+    assert(fn.includes("caller.role === 'trainer' && role !== 'member'"), 'trainers can only create athletes');
+    assert(fn.includes("record.trainer_id !== caller.app_entity_id || !pending"), 'trainer-created athletes must be their own and pending');
+    assert(fn.includes("target.tenant_id === caller.tenant_id"), 'owners only manage accounts of their own gym');
+    assert(fn.includes("caller.role !== 'super_admin'"), 'only the platform admin creates gyms');
   } catch (e: any) {
     failed++;
     errors.push(`Unexpected error: ${e?.message ?? e}`);

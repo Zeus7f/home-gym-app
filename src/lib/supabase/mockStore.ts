@@ -48,8 +48,10 @@ import {
   checkCompletable,
 } from '../domain/bookingPolicy';
 import { translations } from '../i18n';
-import { supabase, isLiveSupabase } from './client';
-import { resolveAuthMode, type AuthMode } from '../auth/accountMapping';
+import { isLiveSupabase } from './client';
+import { can } from '../auth/permissions';
+import { MIN_PASSWORD_LENGTH, resolveAuthMode, type AuthMode } from '../auth/accountMapping';
+import { isValidMobile, normalizeLoginId, normalizePhone } from '../phone';
 
 const viteEnv = (import.meta as any).env || {};
 
@@ -80,7 +82,13 @@ function storeResult(
 }
 
 let idCounter = 0;
+/** B-03: در حالت ابری شناسهٔ رکوردها UUID است (کلید ردیف در app_records و app_entity_id پروفایل) */
+let uuidIds = false;
+export function useUuidIds(flag: boolean) {
+  uuidIds = flag;
+}
 function nextId(prefix: string): string {
+  if (uuidIds && typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   idCounter += 1;
   return `${prefix}-${Date.now()}-${idCounter}`;
 }
@@ -1244,7 +1252,65 @@ const INITIAL_USERS: UserAccount[] = [
   }
 ];
 
+/** حساب نمونهٔ مدیر کل در دموی محلی */
+const SUPER_ADMIN_DEMO: UserAccount = {
+  id: 'u-super',
+  username: 'superadmin',
+  password: '123',
+  role: 'super_admin',
+  entityId: '',
+  displayName: 'مدیر کل سامانه (Super Admin)',
+  phone: '09120000099',
+  createdAt: '1403/01/01'
+};
+
+/** حساب‌های قدیمی بدون gymId به باشگاه نمونه تعلق دارند؛ مدیر کل دمو همیشه وجود دارد. */
+function withDemoAccounts(users: UserAccount[]): UserAccount[] {
+  const list = users.map(u =>
+    u.role === 'super_admin' || u.gymId ? u : { ...u, gymId: INITIAL_GYM.id }
+  );
+  return list.some(u => u.role === 'super_admin') ? list : [SUPER_ADMIN_DEMO, ...list];
+}
+
+/** دادهٔ نمونهٔ باشگاه دمو — کپی مستقل تا تغییرات استور دادهٔ اولیه را آلوده نکند */
+function initialGymData() {
+  return structuredClone({
+    gym: INITIAL_GYM,
+    trainers: INITIAL_TRAINERS,
+    members: INITIAL_MEMBERS,
+    todaySessions: INITIAL_TODAY_SESSIONS,
+    pastSessions: INITIAL_PAST_SESSIONS,
+    memberPayments: INITIAL_PAYMENTS,
+    trainerPayouts: INITIAL_TRAINER_PAYOUTS,
+    sessionAdjustments: [] as SessionAdjustmentRecord[],
+    auditLogs: INITIAL_AUDIT_LOGS,
+    exercises: EXERCISE_CATALOG,
+    dailyCapacityConfigs: {} as Record<string, DailyCapacityConfig>,
+    programs: [] as WorkoutProgram[],
+  });
+}
+
+/** باشگاه تازه‌ساخته: بدون مربی، عضو و جلسه؛ فقط کاتالوگ حرکات */
+function emptyGymData(gym: Gym) {
+  return {
+    gym: { ...gym },
+    trainers: [] as Trainer[],
+    members: [] as Member[],
+    todaySessions: [] as DailySession[],
+    pastSessions: [] as DailySession[],
+    memberPayments: [] as PaymentRecord[],
+    trainerPayouts: [] as TrainerPaymentRecord[],
+    sessionAdjustments: [] as SessionAdjustmentRecord[],
+    auditLogs: [] as AuditLog[],
+    exercises: structuredClone(EXERCISE_CATALOG),
+    dailyCapacityConfigs: {} as Record<string, DailyCapacityConfig>,
+    programs: [] as WorkoutProgram[],
+  };
+}
+
 class GymStore {
+  /** همهٔ باشگاه‌های سامانه (برای مدیر کل). دادهٔ تفصیلی فقط برای باشگاه فعال بار می‌شود. */
+  gyms: Gym[] = [INITIAL_GYM];
   gym = INITIAL_GYM;
   trainers = INITIAL_TRAINERS;
   members = INITIAL_MEMBERS;
@@ -1256,7 +1322,7 @@ class GymStore {
   auditLogs = INITIAL_AUDIT_LOGS;
   exercises: ExerciseItem[] = [...EXERCISE_CATALOG];
 
-  users: UserAccount[] = INITIAL_USERS;
+  users: UserAccount[] = withDemoAccounts(INITIAL_USERS);
   currentUser: UserAccount | null = null; // Unauthenticated by default (F3)
 
   /**
@@ -1277,6 +1343,9 @@ class GymStore {
    */
   previewUser: UserAccount | null = null;
 
+  /** باشگاهی که مدیر کل وارد پنلش شده است (برای پیش‌نمایش نقش‌ها) */
+  adminGymId: string | null = null;
+
   /** هویتی که صفحات با آن داده می‌خوانند: کاربر پیش‌نمایش یا کاربر واردشده */
   get actingUser(): UserAccount | null {
     return this.previewUser ?? this.currentUser;
@@ -1288,7 +1357,7 @@ class GymStore {
    */
   setPreviewUser(userId: string | null): boolean {
     const next =
-      userId && this.currentUser?.role === 'owner'
+      userId && can(this.currentUser?.role, 'role.preview')
         ? this.users.find(u => u.id === userId) ?? null
         : null;
     if ((next?.id ?? null) === (this.previewUser?.id ?? null)) return false;
@@ -1306,6 +1375,7 @@ class GymStore {
 
   listeners = new Set<() => void>();
   private STORAGE_KEY = 'hg_store_state_v2';
+  private REGISTRY_KEY = 'hg_registry_v1';
   private SESSION_KEY = 'hg_current_user_id';
   private saveTimeout: any = null;
 
@@ -1313,55 +1383,101 @@ class GymStore {
     this.hydrateFromStorage();
   }
 
+  /**
+   * دادهٔ هر باشگاه جدا ذخیره می‌شود؛ باشگاه نمونه (gym-1) کلید قدیمی را نگه می‌دارد
+   * تا دادهٔ مرورگرهایی که قبلاً برنامه را باز کرده‌اند از دست نرود.
+   */
+  private gymStorageKey(gymId: string): string {
+    return gymId === INITIAL_GYM.id ? this.STORAGE_KEY : `${this.STORAGE_KEY}:${gymId}`;
+  }
+
   private hydrateFromStorage() {
     try {
-      if (typeof window === 'undefined') return;
-      const raw = localStorage.getItem(this.STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.gym) this.gym = parsed.gym;
-        if (parsed.trainers) this.trainers = parsed.trainers;
-        if (parsed.members) this.members = parsed.members;
-        if (parsed.todaySessions) this.todaySessions = parsed.todaySessions;
-        if (parsed.pastSessions) this.pastSessions = parsed.pastSessions;
-        if (parsed.memberPayments) this.memberPayments = parsed.memberPayments;
-        if (parsed.trainerPayouts) this.trainerPayouts = parsed.trainerPayouts;
-        if (parsed.sessionAdjustments) this.sessionAdjustments = parsed.sessionAdjustments;
-        if (parsed.auditLogs) this.auditLogs = parsed.auditLogs;
-        if (parsed.exercises) this.exercises = parsed.exercises;
-        if (parsed.users) this.users = parsed.users;
-        if (parsed.dailyCapacityConfigs) this.dailyCapacityConfigs = parsed.dailyCapacityConfigs;
-        if (parsed.programs) this.programs = parsed.programs;
+      if (typeof window === 'undefined' || this.authMode !== 'demo') return;
 
-        // B-05: مهاجرت داده‌های قدیمی — «Today» به تاریخ روزی که ذخیره شده بود تبدیل می‌شود،
-        // نه تاریخ امروز؛ وگرنه جلسات دیروز تا ابد «امروز» دیده می‌شدند.
-        const savedOn: string =
-          typeof parsed.savedOn === 'string' && parsed.savedOn ? parsed.savedOn : getTodayJalaliString();
-        const migrate = (s: DailySession) =>
-          s.date === LEGACY_TODAY ? { ...s, date: savedOn } : s;
-        this.todaySessions = this.todaySessions.map(migrate);
-        this.pastSessions = this.pastSessions.map(migrate);
+      // ثبت باشگاه‌ها و حساب‌ها (سراسری، مستقل از باشگاه فعال)
+      const registryRaw = localStorage.getItem(this.REGISTRY_KEY);
+      const legacyRaw = localStorage.getItem(this.STORAGE_KEY);
+      if (registryRaw) {
+        const registry = JSON.parse(registryRaw);
+        if (Array.isArray(registry.gyms) && registry.gyms.length) this.gyms = registry.gyms;
+        if (Array.isArray(registry.users)) this.users = registry.users;
+      } else if (legacyRaw) {
+        // نسخهٔ قبلی حساب‌ها را داخل دادهٔ باشگاه نگه می‌داشت
+        const legacy = JSON.parse(legacyRaw);
+        if (Array.isArray(legacy.users)) this.users = legacy.users;
       }
+      this.users = withDemoAccounts(this.users);
 
       // Restore session — فقط در دموی محلی؛ در حالت Supabase نشست از توکن Auth بازیابی می‌شود
       const savedUserId =
         this.authMode === 'demo'
           ? sessionStorage.getItem(this.SESSION_KEY) || localStorage.getItem(this.SESSION_KEY)
           : null;
-      if (savedUserId) {
-        const found = this.users.find(u => u.id === savedUserId);
-        if (found) {
-          this.currentUser = found;
-        }
-      }
+      const restored = savedUserId ? this.users.find(u => u.id === savedUserId) : undefined;
+      if (restored && restored.isActive !== false) this.currentUser = restored;
+
+      this.loadGymData(restored?.gymId ?? INITIAL_GYM.id);
     } catch (e) {
       console.warn('Store hydration warning:', e);
     }
   }
 
+  /** بارگذاری دادهٔ یک باشگاه در استور (بدون ذخیرهٔ دادهٔ باشگاه قبلی) */
+  private loadGymData(gymId: string) {
+    const registered = this.gyms.find(g => g.id === gymId);
+    let parsed: any = null;
+    try {
+      const raw = typeof window === 'undefined' ? null : localStorage.getItem(this.gymStorageKey(gymId));
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      console.warn('Store hydration warning:', e);
+    }
+
+    if (!parsed && gymId === INITIAL_GYM.id) {
+      // دادهٔ نمونهٔ دمو
+      Object.assign(this, initialGymData());
+    } else {
+      Object.assign(this, emptyGymData(registered ?? { ...INITIAL_GYM, id: gymId }));
+    }
+
+    if (parsed) {
+      if (parsed.gym) this.gym = parsed.gym;
+      if (parsed.trainers) this.trainers = parsed.trainers;
+      if (parsed.members) this.members = parsed.members;
+      if (parsed.todaySessions) this.todaySessions = parsed.todaySessions;
+      if (parsed.pastSessions) this.pastSessions = parsed.pastSessions;
+      if (parsed.memberPayments) this.memberPayments = parsed.memberPayments;
+      if (parsed.trainerPayouts) this.trainerPayouts = parsed.trainerPayouts;
+      if (parsed.sessionAdjustments) this.sessionAdjustments = parsed.sessionAdjustments;
+      if (parsed.auditLogs) this.auditLogs = parsed.auditLogs;
+      if (parsed.exercises) this.exercises = parsed.exercises;
+      if (parsed.dailyCapacityConfigs) this.dailyCapacityConfigs = parsed.dailyCapacityConfigs;
+      if (parsed.programs) this.programs = parsed.programs;
+
+      // B-05: مهاجرت داده‌های قدیمی — «Today» به تاریخ روزی که ذخیره شده بود تبدیل می‌شود،
+      // نه تاریخ امروز؛ وگرنه جلسات دیروز تا ابد «امروز» دیده می‌شدند.
+      const savedOn: string =
+        typeof parsed.savedOn === 'string' && parsed.savedOn ? parsed.savedOn : getTodayJalaliString();
+      const migrate = (s: DailySession) =>
+        s.date === LEGACY_TODAY ? { ...s, date: savedOn } : s;
+      this.todaySessions = this.todaySessions.map(migrate);
+      this.pastSessions = this.pastSessions.map(migrate);
+    }
+
+    // نام و وضعیت باشگاه از ثبت سراسری می‌آید (مدیر کل آن را تغییر می‌دهد)
+    if (registered) this.gym = { ...this.gym, name: registered.name, isActive: registered.isActive };
+    this.previewUser = null;
+  }
+
   private saveToStorage() {
     try {
-      if (typeof window === 'undefined') return;
+      // در حالت Supabase داده در ابر است و روی دستگاه (که ممکن است مشترک باشد) نمی‌ماند
+      if (typeof window === 'undefined' || this.authMode !== 'demo') return;
+      // در حالت Supabase رمزی در مرورگر نگه داشته نمی‌شود
+      const users =
+        this.authMode === 'demo' ? this.users : this.users.map(u => ({ ...u, password: '' }));
+      localStorage.setItem(this.REGISTRY_KEY, JSON.stringify({ gyms: this.gyms, users }));
       const payload = {
         gym: this.gym,
         trainers: this.trainers,
@@ -1373,15 +1489,31 @@ class GymStore {
         sessionAdjustments: this.sessionAdjustments,
         auditLogs: this.auditLogs,
         exercises: this.exercises,
-        users: this.users,
         dailyCapacityConfigs: this.dailyCapacityConfigs,
         programs: this.programs,
         savedOn: getTodayJalaliString()
       };
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
+      localStorage.setItem(this.gymStorageKey(this.gym.id), JSON.stringify(payload));
     } catch (e) {
       console.warn('Store save warning:', e);
     }
+  }
+
+  /**
+   * تعویض باشگاه فعال: دادهٔ باشگاه فعلی ذخیره و دادهٔ باشگاه مقصد بار می‌شود.
+   * پس از ورود (باشگاه حساب) و هنگام ورود مدیر کل به پنل یک باشگاه صدا زده می‌شود.
+   */
+  activateGym(gymId: string) {
+    if (this.gym.id === gymId) return;
+    if (this.saveTimeout) clearTimeout(this.saveTimeout);
+    this.saveToStorage();
+    this.loadGymData(gymId);
+    this.notify();
+  }
+
+  /** حساب‌های باشگاه فعال (برای پیش‌نمایش نقش و فهرست کاربران) */
+  get gymUsers(): UserAccount[] {
+    return this.users.filter(u => (u.gymId ?? INITIAL_GYM.id) === this.gym.id);
   }
 
   subscribe(fn: () => void): () => void {
@@ -1403,45 +1535,34 @@ class GymStore {
   // AUTHENTICATION & USER MANAGEMENT
   // ==========================================
   login(username: string, password: string): StoreResult {
-    if (this.authMode !== 'demo') {
-      return {
-        success: false,
-        messageKey: 'login.authUnavailable',
-        message: 'ورود فقط از طریق سرویس احراز هویت ممکن است.',
-      };
-    }
+    if (this.authMode !== 'demo') return storeResult(false, 'login.authUnavailable');
+
+    // ورود با شمارهٔ موبایل (با هر نوع رقم و پیشوند) یا نام کاربری
+    const id = normalizeLoginId(username);
     const user = this.users.find(
-      u => u.username.toLowerCase() === username.trim().toLowerCase()
+      u => u.username.toLowerCase() === id || (!!u.phone && normalizePhone(u.phone) === id)
     );
-    if (!user) {
-      return {
-        success: false,
-        messageKey: 'login.userNotFound',
-        message: 'نام کاربری وارد شده یافت نشد.',
-      };
+    if (!user) return storeResult(false, 'login.userNotFound');
+    if (user.password !== password.trim()) return storeResult(false, 'login.badPassword');
+    if (user.isActive === false) return storeResult(false, 'login.inactive');
+    if (user.gymId && this.gyms.find(g => g.id === user.gymId)?.isActive === false) {
+      return storeResult(false, 'login.gymInactive');
     }
-    if (user.password !== password.trim()) {
-      return {
-        success: false,
-        messageKey: 'login.badPassword',
-        message: 'کلمه عبور وارد شده نادرست است.',
-      };
-    }
+
+    if (user.gymId) this.activateGym(user.gymId);
     this.currentUser = user;
+    this.previewUser = null;
     try {
       sessionStorage.setItem(this.SESSION_KEY, user.id);
     } catch (e) {}
     this.notify();
-    return {
-      success: true,
-      messageKey: 'login.success',
-      message: 'ورود با موفقیت انجام شد.',
-    };
+    return storeResult(true, 'login.success');
   }
 
   logout() {
     this.currentUser = null;
     this.previewUser = null;
+    this.adminGymId = null;
     try {
       sessionStorage.removeItem(this.SESSION_KEY);
       localStorage.removeItem(this.SESSION_KEY);
@@ -1461,31 +1582,83 @@ class GymStore {
     if (this.authMode !== 'demo') return;
     const user = this.users.find(u => u.id === userId);
     if (user) {
+      if (user.gymId) this.activateGym(user.gymId);
       this.currentUser = user;
       this.previewUser = null;
       this.notify();
     }
   }
 
-  resetPassword(userId: string, newPassword: string): boolean {
-    const user = this.users.find(u => u.id === userId);
-    if (!user) return false;
-    user.password = newPassword.trim();
+  // ==========================================
+  // ACCOUNTS & GYMS (مدیر کل → باشگاه و مدیر؛ مدیر → مربی و ورزشکار؛ مربی → ورزشکار)
+  // ==========================================
+
+  /** اعتبارسنجی مشترک ساخت حساب؛ null یعنی معتبر */
+  private checkNewAccount(name: string, phone: string, password: string | undefined): StoreResult | null {
+    if (!name.trim()) return storeResult(false, 'account.invalidName');
+    if (!isValidMobile(phone)) return storeResult(false, 'account.invalidPhone');
+    if (this.users.some(u => u.phone && normalizePhone(u.phone) === phone)) {
+      return storeResult(false, 'account.phoneTaken');
+    }
+    if (password !== undefined && password.trim().length < MIN_PASSWORD_LENGTH) {
+      return storeResult(false, 'account.weakPassword');
+    }
+    return null;
+  }
+
+  private audit(action: string, entityType: string, entityId: string, details: string) {
     this.auditLogs.unshift({
       id: nextId('aud'),
-      action: 'PASSWORD_RESET',
-      entityType: 'UserAccount',
-      entityId: userId,
-      details: `کلمه عبور حساب کاربری ${user.displayName} (${user.username}) توسط مدیر باشگاه تغییر یافت.`,
+      action,
+      entityType,
+      entityId,
+      details,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       user: this.currentUser?.displayName || 'مدیر باشگاه'
     });
+  }
+
+  resetPassword(userId: string, newPassword: string): StoreResult {
+    const user = this.users.find(u => u.id === userId);
+    if (!user) return storeResult(false, 'member.notFound');
+    if (newPassword.trim().length < MIN_PASSWORD_LENGTH) return storeResult(false, 'account.weakPassword');
+    // در حالت Supabase رمز فقط در سرویس Auth تغییر می‌کند
+    if (this.authMode === 'demo') user.password = newPassword.trim();
+    this.audit(
+      'PASSWORD_RESET',
+      'UserAccount',
+      userId,
+      `کلمه عبور حساب کاربری ${user.displayName} (${user.username}) تغییر یافت.`
+    );
     this.notify();
-    return true;
+    return storeResult(true, 'account.passwordChanged');
+  }
+
+  /** فعال/غیرفعال کردن حساب. حساب غیرفعال اجازهٔ ورود ندارد. */
+  setAccountActive(userId: string, active: boolean): StoreResult {
+    const user = this.users.find(u => u.id === userId);
+    if (!user) return storeResult(false, 'member.notFound');
+    user.isActive = active;
+    if (user.role === 'trainer') {
+      const trainer = this.trainers.find(t => t.id === user.entityId);
+      if (trainer) trainer.status = active ? 'active' : 'inactive';
+    }
+    if (user.role === 'member') {
+      const member = this.members.find(m => m.id === user.entityId);
+      if (member) member.status = active ? 'active' : 'inactive';
+    }
+    this.notify();
+    return storeResult(true, active ? 'account.activated' : 'account.deactivated');
+  }
+
+  /** حساب ورود یک رکورد مربی/عضو در باشگاه فعال */
+  accountFor(role: 'trainer' | 'member', entityId: string): UserAccount | undefined {
+    return this.users.find(u => u.role === role && u.entityId === entityId);
   }
 
   createUserAccount(data: Omit<UserAccount, 'id' | 'createdAt'>): UserAccount {
     const newUser: UserAccount = {
+      gymId: data.role === 'super_admin' ? undefined : this.gym.id,
       ...data,
       id: nextId('u'),
       createdAt: getTodayJalaliString()
@@ -1493,6 +1666,89 @@ class GymStore {
     this.users.unshift(newUser);
     this.notify();
     return newUser;
+  }
+
+  /**
+   * مدیر کل: ساخت باشگاه به‌همراه حساب مدیر آن (دموی محلی).
+   * در حالت Supabase همین کار را Edge Function `manage-account` انجام می‌دهد.
+   */
+  createGym(input: {
+    name: string;
+    capacity: number;
+    ownerName: string;
+    ownerPhone: string;
+    ownerPassword: string;
+  }): StoreResult & { gymId?: string } {
+    if (!input.name.trim()) return storeResult(false, 'gym.invalidName');
+    if (!Number.isFinite(input.capacity) || input.capacity < 1) return storeResult(false, 'gym.invalidCapacity');
+    const phone = normalizePhone(input.ownerPhone);
+    const invalid = this.checkNewAccount(input.ownerName, phone, input.ownerPassword);
+    if (invalid) return invalid;
+
+    const gym: Gym = {
+      id: nextId('gym'),
+      name: input.name.trim(),
+      capacity: Math.round(input.capacity),
+      currency: 'تومان',
+      noShowDeductsSession: false,
+      isActive: true,
+      createdAt: getTodayJalaliString(),
+    };
+    this.gyms.push(gym);
+    this.users.unshift({
+      id: nextId('u'),
+      username: phone,
+      password: this.authMode === 'demo' ? input.ownerPassword.trim() : '',
+      role: 'owner',
+      entityId: gym.id,
+      gymId: gym.id,
+      displayName: input.ownerName.trim(),
+      phone,
+      createdAt: getTodayJalaliString(),
+    });
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(this.gymStorageKey(gym.id), JSON.stringify({ gym, savedOn: getTodayJalaliString() }));
+      }
+    } catch (e) {}
+    this.notify();
+    return { ...storeResult(true, 'gym.created', { gym: gym.name }), gymId: gym.id };
+  }
+
+  /** مدیر کل: فعال/غیرفعال کردن باشگاه */
+  setGymActive(gymId: string, active: boolean): StoreResult {
+    const gym = this.gyms.find(g => g.id === gymId);
+    if (!gym) return storeResult(false, 'gym.invalidName');
+    gym.isActive = active;
+    if (this.gym.id === gymId) this.gym = { ...this.gym, isActive: active };
+    this.notify();
+    return storeResult(true, active ? 'gym.activated' : 'gym.deactivated');
+  }
+
+  /** خلاصهٔ هر باشگاه برای پنل مدیر کل (از دادهٔ ذخیره‌شدهٔ هر باشگاه) */
+  gymSummaries(): { gym: Gym; trainers: number; members: number; owner?: UserAccount }[] {
+    return this.gyms.map(gym => {
+      let trainers = 0;
+      let members = 0;
+      if (gym.id === this.gym.id) {
+        trainers = this.trainers.length;
+        members = this.members.length;
+      } else {
+        try {
+          const raw = typeof window === 'undefined' ? null : localStorage.getItem(this.gymStorageKey(gym.id));
+          const parsed = raw ? JSON.parse(raw) : null;
+          if (parsed) {
+            trainers = parsed.trainers?.length ?? 0;
+            members = parsed.members?.length ?? 0;
+          } else if (gym.id === INITIAL_GYM.id) {
+            trainers = INITIAL_TRAINERS.length;
+            members = INITIAL_MEMBERS.length;
+          }
+        } catch (e) {}
+      }
+      const owner = this.users.find(u => u.role === 'owner' && u.gymId === gym.id);
+      return { gym, trainers, members, owner };
+    });
   }
 
   // ==========================================
@@ -1569,6 +1825,7 @@ class GymStore {
       trainerName: names.trainerName,
       memberName: names.memberName,
       allowPastDate: options.allowPastDate,
+      memberPackagePending: this.members.find(m => m.id === req.memberId)?.packagePending === true,
     });
   }
 
@@ -2033,48 +2290,130 @@ class GymStore {
     this.notify();
   }
 
-  // Add New Member (with optional initial password)
+  /**
+   * افزودن ورزشکار. با رمز، حساب ورود هم ساخته می‌شود (نام کاربری = موبایل).
+   * `byTrainerId`: ورزشکار ساختهٔ مربی — به همان مربی وصل می‌شود، بسته و قیمت ندارد
+   * و تا تعیین بسته توسط مدیر (`assignMemberPackage`) رزرو ندارد.
+   */
   addMember(
     data: Omit<Member, 'id' | 'usedSessions' | 'remainingSessions' | 'outstandingBalance' | 'registrationDate'>,
-    initialPassword?: string
-  ) {
+    initialPassword?: string,
+    options: { byTrainerId?: string } = {}
+  ): StoreResult & { member?: Member } {
+    const phone = normalizePhone(data.phone);
+    const invalid = this.checkNewAccount(data.name, phone, initialPassword || undefined);
+    if (invalid) return invalid;
+
+    const byTrainer = options.byTrainerId
+      ? this.trainers.find(t => t.id === options.byTrainerId)
+      : undefined;
+    const base = byTrainer
+      ? {
+          ...data,
+          defaultTrainerId: byTrainer.id,
+          defaultTrainerName: byTrainer.name,
+          packageName: '',
+          totalSessions: 0,
+          packagePrice: 0,
+          paidAmount: 0,
+          expirationDate: '',
+          packagePending: true,
+          createdByTrainerId: byTrainer.id,
+        }
+      : data;
+
     const newMember: Member = {
-      ...data,
+      ...base,
+      phone,
+      name: base.name.trim(),
       id: nextId('m'),
       usedSessions: 0,
-      remainingSessions: data.totalSessions,
-      outstandingBalance: Math.max(0, data.packagePrice - data.paidAmount),
+      remainingSessions: base.totalSessions,
+      outstandingBalance: Math.max(0, base.packagePrice - base.paidAmount),
       registrationDate: getTodayJalaliString()
     };
     this.members.unshift(newMember);
 
     // Record payment if initial paid amount > 0
-    if (data.paidAmount > 0) {
+    if (base.paidAmount > 0) {
       this.memberPayments.unshift({
         id: nextId('pay'),
         memberId: newMember.id,
         memberName: newMember.name,
-        amount: data.paidAmount,
+        amount: base.paidAmount,
         date: getTodayJalaliString(),
         method: 'card',
         description: 'پیش‌پرداخت اولیه هنگام ثبت نام',
-        recordedBy: 'مدیر باشگاه'
+        recordedBy: this.currentUser?.displayName || 'مدیر باشگاه'
       });
     }
 
     if (initialPassword && initialPassword.trim()) {
       this.createUserAccount({
-        username: data.phone || `member_${nextId('x').split('-').pop()}`,
+        username: phone,
         // B-01: در حالت Supabase رمز فقط به سرویس Auth می‌رود و در مرورگر ذخیره نمی‌شود
         password: this.authMode === 'demo' ? initialPassword.trim() : '',
         role: 'member',
         entityId: newMember.id,
-        displayName: newMember.name
+        displayName: newMember.name,
+        phone
       });
     }
 
+    this.audit(
+      'MEMBER_CREATED',
+      'Member',
+      newMember.id,
+      byTrainer
+        ? `ورزشکار ${newMember.name} توسط مربی ${byTrainer.name} ثبت شد و منتظر تعیین بسته است.`
+        : `ورزشکار ${newMember.name} ثبت شد.`
+    );
     this.notify();
-    return newMember;
+    return {
+      ...storeResult(true, byTrainer ? 'member.createdPending' : 'member.created', { member: newMember.name }),
+      member: newMember,
+    };
+  }
+
+  /** مدیر: تعیین بسته برای ورزشکاری که مربی ساخته (یا تمدید با بستهٔ تازه) */
+  assignMemberPackage(
+    memberId: string,
+    pkg: { packageName: string; totalSessions: number; packagePrice: number; paidAmount: number; startDate: string; expirationDate: string }
+  ): StoreResult {
+    const member = this.members.find(m => m.id === memberId);
+    if (!member) return storeResult(false, 'member.notFound');
+    if (!pkg.packageName.trim() || !Number.isFinite(pkg.totalSessions) || pkg.totalSessions < 1) {
+      return storeResult(false, 'member.invalidPackage');
+    }
+    if (pkg.packagePrice < 0 || pkg.paidAmount < 0) return storeResult(false, 'payment.invalidAmount');
+
+    member.packageName = pkg.packageName.trim();
+    member.totalSessions = Math.round(pkg.totalSessions);
+    member.usedSessions = 0;
+    member.remainingSessions = member.totalSessions;
+    member.packagePrice = pkg.packagePrice;
+    member.paidAmount = pkg.paidAmount;
+    member.outstandingBalance = Math.max(0, pkg.packagePrice - pkg.paidAmount);
+    member.startDate = pkg.startDate;
+    member.expirationDate = pkg.expirationDate;
+    member.status = 'active';
+    member.packagePending = false;
+
+    if (pkg.paidAmount > 0) {
+      this.memberPayments.unshift({
+        id: nextId('pay'),
+        memberId: member.id,
+        memberName: member.name,
+        amount: pkg.paidAmount,
+        date: getTodayJalaliString(),
+        method: 'card',
+        description: `پرداخت بستهٔ ${member.packageName}`,
+        recordedBy: this.currentUser?.displayName || 'مدیر باشگاه'
+      });
+    }
+    this.audit('PACKAGE_ASSIGNED', 'Member', member.id, `بستهٔ ${member.packageName} برای ${member.name} ثبت شد.`);
+    this.notify();
+    return storeResult(true, 'member.packageAssigned', { member: member.name });
   }
 
   /**
@@ -2214,13 +2553,19 @@ class GymStore {
     this.notify();
   }
 
-  // Add Trainer (with optional password)
+  /** مدیر: افزودن مربی. با رمز، حساب ورود هم ساخته می‌شود (نام کاربری = موبایل). */
   addTrainer(
     data: Omit<Trainer, 'id' | 'completedSessions' | 'paidCompensation' | 'outstandingCompensation'>,
     initialPassword?: string
-  ) {
+  ): StoreResult & { trainer?: Trainer } {
+    const phone = normalizePhone(data.phone);
+    const invalid = this.checkNewAccount(data.name, phone, initialPassword || undefined);
+    if (invalid) return invalid;
+
     const newTrainer: Trainer = {
       ...data,
+      phone,
+      name: data.name.trim(),
       id: nextId('t'),
       completedSessions: 0,
       paidCompensation: 0,
@@ -2230,17 +2575,19 @@ class GymStore {
 
     if (initialPassword && initialPassword.trim()) {
       this.createUserAccount({
-        username: data.phone || `trainer_${nextId('x').split('-').pop()}`,
+        username: phone,
         // B-01: در حالت Supabase رمز فقط به سرویس Auth می‌رود و در مرورگر ذخیره نمی‌شود
         password: this.authMode === 'demo' ? initialPassword.trim() : '',
         role: 'trainer',
         entityId: newTrainer.id,
-        displayName: newTrainer.name
+        displayName: newTrainer.name,
+        phone
       });
     }
 
+    this.audit('TRAINER_CREATED', 'Trainer', newTrainer.id, `مربی ${newTrainer.name} ثبت شد.`);
     this.notify();
-    return newTrainer;
+    return { ...storeResult(true, 'trainer.created', { trainer: newTrainer.name }), trainer: newTrainer };
   }
 
   // Record Trainer Payout (Section 13 & 32)
@@ -2294,30 +2641,6 @@ class GymStore {
       user: this.currentUser?.displayName || 'مدیر باشگاه'
     });
     this.notify();
-    // Live Supabase sync for new exercises
-    if (isLiveSupabase && supabase) {
-      supabase.from('exercises').insert({
-        id: newExercise.id,
-        name: newExercise.name,
-        name_fa: newExercise.nameFa,
-        body_part: newExercise.bodyPart,
-        body_part_fa: newExercise.bodyPartFa,
-        equipment: newExercise.equipment,
-        equipment_fa: newExercise.equipmentFa,
-        pattern: newExercise.pattern,
-        pattern_fa: newExercise.patternFa,
-        position: newExercise.position,
-        position_fa: newExercise.positionFa,
-        gif_url: newExercise.gifUrl,
-        instructions_en: newExercise.instructionsEn,
-        instructions_fa: newExercise.instructionsFa,
-        default_sets: newExercise.defaultSets,
-        default_reps: newExercise.defaultReps,
-        is_custom: true
-      }).then(({ error }) => {
-        if (error) console.warn('Supabase addCustomExercise warning:', error.message);
-      });
-    }
 
     return newExercise;
   }
@@ -2337,12 +2660,6 @@ class GymStore {
     });
     this.notify();
 
-    // Live Supabase delete
-    if (isLiveSupabase && supabase) {
-      supabase.from('exercises').delete().eq('id', id).then(({ error }) => {
-        if (error) console.warn('Supabase deleteExercise warning:', error.message);
-      });
-    }
 
     return true;
   }
@@ -2365,30 +2682,6 @@ class GymStore {
 
     this.notify();
 
-    // Live Supabase update
-    if (isLiveSupabase && supabase) {
-      supabase.from('exercises').upsert({
-        id: exercise.id,
-        name: exercise.name,
-        name_fa: exercise.nameFa,
-        body_part: exercise.bodyPart,
-        body_part_fa: exercise.bodyPartFa,
-        equipment: exercise.equipment,
-        equipment_fa: exercise.equipmentFa,
-        pattern: exercise.pattern,
-        pattern_fa: exercise.patternFa,
-        position: exercise.position,
-        position_fa: exercise.positionFa,
-        gif_url: exercise.gifUrl,
-        instructions_en: exercise.instructionsEn,
-        instructions_fa: exercise.instructionsFa,
-        default_sets: exercise.defaultSets,
-        default_reps: exercise.defaultReps,
-        is_custom: exercise.isCustom ?? false
-      }).then(({ error }) => {
-        if (error) console.warn('Supabase updateExercise warning:', error.message);
-      });
-    }
 
     return exercise;
   }
@@ -2553,121 +2846,23 @@ class GymStore {
   }
 
   // ==========================================
-  // SUPABASE CLOUD SYNC (READ-ONLY, PARTIAL)
+  // SUPABASE CLOUD DATA (B-03) — بارگذاری و همگام‌سازی در lib/data/cloudSync.ts
   // ==========================================
-  /**
-   * B-03: این مسیر فقط جداول کاتالوگ، باشگاه، مربیان و اعضا را *می‌خواند*.
-   * جلسات، حضور، امور مالی، برنامه‌ها و کاربران فقط در مرورگر ذخیره می‌شوند.
-   * بنابراین «connected» فقط یعنی خواندن موفق همین جداول، نه همگام‌سازی کامل.
-   */
-  isSupabaseConnected = false;
-  /** جداولی که آخرین بار با موفقیت از Supabase خوانده شدند */
-  supabaseSyncedTables: string[] = [];
-  /** وضعیت همگام‌سازی برای نمایش صادقانه در رابط کاربری */
-  supabaseSyncStatus: 'off' | 'partial' | 'error' = 'off';
-  /** داده‌هایی که هیچ مسیر خواندن/نوشتن ابری ندارند */
-  static readonly LOCAL_ONLY_DATA = [
-    'sessions',
-    'attendance',
-    'payments',
-    'payouts',
-    'audit_logs',
-    'programs',
-    'users',
-  ] as const;
 
-  async syncWithSupabase() {
-    if (!isLiveSupabase || !supabase) return;
-    const synced: string[] = [];
-    try {
-      // 1. Fetch exercises from Supabase
-      const { data: exData, error: exErr } = await supabase.from('exercises').select('*');
-      if (!exErr) synced.push('exercises');
-      if (!exErr && exData && exData.length > 0) {
-        this.exercises = exData.map(row => ({
-          id: row.id,
-          name: row.name,
-          nameFa: row.name_fa || row.name,
-          bodyPart: row.body_part,
-          bodyPartFa: row.body_part_fa || row.body_part,
-          equipment: row.equipment,
-          equipmentFa: row.equipment_fa || row.equipment,
-          pattern: row.pattern,
-          patternFa: row.pattern_fa || row.pattern,
-          position: row.position,
-          positionFa: row.position_fa || row.position,
-          gifUrl: row.gif_url,
-          instructionsEn: row.instructions_en || '',
-          instructionsFa: row.instructions_fa || '',
-          defaultSets: row.default_sets || 3,
-          defaultReps: row.default_reps || 10,
-          isCustom: row.is_custom || false
-        }));
-      }
-
-      // 2. Fetch gym settings (فیلدهای محلی مانند hourlyCapacity حفظ می‌شوند)
-      const { data: gymData, error: gymErr } = await supabase.from('gyms').select('*').limit(1).maybeSingle();
-      if (!gymErr) synced.push('gyms');
-      if (!gymErr && gymData) {
-        this.gym = {
-          ...this.gym,
-          id: gymData.id,
-          name: gymData.name,
-          capacity: gymData.capacity,
-          currency: gymData.currency || 'تومان',
-          noShowDeductsSession: gymData.no_show_deducts_session || false
-        };
-      }
-
-      // 3. Fetch trainers
-      const { data: trData, error: trErr } = await supabase.from('trainers').select('*');
-      if (!trErr) synced.push('trainers');
-      if (!trErr && trData && trData.length > 0) {
-        trData.forEach(row => {
-          const existing = this.trainers.find(t => t.id === row.id);
-          if (existing) {
-            existing.name = row.name;
-            existing.phone = row.phone || existing.phone;
-            existing.specialty = row.specialty || existing.specialty;
-            existing.dailyCapacity = row.daily_capacity || existing.dailyCapacity;
-            existing.sessionRate = Number(row.session_rate) || existing.sessionRate;
-          }
-        });
-      }
-
-      // 4. Fetch members
-      const { data: memData, error: memErr } = await supabase.from('members').select('*');
-      if (!memErr) synced.push('members');
-      if (!memErr && memData && memData.length > 0) {
-        memData.forEach(row => {
-          const existing = this.members.find(m => m.id === row.id);
-          if (existing) {
-            existing.name = row.name;
-            existing.phone = row.phone || existing.phone;
-            existing.packageName = row.package_name || existing.packageName;
-            existing.totalSessions = row.total_sessions ?? existing.totalSessions;
-            existing.usedSessions = row.used_sessions ?? existing.usedSessions;
-            existing.remainingSessions = Math.max(0, existing.totalSessions - existing.usedSessions);
-          }
-        });
-      }
-    } catch (e) {
-      console.warn('Supabase sync warning:', e);
-    }
-
-    this.supabaseSyncedTables = synced;
-    this.isSupabaseConnected = synced.length > 0;
-    this.supabaseSyncStatus = synced.length > 0 ? 'partial' : 'error';
+  /** جایگزینی دادهٔ باشگاه فعال با دادهٔ بارشده از Supabase */
+  applyCloudGym(gym: Gym, data: Partial<ReturnType<typeof emptyGymData>>, users: UserAccount[]) {
+    Object.assign(this, emptyGymData(gym), data, { gym });
+    if (!this.gyms.some(g => g.id === gym.id)) this.gyms = [...this.gyms.filter(g => g.id !== INITIAL_GYM.id), gym];
+    // حساب‌های باشگاه از profiles؛ حساب واردشده همیشه در فهرست می‌ماند
+    const others = this.users.filter(u => u.gymId !== gym.id && u.id !== this.currentUser?.id);
+    this.users = [...(this.currentUser ? [this.currentUser] : []), ...users.filter(u => u.id !== this.currentUser?.id), ...others];
+    this.previewUser = null;
     this.notify();
   }
 }
 
 export const gymStore = new GymStore();
 
-// Trigger initial cloud sync when Supabase is configured
-if (isLiveSupabase) {
-  gymStore.syncWithSupabase();
-}
 
 // Backwards compatibility alias for components
 export const mockStore = gymStore;

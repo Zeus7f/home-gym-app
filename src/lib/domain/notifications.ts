@@ -1,3 +1,4 @@
+import type { AppRole } from '../auth/permissions';
 // Pure Domain Logic: Role-aware Notification Engine
 // Derives user-facing alerts from live store data — no hardcoded notification lists.
 //
@@ -81,7 +82,7 @@ export interface NotificationLabels {
 
 export interface NotificationInput {
   /** کاربر واردشده */
-  currentUser: { role: 'owner' | 'trainer' | 'member'; entityId: string } | null;
+  currentUser: { role: AppRole; entityId: string } | null;
   members: Member[];
   trainers: Trainer[];
   todaySessions: DailySession[];

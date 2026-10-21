@@ -18,6 +18,7 @@ export const appDict = {
     previewMode: 'Preview mode',
     signOut: 'Sign out',
     roles: {
+      super_admin: 'Super Admin',
       owner: 'Gym Owner',
       trainer: 'Trainer',
       member: 'Member',
@@ -163,6 +164,7 @@ export const appDict = {
     previewMode: 'حالت پیش‌نمایش',
     signOut: 'خروج از حساب کاربری',
     roles: {
+      super_admin: 'مدیر کل سامانه',
       owner: 'مدیر باشگاه',
       trainer: 'مربی',
       member: 'ورزشکار',

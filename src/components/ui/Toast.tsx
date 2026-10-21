@@ -50,7 +50,7 @@ export const Toast: React.FC<ToastProps> = ({
       role="status"
       aria-live="polite"
       className={cn(
-        'fixed bottom-24 md:bottom-6 start-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl border backdrop-blur-md shadow-2xl text-xs font-bold animate-fade-in max-w-md',
+        'fixed bottom-24 md:bottom-6 inset-x-4 md:inset-x-auto md:start-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl border backdrop-blur-md shadow-2xl text-xs font-bold animate-fade-in md:max-w-md',
         style
       )}
     >

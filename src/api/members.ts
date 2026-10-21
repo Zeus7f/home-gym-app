@@ -7,13 +7,18 @@ import { gymStore } from './_client';
 import { localizeResult, translateStoreMessage } from './_messages';
 import type { Member, DailySession } from '../lib/domain/gymManagement';
 import { toman } from '../lib/format';
-import { createLoginAccount } from './auth';
 
 type ActionResult = { success: boolean; message: string };
 
 /** Get all members. */
 export async function getMembers(): Promise<Member[]> {
   return gymStore.members;
+}
+
+/** رکورد ورزشکارِ هویت فعال (برای صفحات ورزشکار) */
+export function getCurrentMember(): Member | undefined {
+  const user = gymStore.actingUser;
+  return user?.role === 'member' ? gymStore.members.find(m => m.id === user.entityId) : undefined;
 }
 
 /** Get a single member by ID. */
@@ -35,27 +40,6 @@ export async function getMemberSessions(memberId: string): Promise<DailySession[
     ...gymStore.todaySessions.filter(s => s.memberId === memberId),
     ...gymStore.pastSessions.filter(s => s.memberId === memberId),
   ];
-}
-
-/**
- * Add a new member. With a password, a sign-in account is created too
- * (B-01: on Supabase Auth when configured; `account` reports that step).
- */
-export async function addMember(
-  data: Parameters<typeof gymStore.addMember>[0],
-  initialPassword?: string,
-): Promise<{ member: Member; account?: ActionResult }> {
-  const member = gymStore.addMember(data, initialPassword);
-  if (!initialPassword?.trim()) return { member };
-  const account = await createLoginAccount({
-    role: 'member',
-    entityId: member.id,
-    username: data.phone.replace(/\s+/g, ''),
-    password: initialPassword.trim(),
-    fullName: member.name,
-    phone: data.phone,
-  });
-  return { member, account };
 }
 
 /**

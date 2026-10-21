@@ -17,6 +17,7 @@ import { trainerDict } from './trainer';
 import { memberDict } from './member';
 import { ownerDict } from './owner';
 import { calendarDict } from './calendar';
+import { accountsDict } from './accounts';
 
 export type Language = 'en' | 'fa';
 
@@ -28,6 +29,8 @@ export const translations = {
     ...commonDict.en,
     // متن تقویم ماهانه
     ...calendarDict.en,
+    // پوستهٔ واحد، صفحهٔ ورود، پنل مدیر کل و فرم‌های حساب
+    ...accountsDict.en,
     // فضای کاری هر نقش — با فضای‌نام تا دسترسی صریح باشد: t.trainer.* / t.member.* / t.owner.*
     trainer: trainerDict.en,
     member: memberDict.en,
@@ -37,6 +40,7 @@ export const translations = {
     ...appDict.fa,
     ...commonDict.fa,
     ...calendarDict.fa,
+    ...accountsDict.fa,
     trainer: trainerDict.fa,
     member: memberDict.fa,
     owner: ownerDict.fa,

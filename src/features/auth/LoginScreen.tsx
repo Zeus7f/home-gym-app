@@ -1,494 +1,270 @@
-import React, { useState } from 'react';
+/**
+ * صفحهٔ ورود — ورود با شمارهٔ موبایل و کلمه عبور.
+ *
+ *   ≥ lg : دو ستون؛ پنل برند (نام باشگاه و سه مزیت) کنار فرم
+ *   < lg : نوار برند فشرده بالای فرم تمام‌عرض
+ *
+ * حساب‌های نمونه فقط در دموی محلی (بدون Supabase) و در یک بخش جمع‌شو نمایش داده می‌شوند.
+ */
+
+import React, { useEffect, useState } from 'react';
+import { Dumbbell, CheckCircle2, AlertCircle, LogIn, ChevronDown } from 'lucide-react';
 import { isServerAuth, login } from '../../api/auth';
-import { useI18n } from '../../components/LanguageProvider';
 import { getGym } from '../../api/gym';
+import { useI18n } from '../../components/LanguageProvider';
 import { Language, translations } from '../../lib/i18n';
 import { ThemeToggle } from '../../components/ui/ThemeToggle';
-import { LanguageToggle } from '../../components/ui/LanguageToggle';
-import {
-  Dumbbell,
-  Lock,
-  User,
-  LogIn,
-  AlertCircle,
-  Sparkles,
-  Shield,
-  UserCheck,
-  Eye,
-  EyeOff,
-  Flame,
-  ArrowRight,
-} from 'lucide-react';
+import { Field, PasswordInput, PhoneInput } from '../../components/ui/Form';
+import { Btn } from '../../components/ui/Btn';
+import { displayName } from '../../lib/displayName';
+import type { AppRole } from '../../lib/auth/permissions';
 
 interface LoginScreenProps {
   lang?: Language;
   onLanguageChange?: (lang: Language) => void;
 }
 
-type RoleTab = 'owner' | 'trainer' | 'member';
+/** حساب‌های نمونهٔ دموی محلی (رمز همه ۱۲۳) */
+const DEMO_ACCOUNTS: { role: AppRole; phone: string; name: string }[] = [
+  { role: 'super_admin', phone: '09120000099', name: 'مدیر کل سامانه (Super Admin)' },
+  { role: 'owner', phone: '09120000000', name: 'مدیر باشگاه (Admin)' },
+  { role: 'trainer', phone: '09121112233', name: 'علی رستمی (Ali)' },
+  { role: 'member', phone: '09127778899', name: 'رضا کمالی (Reza)' },
+];
 
 export function LoginScreen({ lang: langProp, onLanguageChange: onLangProp }: LoginScreenProps) {
   const { lang, setLang } = useI18n();
   const activeLang = langProp ?? lang;
-  const onLanguageChange = onLangProp ?? setLang;
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [selectedRoleTab, setSelectedRoleTab] = useState<RoleTab>('owner');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
+  const changeLang = onLangProp ?? setLang;
   const t = translations[activeLang];
-  const demoAuth = !isServerAuth();
+  const isFa = activeLang === 'fa';
+  const demo = !isServerAuth();
 
-  const [gymName, setGymName] = useState('Iron Haven Fitness Club');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [gymName, setGymName] = useState('');
 
-  React.useEffect(() => {
-    getGym().then(g => {
-      if (g?.name) setGymName(g.name);
-    });
+  useEffect(() => {
+    getGym().then(g => setGymName(g?.name ?? ''));
   }, []);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setErrorMsg(
-        activeLang === 'fa'
-          ? t.login.errEmpty
-          : 'Please enter username and password.'
-      );
+  async function signIn(id: string, pass: string) {
+    if (!id.trim() || !pass.trim()) {
+      setError(t.auth.errEmpty);
       return;
     }
-
-    setLoading(true);
-    setErrorMsg(null);
-
-    setTimeout(async () => {
-      const res = await login(username, password);
-      setLoading(false);
-      if (!res.success) {
-        setErrorMsg(
-          res.message ||
-            (activeLang === 'fa'
-              ? t.login.errInvalid
-              : 'Invalid credentials.')
-        );
-      }
-    }, 200);
+    setBusy(true);
+    setError(null);
+    const res = await login(id, pass);
+    setBusy(false);
+    if (!res.success) setError(res.message || t.login.errInvalid);
   }
 
-  function handleQuickLogin(user: string, pass: string) {
-    setUsername(user);
-    setPassword(pass);
-    setErrorMsg(null);
-    setLoading(true);
-    setTimeout(async () => {
-      await login(user, pass);
-      setLoading(false);
-    }, 150);
-  }
+  const brand = displayName(gymName, isFa) || t.shell.brand;
 
   return (
-    <div
-      style={{
-        backgroundColor: 'var(--c-deep)',
-        color: 'var(--c-text-primary)',
-      }}
-      className="min-h-screen flex flex-col justify-between p-4 sm:p-6 transition-colors relative overflow-hidden select-none"
-    >
-      {/* هاله‌های نوری تم آیرون هیون (Deep, Steel, Brass) */}
-      <div
+    <div className="min-h-dvh flex flex-col lg:flex-row bg-[var(--c-surface-0)]" dir={isFa ? 'rtl' : 'ltr'}>
+      {/* ── پنل برند ─────────────────────────────────────────────── */}
+      <aside
+        className="relative overflow-hidden lg:w-[44%] lg:min-h-dvh px-5 sm:px-8 lg:px-12 pt-6 pb-8 lg:py-12 flex flex-col"
         style={{
-          background: 'radial-gradient(circle, rgba(24,82,126,0.35) 0%, rgba(4,29,44,0) 70%)',
+          backgroundColor: 'var(--c-chrome)',
+          backgroundImage:
+            'radial-gradient(circle at 85% 15%, rgba(209,178,82,0.22), transparent 45%), radial-gradient(circle at 10% 90%, rgba(24,82,126,0.55), transparent 55%)',
+          color: '#dbe5ec',
         }}
-        className="absolute top-[-15%] start-[10%] w-[650px] h-[650px] rounded-full blur-[100px] pointer-events-none"
-      />
-      <div
-        style={{
-          background: 'radial-gradient(circle, rgba(209,178,82,0.18) 0%, rgba(4,29,44,0) 70%)',
-        }}
-        className="absolute bottom-[-15%] end-[10%] w-[550px] h-[550px] rounded-full blur-[100px] pointer-events-none"
-      />
+      >
+        {/* الگوی صفحه‌های وزنه */}
+        <div aria-hidden className="pointer-events-none absolute -bottom-24 -end-24 hidden lg:block">
+          {[340, 260, 180].map(size => (
+            <div
+              key={size}
+              className="absolute rounded-full border-[18px]"
+              style={{
+                width: size,
+                height: size,
+                bottom: (340 - size) / 2,
+                insetInlineEnd: (340 - size) / 2,
+                borderColor: 'rgba(255,255,255,0.05)',
+              }}
+            />
+          ))}
+        </div>
 
-      {/* هدر بالای صفحه با لوگو و ابزارهای تغییر تم/زبان */}
-      <header className="relative z-10 flex items-center justify-between max-w-4xl mx-auto w-full py-2">
-        <div className="flex items-center gap-3">
-          <div
-            style={{
-              backgroundColor: 'var(--c-ink)',
-              borderColor: 'var(--c-border-strong)',
-              color: 'var(--c-brass)',
-            }}
-            className="w-11 h-11 rounded-2xl border flex items-center justify-center font-black shadow-md shadow-black/20"
-          >
-            <Dumbbell className="w-5 h-5 stroke-[2.4]" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-serif font-black text-lg tracking-tight text-white">
-                {activeLang === 'fa' ? gymName : 'Iron Haven Club'}
-              </span>
-              <span
-                style={{
-                  backgroundColor: 'rgba(209,178,82,0.18)',
-                  color: 'var(--c-brass)',
-                  borderColor: 'rgba(209,178,82,0.35)',
-                }}
-                className="px-2 py-0.5 rounded-full text-[10px] font-black border"
-              >
-                {t.login.version}
-              </span>
+        <div className="relative flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="h-11 w-11 rounded-2xl grid place-items-center shrink-0" style={{ backgroundColor: 'var(--c-chrome-2)', color: 'var(--c-brass)' }}>
+              <Dumbbell size={22} strokeWidth={2.4} />
+            </span>
+            <div className="min-w-0">
+              <div className="text-white font-extrabold text-[18px] leading-tight truncate">{t.shell.brand}</div>
+              {gymName && <div className="text-[12.5px] truncate" style={{ color: '#b4c8d6' }}>{brand}</div>}
             </div>
-            <p className="text-[11px] text-slate-300 font-medium">
-              {activeLang === 'fa'
-                ? t.login.subtitle
-                : 'Integrated Gym Operational Platform'}
-            </p>
+          </div>
+          <div className="lg:hidden flex items-center gap-2 shrink-0">
+            <LangSwitch lang={activeLang} onChange={changeLang} dark />
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <LanguageToggle currentLang={lang} onLanguageChange={onLanguageChange} />
+        <div className="relative hidden lg:block mt-auto mb-auto pt-16">
+          <h2 className="text-white font-extrabold text-[34px] leading-tight max-w-md">{t.auth.featureTitle}</h2>
+          <ul className="mt-8 space-y-4 max-w-md">
+            {t.auth.features.map(f => (
+              <li key={f} className="flex items-start gap-3 text-[15.5px] leading-relaxed">
+                <CheckCircle2 size={20} className="shrink-0 mt-0.5" style={{ color: 'var(--c-brass)' }} />
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="relative hidden lg:block text-[12.5px]" style={{ color: '#8fa7b8' }}>{t.auth.footer}</p>
+      </aside>
+
+      {/* ── فرم ──────────────────────────────────────────────────── */}
+      <main className="flex-1 min-w-0 flex flex-col">
+        <div className="hidden lg:flex justify-end items-center gap-2 px-8 pt-6">
+          <LangSwitch lang={activeLang} onChange={changeLang} />
           <ThemeToggle />
         </div>
-      </header>
 
-      {/* بدنه اصلی و فرم ورود */}
-      <main className="relative z-10 max-w-md w-full mx-auto my-auto py-6">
-        <div
-          style={{
-            backgroundColor: 'var(--c-surface-1)',
-            borderColor: 'var(--c-border)',
-          }}
-          className="rounded-3xl p-6 sm:p-7 border shadow-2xl space-y-5"
-        >
-          {/* عنوان کارت ورود */}
-          <div className="text-center space-y-1.5">
-            <div
-              style={{
-                backgroundColor: 'var(--c-surface-2)',
-                borderColor: 'var(--c-border)',
-                color: 'var(--c-steel)',
-              }}
-              className="w-14 h-14 rounded-2xl border mx-auto flex items-center justify-center shadow-inner"
-            >
-              <Lock className="w-7 h-7 stroke-[2.2]" />
-            </div>
-            <h1
-              className="text-2xl font-black pt-1 tracking-tight"
-              style={{ color: 'var(--c-deep)' }}
-            >
-              {t.login.title}
+        <div className="flex-1 flex items-start lg:items-center justify-center px-4 sm:px-8 py-8 lg:py-10">
+          <div className="w-full max-w-[420px]">
+            <h1 className="text-[26px] sm:text-[30px] font-extrabold leading-tight" style={{ color: 'var(--c-heading)' }}>
+              {t.auth.welcome}
             </h1>
-            <p
-              className="text-xs max-w-xs mx-auto leading-relaxed"
-              style={{ color: 'var(--c-text-muted)' }}
-            >
-              {activeLang === 'fa'
-                ? t.login.hint
-                : 'Enter your credentials to access your designated workspace.'}
+            <p className="mt-2 text-[14.5px] leading-relaxed" style={{ color: 'var(--c-text-muted)' }}>
+              {t.auth.intro}
             </p>
-          </div>
 
-          {/* پیام خطا در صورت وجود */}
-          {errorMsg && (
-            <div
-              role="alert"
-              style={{
-                backgroundColor: 'var(--c-status-noshow-bg)',
-                borderColor: 'var(--c-rubber)',
-                color: 'var(--c-rubber)',
+            <form
+              className="mt-7 space-y-4"
+              noValidate
+              onSubmit={e => {
+                e.preventDefault();
+                void signIn(phone, password);
               }}
-              className="p-3 border rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in"
             >
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
+              <Field label={t.auth.phone}>
+                {id => (
+                  <PhoneInput
+                    id={id}
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    placeholder={t.auth.phonePlaceholder}
+                    autoComplete="username"
+                    className="h-12 text-[16px]"
+                    aria-invalid={!!error}
+                  />
+                )}
+              </Field>
+              <Field label={t.auth.password}>
+                {id => (
+                  <PasswordInput
+                    id={id}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    className="h-12 text-[16px]"
+                    aria-invalid={!!error}
+                  />
+                )}
+              </Field>
 
-          {/* B-01: حساب‌های تستی فقط در دموی محلی؛ با Supabase Auth ورود فقط با حساب واقعی است */}
-          {demoAuth && (
-          <>
-          {/* کارت‌های انتخاب سریع نقش (مدیر، مربی، شاگرد) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
-              <span className="flex items-center gap-1">
-                <Sparkles size={13} style={{ color: 'var(--c-brass)' }} />
-                <span>{t.login.quickAccess}</span>
-              </span>
-              <span className="font-mono text-[10px]">{t.login.allPasswords}</span>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: 'var(--c-surface-2)',
-                borderColor: 'var(--c-border)',
-              }}
-              className="p-1 rounded-2xl border grid grid-cols-3 gap-1"
-            >
-              {/* تب مدیر */}
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRoleTab('owner');
-                  setUsername('admin');
-                  setPassword('123');
-                }}
-                style={{
-                  backgroundColor:
-                    selectedRoleTab === 'owner' ? 'var(--c-ink)' : 'transparent',
-                  color: selectedRoleTab === 'owner' ? '#ffffff' : 'var(--c-text-muted)',
-                }}
-                className="py-2 px-1.5 rounded-xl text-center text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-1 shadow-2xs"
-              >
-                <Shield size={16} style={{ color: selectedRoleTab === 'owner' ? 'var(--c-brass)' : 'inherit' }} />
-                <span>{t.roles.owner}</span>
-              </button>
-
-              {/* تب مربی */}
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRoleTab('trainer');
-                  setUsername('sara');
-                  setPassword('123');
-                }}
-                style={{
-                  backgroundColor:
-                    selectedRoleTab === 'trainer' ? 'var(--c-steel)' : 'transparent',
-                  color: selectedRoleTab === 'trainer' ? '#ffffff' : 'var(--c-text-muted)',
-                }}
-                className="py-2 px-1.5 rounded-xl text-center text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-1 shadow-2xs"
-              >
-                <Dumbbell size={16} />
-                <span>{t.roles.trainer}</span>
-              </button>
-
-              {/* تب ورزشکار */}
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRoleTab('member');
-                  setUsername('reza');
-                  setPassword('123');
-                }}
-                style={{
-                  backgroundColor:
-                    selectedRoleTab === 'member' ? 'var(--c-brass)' : 'transparent',
-                  color: selectedRoleTab === 'member' ? '#041d2c' : 'var(--c-text-muted)',
-                }}
-                className="py-2 px-1.5 rounded-xl text-center text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-1 shadow-2xs"
-              >
-                <UserCheck size={16} />
-                <span>{t.roles.member}</span>
-              </button>
-            </div>
-
-            {/* کارت پیش‌نمایش نقش انتخاب‌شده با دکمه ورود آنی */}
-            <div
-              style={{
-                backgroundColor: 'var(--c-surface-2)',
-                borderColor: 'var(--c-border)',
-              }}
-              className="p-3 rounded-2xl border text-xs flex items-center justify-between gap-3 animate-in fade-in"
-            >
-              {selectedRoleTab === 'owner' && (
-                <>
-                  <div>
-                    <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-sky-500" />
-                      <span>{t.login.ownerAccount}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      <span>{t.login.usernameLabel}</span> <span className="font-mono font-bold text-slate-600 dark:text-slate-300">admin</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('admin', '123')}
-                    style={{
-                      backgroundColor: 'var(--c-ink)',
-                      color: '#ffffff',
-                    }}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1"
-                  >
-                    <span>{t.login.directLogin}</span>
-                    <ArrowRight size={13} className="rtl:rotate-180" />
-                  </button>
-                </>
-              )}
-
-              {selectedRoleTab === 'trainer' && (
-                <>
-                  <div>
-                    <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-teal-500" />
-                      <span>{t.login.trainerAccount}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5 flex gap-2">
-                      <span>sara: <b className="font-mono text-slate-600 dark:text-slate-300">sara</b></span>
-                      <span>·</span>
-                      <span>ali: <b className="font-mono text-slate-600 dark:text-slate-300">ali</b></span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('sara', '123')}
-                    style={{
-                      backgroundColor: 'var(--c-steel)',
-                      color: '#ffffff',
-                    }}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1"
-                  >
-                    <span>{t.login.loginAs(t.login.saraName)}</span>
-                    <ArrowRight size={13} className="rtl:rotate-180" />
-                  </button>
-                </>
-              )}
-
-              {selectedRoleTab === 'member' && (
-                <>
-                  <div>
-                    <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-amber-500" />
-                      <span>{t.login.memberAccount}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      <span>{t.login.usernameLabel}</span>{' '}
-                      <span className="font-mono font-bold text-slate-600 dark:text-slate-300">reza</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('reza', '123')}
-                    style={{
-                      backgroundColor: 'var(--c-brass)',
-                      color: '#041d2c',
-                    }}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1"
-                  >
-                    <span>{t.login.loginAs(t.login.rezaName)}</span>
-                    <ArrowRight size={13} className="rtl:rotate-180" />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* خط تفکیک فرم دستی */}
-          <div className="relative flex items-center justify-center">
-            <div className="border-t w-full" style={{ borderColor: 'var(--c-border)' }} />
-            <span
-              style={{
-                backgroundColor: 'var(--c-surface-1)',
-                color: 'var(--c-text-muted)',
-              }}
-              className="absolute px-3 text-[11px] font-medium"
-            >
-              {t.login.orManual}
-            </span>
-          </div>
-          </>
-          )}
-
-          {/* فرم اصلی ورود */}
-          <form onSubmit={handleSubmit} className="space-y-3.5">
-            {/* فیلد نام کاربری */}
-            <div className="space-y-1">
-              <label
-                htmlFor="login-username"
-                className="block text-xs font-bold"
-                style={{ color: 'var(--c-deep)' }}
-              >
-                {t.login.username}
-              </label>
-              <div
-                style={{
-                  backgroundColor: 'var(--c-surface-2)',
-                  borderColor: 'var(--c-border)',
-                }}
-                className="flex items-center gap-2 h-11 px-3.5 rounded-xl border focus-within:border-slate-400 dark:focus-within:border-slate-500 transition-colors"
-              >
-                <User size={17} className="text-slate-400 shrink-0" />
-                <input
-                  id="login-username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder={demoAuth ? t.login.usernamePlaceholder : t.login.username}
-                  autoComplete="username"
-                  required
-                  className="w-full bg-transparent border-none outline-hidden text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-
-            {/* فیلد کلمه عبور */}
-            <div className="space-y-1">
-              <label
-                htmlFor="login-password"
-                className="block text-xs font-bold"
-                style={{ color: 'var(--c-deep)' }}
-              >
-                {t.login.password}
-              </label>
-              <div
-                style={{
-                  backgroundColor: 'var(--c-surface-2)',
-                  borderColor: 'var(--c-border)',
-                }}
-                className="flex items-center gap-2 h-11 px-3.5 rounded-xl border focus-within:border-slate-400 dark:focus-within:border-slate-500 transition-colors"
-              >
-                <Lock size={17} className="text-slate-400 shrink-0" />
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  required
-                  className="w-full bg-transparent border-none outline-hidden text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                  aria-label={t.login.togglePassword}
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-xl border px-3.5 py-3 text-[13.5px] font-semibold"
+                  style={{ backgroundColor: 'var(--c-status-noshow-bg)', borderColor: 'var(--c-rubber)', color: 'var(--c-rubber)' }}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {/* دکمه ارسال فرم */}
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                backgroundColor: 'var(--c-deep)',
-                color: '#ffffff',
-                borderColor: 'var(--c-steel)',
-              }}
-              className="w-full h-12 rounded-xl border font-black text-sm flex items-center justify-center gap-2 shadow-lg hover:opacity-95 transition-all cursor-pointer mt-2 disabled:opacity-50"
-            >
-              {loading ? (
-                <span>{t.login.checking}</span>
-              ) : (
-                <>
-                  <LogIn size={18} />
-                  <span>{t.login.submit}</span>
-                </>
+                  <AlertCircle size={17} className="shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
               )}
-            </button>
-          </form>
+
+              <Btn type="submit" v="primary" className="w-full h-12 text-[16px] rounded-xl" disabled={busy}>
+                {busy ? t.auth.checking : (
+                  <>
+                    <LogIn size={18} className={isFa ? 'rotate-180' : ''} /> {t.auth.submit}
+                  </>
+                )}
+              </Btn>
+              <p className="text-[12.5px] text-center" style={{ color: 'var(--c-text-muted)' }}>{t.auth.forgot}</p>
+            </form>
+
+            {demo && (
+              <details className="mt-8 group rounded-2xl border" style={{ borderColor: 'var(--c-border)', backgroundColor: 'var(--c-surface-1)' }}>
+                <summary className="list-none cursor-pointer px-4 h-12 flex items-center justify-between gap-3 text-[14px] font-bold" style={{ color: 'var(--c-steel)' }}>
+                  <span className="truncate">{t.auth.demoTitle}</span>
+                  <ChevronDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="px-4 pb-4">
+                  <p className="text-[12.5px] mb-3" style={{ color: 'var(--c-text-muted)' }}>{t.auth.demoHint}</p>
+                  <ul className="space-y-2">
+                    {DEMO_ACCOUNTS.map(a => (
+                      <li key={a.phone} className="flex items-center gap-3 rounded-xl px-3 py-2 min-w-0" style={{ backgroundColor: 'var(--c-surface-2)' }}>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13.5px] font-bold truncate" style={{ color: 'var(--c-text)' }}>{displayName(a.name, isFa)}</div>
+                          <div className="text-[12px] truncate" style={{ color: 'var(--c-text-muted)' }}>
+                            {t.roles[a.role]} · <span dir="ltr">{a.phone}</span>
+                          </div>
+                        </div>
+                        <Btn
+                          v="ghost"
+                          className="h-9 !px-3 shrink-0"
+                          disabled={busy}
+                          onClick={() => {
+                            setPhone(a.phone);
+                            setPassword('123');
+                            void signIn(a.phone, '123');
+                          }}
+                        >
+                          {t.auth.demoUse}
+                        </Btn>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </details>
+            )}
+          </div>
+        </div>
+
+        <div className="lg:hidden flex items-center justify-between gap-3 px-4 pb-6">
+          <p className="text-[12px] truncate" style={{ color: 'var(--c-text-faint)' }}>{t.auth.footer}</p>
+          <ThemeToggle />
         </div>
       </main>
+    </div>
+  );
+}
 
-      {/* فوتر پایین صفحه */}
-      <footer className="relative z-10 text-center text-xs text-slate-400 py-2">
-        {t.login.footer}
-      </footer>
+function LangSwitch({ lang, onChange, dark = false }: { lang: Language; onChange: (l: Language) => void; dark?: boolean }) {
+  return (
+    <div
+      className="flex p-1 rounded-xl border"
+      style={{
+        backgroundColor: dark ? 'rgba(255,255,255,0.08)' : 'var(--c-surface-2)',
+        borderColor: dark ? 'rgba(255,255,255,0.12)' : 'var(--c-border)',
+      }}
+    >
+      {(['fa', 'en'] as const).map(l => (
+        <button
+          key={l}
+          type="button"
+          onClick={() => onChange(l)}
+          aria-pressed={lang === l}
+          className="h-8 px-3 rounded-lg text-[12.5px] font-bold cursor-pointer"
+          style={{
+            backgroundColor: lang === l ? (dark ? 'rgba(255,255,255,0.16)' : 'var(--c-surface-1)') : 'transparent',
+            color: dark ? '#fff' : lang === l ? 'var(--c-ink)' : 'var(--c-text-muted)',
+          }}
+        >
+          {l === 'fa' ? 'فارسی' : 'EN'}
+        </button>
+      ))}
     </div>
   );
 }
