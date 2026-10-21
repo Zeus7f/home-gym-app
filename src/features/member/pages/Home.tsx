@@ -18,6 +18,7 @@ import {
   PERSIAN_WEEK_DAYS,
   PERSIAN_WEEK_DAYS_EN,
   PERSIAN_WEEK_DAYS_SHORT_EN,
+  toCanonicalJalali,
 } from '../../../lib/date/jalali';
 import { Member } from '../../../lib/domain/gymManagement';
 
@@ -68,12 +69,17 @@ export function Home({ onNavigateTab }: HomeProps) {
   // روزهای هفته از تقویم واقعی گرفته می‌شوند
   const weekVisits = getCurrentWeekShamsi().map((d, idx) => {
     const isToday = d.isToday;
+    // B-05: تطبیق با تاریخ واقعی هر روز هفته (نه مقدار ثابت «Today»)
+    // امروز: هر نوبت لغونشده؛ روزهای دیگر: فقط جلسهٔ تکمیل‌شده به‌عنوان حضور شمرده می‌شود.
     const hasSession = memberSessions.some(
-      s => s.date === 'Today' && s.status !== 'cancelled' && s.memberId === memberId
+      s =>
+        s.memberId === memberId &&
+        toCanonicalJalali(s.date) === d.dateKey &&
+        (isToday ? s.status !== 'cancelled' : s.status === 'completed')
     );
     return {
       label: isFa ? d.labelShort : PERSIAN_WEEK_DAYS_SHORT_EN[idx],
-      status: isToday && hasSession ? 2 : isToday ? 1 : 0,
+      status: hasSession ? 2 : isToday ? 1 : 0,
     };
   });
 
@@ -147,9 +153,8 @@ export function Home({ onNavigateTab }: HomeProps) {
             const nextSess = memberSessions.find(
               s => s.memberId === (currentUser?.entityId || 'm-reza') && s.status === 'scheduled'
             );
-            const target = nextSess?.date && nextSess.date !== 'Today'
-              ? parseJalali(nextSess.date)
-              : getTodayJalali();
+            const target =
+              (nextSess?.date ? parseJalali(toCanonicalJalali(nextSess.date)) : null) ?? getTodayJalali();
             const dayIndex = getJalaliDayOfWeek(target.jy, target.jm, target.jd);
             const dayName = isFa
               ? PERSIAN_WEEK_DAYS[dayIndex]

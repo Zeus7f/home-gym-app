@@ -4,7 +4,11 @@
  */
 
 import { gymStore } from './_client';
+import { localizeResult, translateStoreMessage } from './_messages';
 import type { Member, DailySession } from '../lib/domain/gymManagement';
+import { toman } from '../lib/format';
+
+type ActionResult = { success: boolean; message: string };
 
 /** Get all members. */
 export async function getMembers(): Promise<Member[]> {
@@ -39,14 +43,26 @@ export async function addMember(
   return gymStore.addMember(data);
 }
 
-/** Record a payment from a member (updates outstanding balance). */
+/**
+ * Record a payment from a member (updates outstanding balance).
+ * اعتبارسنجی پیش از mutation انجام می‌شود و نتیجه به زبان فعال برمی‌گردد.
+ */
 export async function recordMemberPayment(
   memberId: string,
   amount: number,
   method: 'card' | 'cash' | 'transfer',
   description: string,
-): Promise<void> {
+): Promise<ActionResult> {
+  const member = gymStore.members.find(m => m.id === memberId);
+  if (!member) return { success: false, message: translateStoreMessage('member.notFound') };
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { success: false, message: translateStoreMessage('payment.invalidAmount') };
+  }
   gymStore.recordMemberPayment(memberId, amount, method, description);
+  return {
+    success: true,
+    message: translateStoreMessage('member.paymentRecorded', { debt: toman(member.outstandingBalance) }),
+  };
 }
 
 /** Adjust the session count of a member (+ or −). */
@@ -54,8 +70,25 @@ export async function adjustMemberSessions(
   memberId: string,
   delta: number,
   reason: string,
-): Promise<void> {
+): Promise<ActionResult> {
+  const member = gymStore.members.find(m => m.id === memberId);
+  if (!member) return { success: false, message: translateStoreMessage('member.notFound') };
+  if (!Number.isInteger(delta) || delta === 0) {
+    return { success: false, message: translateStoreMessage('member.invalidDelta') };
+  }
+  if (member.totalSessions + delta < member.usedSessions) {
+    return { success: false, message: translateStoreMessage('session.adjustTooLow') };
+  }
   gymStore.adjustMemberSessions(memberId, delta, reason);
+  return {
+    success: true,
+    message: translateStoreMessage('member.sessionsAdjusted', { remaining: member.remainingSessions }),
+  };
+}
+
+/** تغییر مربی دائم ورزشکار. */
+export async function changeMemberTrainer(memberId: string, trainerId: string): Promise<ActionResult> {
+  return localizeResult(gymStore.changeMemberDefaultTrainer(memberId, trainerId));
 }
 
 /** Get all member payment records. */

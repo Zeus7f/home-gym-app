@@ -5,7 +5,9 @@ import { Btn } from '../../../components/ui/Btn';
 import { Modal } from '../../../components/ui/Modal';
 import { fa } from '../../../lib/format';
 import { displayName } from '../../../lib/displayName';
-import { getTodaySessions, checkInSession, getTrainerDailyCapacity, addSessionToToday } from '../../../api/sessions';
+import { getTodaySessions, checkInSession, getTrainerDailyCapacity, addSessionToToday, cancelSession } from '../../../api/sessions';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
+import { Toast } from '../../../components/ui/Toast';
 import { getMembers } from '../../../api/members';
 import { getCurrentUser, subscribeToStore } from '../../../api/auth';
 import { DailySession, Member } from '../../../lib/domain/gymManagement';
@@ -30,6 +32,8 @@ export function Today({ onOpenSession }: TodayProps) {
   const [addTime, setAddTime] = useState('11:00');
   const [addError, setAddError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<DailySession | null>(null);
+  const [toast, setToast] = useState<{ message: string; ok: boolean } | null>(null);
 
   const loadData = async () => {
     try {
@@ -71,6 +75,18 @@ export function Today({ onOpenSession }: TodayProps) {
     await loadData();
   };
 
+  /**
+   * لغو نوبت توسط مربی (PROJECT_STATUS P2).
+   * مهلت ۴ ساعته فقط برای درخواست خود ورزشکار است؛ مربی در هر زمان می‌تواند لغو کند.
+   */
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return;
+    const res = await cancelSession(cancelTarget.id, t.trainer.today.cancelTitle);
+    setToast({ message: res.message, ok: res.success });
+    setCancelTarget(null);
+    await loadData();
+  };
+
   const handleAddAthlete = async () => {
     if (!addMemberId) {
       setAddError(t.trainer.today.errorNoAthlete);
@@ -88,7 +104,7 @@ export function Today({ onOpenSession }: TodayProps) {
       if (duplicate) {
         setAddError(
           t.trainer.today.errorDuplicate
-            .replace('{name}', duplicate.memberName)
+            .replace('{name}', displayName(duplicate.memberName, isFa))
             .replace('{time}', addTime)
         );
         return;
@@ -228,7 +244,7 @@ export function Today({ onOpenSession }: TodayProps) {
               <Avatar name={displayName(s.memberName, isFa)} size={46} tone="brass" />
               <div className="flex-1 min-w-0">
                 <div className="text-[17px] font-extrabold truncate">
-                  displayName(s.memberName, isFa)
+                  {displayName(s.memberName, isFa)}
                 </div>
                 <div className="text-[13px] opacity-80 mt-0.5 truncate">
                   {t.trainer.today.atTime.replace('{time}', s.time)} ·{' '}
@@ -288,7 +304,7 @@ export function Today({ onOpenSession }: TodayProps) {
                     className="font-bold text-[15px]"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    displayName(s.memberName, isFa)
+                    {displayName(s.memberName, isFa)}
                   </div>
                   <div
                     className="text-[13px]"
@@ -298,6 +314,14 @@ export function Today({ onOpenSession }: TodayProps) {
               {t.trainer.today.remaining.replace('{count}', num(remaining))}
                   </div>
                 </div>
+                <Btn
+                  v="soft"
+                  className="h-9 px-3 text-xs"
+                  onClick={() => setCancelTarget(s)}
+                  aria-label={`${t.trainer.today.cancelSlot} — ${displayName(s.memberName, isFa)}`}
+                >
+                  {t.trainer.today.cancelSlot}
+                </Btn>
                 <Btn
                   v="ghost"
                   className="h-9 px-3 text-xs"
@@ -332,7 +356,7 @@ export function Today({ onOpenSession }: TodayProps) {
               >
                 <Check size={16} style={{ color: 'var(--c-avail-fg)' }} />
                 <span className="flex-1 font-semibold" style={{ color: 'var(--c-deep)' }}>
-                  displayName(s.memberName, isFa)
+                  {displayName(s.memberName, isFa)}
                 </span>
                 <span className="text-xs tnum" style={{ color: 'var(--c-text-muted)' }}>
                   {s.time}
@@ -387,7 +411,7 @@ export function Today({ onOpenSession }: TodayProps) {
                   }}
                   className="px-3 py-1.5 rounded-xl text-[13px] font-bold transition-colors cursor-pointer"
                 >
-                  displayName(m.name, isFa)
+                  {displayName(m.name, isFa)}
                 </button>
               ))}
             </div>
@@ -443,6 +467,24 @@ export function Today({ onOpenSession }: TodayProps) {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={handleConfirmCancel}
+        title={t.trainer.today.cancelTitle}
+        message={t.trainer.today.cancelMessage
+          .replace('{name}', cancelTarget ? displayName(cancelTarget.memberName, isFa) : '')
+          .replace('{time}', cancelTarget?.time ?? '')}
+        confirmText={t.trainer.today.cancelConfirm}
+        cancelText={t.trainer.today.cancelKeep}
+        variant="danger"
+      />
+      <Toast
+        message={toast?.message ?? null}
+        type={toast?.ok === false ? 'warning' : 'success'}
+        onClose={() => setToast(null)}
+      />
     </div>
   );
 }

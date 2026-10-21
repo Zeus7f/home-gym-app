@@ -73,10 +73,13 @@ function RoleRedirect({ role }: { role: 'owner' | 'trainer' | 'member' }) {
 function RoleGuard({
   role,
   authUser,
+  previewRole,
   children,
 }: {
   role: 'owner' | 'trainer' | 'member';
   authUser: { role: 'owner' | 'trainer' | 'member' } | null;
+  /** نقش کاربر پیش‌نمایش فعال (فقط برای مدیر) */
+  previewRole?: 'owner' | 'trainer' | 'member' | null;
   children: React.ReactNode;
 }) {
   if (!authUser) {
@@ -84,6 +87,11 @@ function RoleGuard({
   }
   if (authUser.role !== role && authUser.role !== 'owner') {
     return <RoleRedirect role={authUser.role} />;
+  }
+  // B-07: مدیر فقط با هویت پیش‌نمایشِ همان نقش وارد فضای مربی/ورزشکار می‌شود؛
+  // وگرنه صفحه با شناسهٔ مدیر داده می‌خواند و خالی یا نادرست می‌شد.
+  if (authUser.role === 'owner' && role !== 'owner' && previewRole !== role) {
+    return <Navigate to={`/${role}?preview_role=${role}`} replace />;
   }
   return <>{children}</>;
 }
@@ -117,9 +125,13 @@ function App() {
    * کاربر واقعاً به‌عنوان مدیر وارد شده باشد.
    */
   const previewUser =
-    authUser?.role === 'owner' && previewRole
+    authUser?.role === 'owner' && previewRole && previewRole !== 'owner'
       ? mockStore.users.find(u => u.role === previewRole) ?? null
       : null;
+
+  // B-07: هویت داده‌ای پیش‌نمایش پیش از رندر فرزندان در استور تنظیم می‌شود
+  // (بی‌صدا و idempotent) تا صفحات همان کاربری را بخوانند که پوسته نمایش می‌دهد.
+  mockStore.setPreviewUser(previewUser?.id ?? null);
 
   const currentUser = previewUser || authUser;
 
@@ -153,7 +165,7 @@ function App() {
       <header
         className="sticky top-0 z-40 border-b backdrop-blur-xl px-4 sm:px-8 py-3"
         style={{
-          background: 'rgba(255,255,255,0.85)',
+          background: 'color-mix(in srgb, var(--c-surface-1) 85%, transparent)',
           borderColor: 'var(--c-border)',
         }}
       >
@@ -178,21 +190,42 @@ function App() {
                 <Badge variant="brand" size="sm" className="hidden sm:inline-flex">
                   {t.appBadge}
                 </Badge>
-                {mockStore.isSupabaseConnected && (
+                {/* B-03: نشان صادقانهٔ وضعیت ابر — فقط خواندن جزئی، نه همگام‌سازی کامل */}
+                {mockStore.supabaseSyncStatus !== 'off' && (
                   <span
                     className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border"
-                    style={{
-                      background: 'var(--c-avail-bg)',
-                      color: 'var(--c-avail-fg)',
-                      borderColor: 'var(--c-avail-fg)',
-                    }}
-                    title="Connected to Supabase PostgreSQL Database"
+                    style={
+                      mockStore.supabaseSyncStatus === 'partial'
+                        ? {
+                            background: 'var(--c-surface-2)',
+                            color: 'var(--c-brass)',
+                            borderColor: 'var(--c-brass)',
+                          }
+                        : {
+                            background: 'var(--c-status-noshow-bg)',
+                            color: 'var(--c-rubber)',
+                            borderColor: 'var(--c-rubber)',
+                          }
+                    }
+                    title={
+                      mockStore.supabaseSyncStatus === 'partial'
+                        ? t.cloudSync.partialHint.replace(
+                            '{tables}',
+                            mockStore.supabaseSyncedTables.join(', ')
+                          )
+                        : t.cloudSync.errorHint
+                    }
                   >
                     <span
-                      className="w-1.5 h-1.5 rounded-full animate-pulse"
-                      style={{ background: 'var(--c-avail-dot)' }}
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ background: 'currentColor' }}
+                      aria-hidden="true"
                     />
-                    <span>{lang === 'fa' ? 'دیتابیس ابری متصل' : 'Supabase Live'}</span>
+                    <span>
+                      {mockStore.supabaseSyncStatus === 'partial'
+                        ? t.cloudSync.partial
+                        : t.cloudSync.error}
+                    </span>
                   </span>
                 )}
               </div>
@@ -266,18 +299,14 @@ function App() {
                   className="text-[10px] font-bold uppercase tracking-wider leading-none mt-1 block"
                   style={{ color: 'var(--c-steel)' }}
                 >
-                  {currentUser.role === 'owner'
-                    ? (lang === 'fa' ? 'مدیریت کل' : 'Gym Owner')
-                    : currentUser.role === 'trainer'
-                    ? (lang === 'fa' ? 'مربی' : 'Trainer')
-                    : (lang === 'fa' ? 'ورزشکار' : 'Member')}
+                  {t.roles[currentUser.role]}
                 </span>
                 {previewUser && (
                   <span
                     className="text-[10px] font-bold leading-none mt-1 block"
                     style={{ color: 'var(--c-brass)' }}
                   >
-                    {lang === 'fa' ? 'حالت پیش‌نمایش' : 'Preview mode'}
+                    {t.previewMode}
                   </span>
                 )}
               </div>
@@ -289,7 +318,7 @@ function App() {
                   // بازگشت به ریشه تا ورود بعدی با نقش جدید از مسیر درست آغاز شود
                   navigate('/');
                 }}
-                aria-label={lang === 'fa' ? 'خروج از حساب کاربری' : 'Sign Out'}
+                aria-label={t.signOut}
                 className="p-2 rounded-xl"
                 style={{ color: 'var(--c-rubber)' }}
               >
@@ -337,8 +366,8 @@ function App() {
           <Eye size={14} />
           <span>
             {lang === 'fa'
-              ? `شما در حال مشاهده فضای کاری «${t.roles[currentUser.role]}» به‌عنوان ${currentUser.displayName} هستید.`
-              : `Previewing the ${t.roles[currentUser.role]} workspace as ${currentUser.displayName}.`}
+              ? `شما در حال مشاهده فضای کاری «${t.roles[currentUser.role]}» به‌عنوان ${displayName(currentUser.displayName, isFa)} هستید.`
+              : `Previewing the ${t.roles[currentUser.role]} workspace as ${displayName(currentUser.displayName, isFa)}.`}
           </span>
         </div>
       )}
@@ -355,7 +384,7 @@ function App() {
                 style={{ borderColor: 'var(--c-ink)' }}
                 className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin mx-auto mb-3"
               />
-              <span className="text-[14px] font-bold">در حال بارگذاری بخش مورد نظر...</span>
+              <span className="text-[14px] font-bold">{t.actions.loading}</span>
             </div>
           }
         >
@@ -377,7 +406,7 @@ function App() {
             <Route
               path="/trainer/*"
               element={
-                <RoleGuard role="trainer" authUser={authUser}>
+                <RoleGuard role="trainer" authUser={authUser} previewRole={previewUser?.role}>
                   <TrainerShell />
                 </RoleGuard>
               }
@@ -387,7 +416,7 @@ function App() {
             <Route
               path="/member/*"
               element={
-                <RoleGuard role="member" authUser={authUser}>
+                <RoleGuard role="member" authUser={authUser} previewRole={previewUser?.role}>
                   <MemberShell />
                 </RoleGuard>
               }

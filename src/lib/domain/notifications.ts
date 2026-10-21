@@ -6,14 +6,28 @@
 import type { DailySession, Member, Trainer, WorkoutProgram } from './gymManagement';
 import { getTodayJalali, parseJalali, jalaliToGregorian } from '../date/jalali';
 
+/** زبان متن اعلان‌ها. */
+export type NotificationLang = 'fa' | 'en';
+
 /**
- * قالب‌بندی عدد به ارقام فارسی.
+ * قالب‌بندی عدد بر اساس زبان فعال (ارقام فارسی یا لاتین).
  * لایه دامنه به فرمت‌ده رابط کاربری وابسته نیست، پس تبدیل ارقام اینجا انجام می‌شود.
  */
-function fa(n: number): string {
-  if (!isFinite(n)) return '۰';
-  return new Intl.NumberFormat('fa-IR').format(n);
+export function formatNotificationNumber(n: number, lang: NotificationLang = 'fa'): string {
+  const tag = lang === 'fa' ? 'fa-IR' : 'en-US';
+  if (!isFinite(n)) return new Intl.NumberFormat(tag).format(0);
+  return new Intl.NumberFormat(tag).format(n);
 }
+
+/**
+ * مقصدهای مجاز ناوبری اعلان‌ها — باید دقیقاً با کلید تب‌های هر shell یکی باشد.
+ * B-08: مقصدهای قبلی (`members`, `finance`, ...) با تب‌های مالک (`mem`, `fin`, ...) هم‌خوان نبودند.
+ */
+export const NOTIFICATION_TABS = {
+  member: { sessions: 'ses', exercises: 'ex' },
+  trainer: { today: 'today', members: 'mem', programs: 'prog', history: 'hist' },
+  owner: { members: 'mem', finance: 'fin', trainers: 'tr', reports: 'rep' },
+} as const;
 
 export type NotificationSeverity = 'info' | 'warning' | 'critical' | 'success';
 
@@ -77,6 +91,10 @@ export interface NotificationInput {
   todayKey: number;
   /** برچسب‌های متنی زبان فعال */
   labels: NotificationLabels;
+  /** زبان فعال برای ارقام و جداکننده‌ها (پیش‌فرض فارسی) */
+  lang?: NotificationLang;
+  /** تبدیل نام ذخیره‌شده به نام قابل‌نمایش در زبان فعال */
+  nameOf?: (raw: string) => string;
 }
 
 /** تعداد روز باقیمانده تا یک تاریخ جلالی (بدون در نظر گرفتن ساعت) */
@@ -116,11 +134,15 @@ export function buildNotifications({
   programs,
   todayKey,
   labels,
+  lang = 'fa',
+  nameOf = (raw: string) => raw,
 }: NotificationInput): AppNotification[] {
   if (!currentUser) return [];
 
+  const fa = (n: number) => formatNotificationNumber(n, lang);
+  const sep = lang === 'fa' ? '، ' : ', ';
   const notifications: AppNotification[] = [];
-  const nowLabel = 'همین حالا';
+  const nowLabel = lang === 'fa' ? 'همین حالا' : 'Just now';
 
   const add = (
     n: Omit<AppNotification, 'id' | 'timestamp'> & { id?: string }
@@ -187,10 +209,10 @@ export function buildNotifications({
           body:
             upcoming.status === 'in_progress'
               ? labels.upcomingSession.liveBody
-                  .replace('{trainer}', upcoming.trainerName)
+                  .replace('{trainer}', nameOf(upcoming.trainerName))
                   .replace('{time}', upcoming.time)
               : labels.upcomingSession.body
-                  .replace('{trainer}', upcoming.trainerName)
+                  .replace('{trainer}', nameOf(upcoming.trainerName))
                   .replace('{time}', upcoming.time),
           targetTab: 'ses',
         });
@@ -207,7 +229,7 @@ export function buildNotifications({
           title: labels.sessionCancelled.title,
           body: labels.sessionCancelled.body
             .replace('{time}', cancelled.time)
-            .replace('{trainer}', cancelled.trainerName),
+            .replace('{trainer}', nameOf(cancelled.trainerName)),
           targetTab: 'ses',
         });
       }
@@ -223,7 +245,7 @@ export function buildNotifications({
           severity: 'success',
           title: labels.programPublished.title,
           body: labels.programPublished.body
-            .replace('{trainer}', program.trainerName)
+            .replace('{trainer}', nameOf(program.trainerName))
             .replace('{title}', program.title)
             .replace('{count}', fa(exerciseCount)),
           targetTab: 'ex',
@@ -249,7 +271,7 @@ export function buildNotifications({
         title: labels.sessionCompleted.title,
         body: labels.sessionCompleted.body.replace(
           '{members}',
-          live.map(s => `${s.memberName} — ${s.time}`).join('، ')
+          live.map(s => `${nameOf(s.memberName)} — ${s.time}`).join(sep)
         ),
         targetTab: 'today',
       });
@@ -261,7 +283,7 @@ export function buildNotifications({
         title: labels.sessionsWaiting.title,
         body: labels.sessionsWaiting.body.replace(
           '{members}',
-          waiting.map(s => `${s.memberName} — ${s.time}`).join('، ')
+          waiting.map(s => `${nameOf(s.memberName)} — ${s.time}`).join(sep)
         ),
         targetTab: 'today',
       });
@@ -277,9 +299,26 @@ export function buildNotifications({
         title: labels.trainerLowBalance.title,
         body: labels.trainerLowBalance.body.replace(
           '{members}',
-          lowMembers.map(m => `${m.name} (${fa(m.remainingSessions)})`).join('، ')
+          lowMembers.map(m => `${nameOf(m.name)} (${fa(m.remainingSessions)})`).join(sep)
         ),
         targetTab: 'mem',
+      });
+    }
+
+    // غیبت ورزشکاران همین مربی (قبلاً فقط به مالک اطلاع داده می‌شد)
+    const myNoShows = pastSessions.filter(
+      s => s.trainerId === currentUser.entityId && s.status === 'no_show'
+    );
+    if (myNoShows.length > 0) {
+      add({
+        kind: 'no_show',
+        severity: 'info',
+        title: labels.noShow.title,
+        body: labels.noShow.body.replace(
+          '{members}',
+          myNoShows.map(s => nameOf(s.memberName)).join(sep)
+        ),
+        targetTab: NOTIFICATION_TABS.trainer.history,
       });
     }
 
@@ -294,7 +333,7 @@ export function buildNotifications({
         title: labels.draftProgram.title,
         body: labels.draftProgram.body.replace(
           '{titles}',
-          draftPrograms.map(p => p.title).join('، ')
+          draftPrograms.map(p => p.title).join(sep)
         ),
         targetTab: 'prog',
       });
@@ -311,9 +350,9 @@ export function buildNotifications({
         title: labels.ownerLowBalance.title,
         body: labels.ownerLowBalance.body.replace(
           '{members}',
-          lowMembers.map(m => `${m.name} (${fa(m.remainingSessions)})`).join('، ')
+          lowMembers.map(m => `${nameOf(m.name)} (${fa(m.remainingSessions)})`).join(sep)
         ),
-        targetTab: 'members',
+        targetTab: NOTIFICATION_TABS.owner.members,
       });
     }
 
@@ -329,9 +368,9 @@ export function buildNotifications({
         title: labels.ownerExpiring.title,
         body: labels.ownerExpiring.body.replace(
           '{members}',
-          expiring.map(m => m.name).join('، ')
+          expiring.map(m => nameOf(m.name)).join(sep)
         ),
-        targetTab: 'members',
+        targetTab: NOTIFICATION_TABS.owner.members,
       });
     }
 
@@ -346,7 +385,7 @@ export function buildNotifications({
         body: labels.paymentDue.body
           .replace('{count}', fa(debtors.length))
           .replace('{total}', fa(total)),
-        targetTab: 'finance',
+        targetTab: NOTIFICATION_TABS.owner.finance,
       });
     }
 
@@ -361,7 +400,7 @@ export function buildNotifications({
         body: labels.trainerPayoutDue.body
           .replace('{count}', fa(owing.length))
           .replace('{total}', fa(total)),
-        targetTab: 'trainers',
+        targetTab: NOTIFICATION_TABS.owner.trainers,
       });
     }
 
@@ -374,9 +413,9 @@ export function buildNotifications({
         title: labels.noShow.title,
         body: labels.noShow.body.replace(
           '{members}',
-          noShows.map(s => s.memberName).join('، ')
+          noShows.map(s => nameOf(s.memberName)).join(sep)
         ),
-        targetTab: 'reports',
+        targetTab: NOTIFICATION_TABS.owner.reports,
       });
     }
   }

@@ -10,7 +10,7 @@ import { num } from '../../../lib/format';
 import { displayName } from '../../../lib/displayName';
 import { getCurrentUser, subscribeToStore } from '../../../api/auth';
 import { getTodaySessions, getTrainerPastSessions, getTrainerDailyCapacity } from '../../../api/sessions';
-import { getTodayJalaliString, getTodayJalaliKey } from '../../../lib/date/jalali';
+import { getTodayJalaliString, getTodayJalaliKey, toCanonicalJalali } from '../../../lib/date/jalali';
 import type { DailySession } from '../../../lib/domain/gymManagement';
 
 type SessionStatusKey = 'done' | 'live' | 'wait' | 'cancel' | 'noshow';
@@ -57,12 +57,10 @@ export function Calendar() {
   const { sessionCounts, capacityStatuses } = useMemo(() => {
     const counts: Record<string, number> = {};
     const capacity: Record<string, { used: number; total: number }> = {};
-    const todayKey = getTodayJalaliString();
-
     for (const s of sessions) {
       if (s.status === 'cancelled') continue;
-      // جلسات «Today» روی تاریخ امروز نگاشت می‌شوند
-      const dateKey = s.date === 'Today' ? todayKey : s.date;
+      // تاریخ canonical (مقدار قدیمی «Today» روی تاریخ امروز نگاشت می‌شود)
+      const dateKey = toCanonicalJalali(s.date);
       if (!dateKey) continue;
       counts[dateKey] = (counts[dateKey] || 0) + 1;
 
@@ -80,9 +78,7 @@ export function Calendar() {
       sessions
         .filter(s => {
           if (s.status === 'cancelled') return false;
-          const todayKey = getTodayJalaliString();
-          const dateKey = s.date === 'Today' ? todayKey : s.date;
-          return dateKey === selectedDate;
+          return toCanonicalJalali(s.date) === selectedDate;
         })
         .sort((a, b) => a.time.localeCompare(b.time)),
     [sessions, selectedDate]
@@ -166,7 +162,7 @@ export function Calendar() {
                     className="font-bold text-[14px] truncate"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    displayName(s.memberName, isFa)
+                    {displayName(s.memberName, isFa)}
                   </div>
                   <div
                     className="text-[12px] truncate"

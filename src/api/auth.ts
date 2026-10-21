@@ -7,8 +7,17 @@ import { gymStore } from './_client';
 import { localizeResult } from './_messages';
 import type { UserAccount } from '../lib/domain/gymManagement';
 
-/** کاربر واردشده فعلی (یا null اگر وارد نشده باشد). */
+/**
+ * هویت داده‌ای فعال برای صفحات.
+ * B-07: در حالت پیش‌نمایش مدیر، کاربر پیش‌نمایش برگردانده می‌شود تا داده‌ها
+ * با همان هویتی خوانده شوند که پوستهٔ UI نمایش می‌دهد.
+ */
 export function getCurrentUser(): UserAccount | null {
+  return gymStore.actingUser;
+}
+
+/** کاربر واقعیِ واردشده (بدون در نظر گرفتن پیش‌نمایش). */
+export function getAuthenticatedUser(): UserAccount | null {
   return gymStore.currentUser;
 }
 

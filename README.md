@@ -130,8 +130,8 @@
 ## 🚀 راهنمای نصب و اجرای محلی (Quick Start)
 
 ### پیش‌نیازها
-* **Node.js:** نسخه ۲۰ یا بالاتر
-* **npm:** نسخه ۱۰ یا بالاتر
+* **Bun:** نسخه ۱٫۴ یا بالاتر (مدیر بسته و اجراکنندهٔ تست‌ها)
+* **Node.js:** نسخه ۲۰ یا بالاتر (برای `bun start`)
 
 ### مراحل اجرا
 ```bash
@@ -140,13 +140,13 @@ git clone https://github.com/Zeus7f/home-gym-app.git
 cd home-gym-app
 
 # ۲. نصب وابستگی‌ها
-npm install
+bun install --frozen-lockfile
 
 # ۳. تنظیم متغیرهای محیطی
 cp .env.example .env
 
 # ۴. اجرای سرور توسعه (Development Server)
-npm run dev
+bun run dev
 ```
 
 برنامه روی آدرس **`http://localhost:3000`** در دسترس خواهد بود.
@@ -155,10 +155,15 @@ npm run dev
 
 ## 🛠️ دستورات پروژه (Available Scripts)
 
-* `npm run dev`: اجرای همزمان سرور توسعه با Vite.
-* `npm run build`: ساخت نسخه نهایی بهینه‌سازی‌شده برای Production با Code-Splitting ماژولار.
-* `npm run lint`: بررسی صحت کامل انواع در TypeScript (`tsc --noEmit`).
-* `npm start`: اجرای سرور پروداکشن از خروجی `dist/`.
+مدیر بسته‌ی پروژه **Bun** است (`bun.lock` مرجع است؛ `package-lock.json` نسازید).
+
+* `bun install --frozen-lockfile`: نصب وابستگی‌ها دقیقاً مطابق lockfile.
+* `bun run dev`: اجرای سرور توسعه (Express + Vite middleware) روی `http://localhost:3000`.
+* `bun run build`: ساخت bundle کلاینت در `dist/` — همان خروجی‌ای که روی Cloudflare Workers (Static Assets) منتشر می‌شود.
+* `bun run lint`: بررسی انواع TypeScript (`tsc --noEmit`).
+* `bun run test`: اجرای تست‌های دامنه.
+* `bun run deploy`: انتشار `dist/` روی Cloudflare Workers.
+* `bun start`: اجرای سرور Node/Express در حالت production. این دستور ابتدا `build:server` را اجرا می‌کند و bundle سرور را در `build/server.cjs` می‌سازد (خارج از `dist/` تا کد سرور هرگز به‌عنوان asset عمومی منتشر نشود)؛ پیش از آن `bun run build` را اجرا کنید تا `dist/` وجود داشته باشد. این مسیر برای استقرار Cloudflare لازم نیست.
 
 ---
 

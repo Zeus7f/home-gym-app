@@ -3,10 +3,10 @@ import { Search } from 'lucide-react';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Meter } from '../../../components/ui/Meter';
 import { num } from '../../../lib/format';
-import { displayName } from '../../../lib/displayName';
+import { displayName, localizedLabel } from '../../../lib/displayName';
 import { useI18n } from '../../../components/LanguageProvider';
 import { getMemberSessions } from '../../../api/members';
-import { formatJalaliLocalized } from '../../../lib/date/jalali';
+import { formatJalaliLocalized, toCanonicalJalali } from '../../../lib/date/jalali';
 import { getMembers } from '../../../api/members';
 import { getCurrentUser } from '../../../api/auth';
 import { Member } from '../../../lib/domain/gymManagement';
@@ -36,9 +36,10 @@ export function Athletes() {
         const lastByMember: Record<string, string> = {};
         for (const sessions of allSessions) {
           for (const s of sessions) {
-            if (s.status !== 'completed' || s.date === 'Today') continue;
-            if (!lastByMember[s.memberId] || s.date > lastByMember[s.memberId]) {
-              lastByMember[s.memberId] = s.date;
+            if (s.status !== 'completed') continue;
+            const date = toCanonicalJalali(s.date);
+            if (!lastByMember[s.memberId] || date > lastByMember[s.memberId]) {
+              lastByMember[s.memberId] = date;
             }
           }
         }
@@ -108,13 +109,13 @@ export function Athletes() {
                       className="font-bold text-[15px] truncate"
                       style={{ color: 'var(--c-deep)' }}
                     >
-                      displayName(m.name, isFa)
+                      {displayName(m.name, isFa)}
                     </div>
                     <div
                       className="text-[13px] truncate"
                       style={{ color: 'var(--c-text-muted)' }}
                     >
-                      {m.packageName} ·{' '}
+                      {localizedLabel(m.packageName, isFa)} ·{' '}
                       {lastSessionBy[m.id]
                         ? t.trainer.athletes.lastSession.replace(
                             '{date}',

@@ -5,6 +5,7 @@ import { Pill, SessionStatus } from '../../../components/ui/Pill';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Btn } from '../../../components/ui/Btn';
 import { useI18n } from '../../../components/LanguageProvider';
+import { Toast } from '../../../components/ui/Toast';
 import { displayName } from '../../../lib/displayName';
 import { num } from '../../../lib/format';
 import {
@@ -78,8 +79,12 @@ export function Sched({ isMobile = false }: SchedProps) {
     setSessions(updated);
   };
 
+  const [toast, setToast] = useState<string | null>(null);
+
+  // B-06: تکمیل ناموفق (لغوشده، بدون اعتبار، بستهٔ منقضی) باید به مدیر نمایش داده شود
   const handleComplete = async (sessionId: string) => {
-    await completeSession(sessionId);
+    const res = await completeSession(sessionId);
+    if (!res.success) setToast(res.message);
     const updated = await getSessions(selectedDayKey);
     setSessions(updated);
   };
@@ -249,7 +254,7 @@ export function Sched({ isMobile = false }: SchedProps) {
                             }}
                             className={`font-semibold truncate text-[15px] ${isCancel ? 'line-through' : ''}`}
                           >
-                            displayName(s.memberName, isFa)
+                            {displayName(s.memberName, isFa)}
                           </div>
                           <div
                             className="text-[13px] truncate flex items-center gap-1.5"
@@ -309,6 +314,7 @@ export function Sched({ isMobile = false }: SchedProps) {
           )}
         </div>
       )}
+      <Toast message={toast} type="warning" onClose={() => setToast(null)} />
     </div>
   );
 }

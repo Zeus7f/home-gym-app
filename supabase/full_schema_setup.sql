@@ -1,6 +1,11 @@
 -- ============================================================================
 -- HOME GYM MANAGEMENT PLATFORM — CONSOLIDATED SUPABASE SCHEMA & SEED SCRIPT
 -- Run this complete script in the Supabase Dashboard -> SQL Editor
+--
+-- ⚠ وضعیت: اسکریپت دمو/seed، نه schema مرجع تولید.
+--   schema مرجع (چندمستأجری با Supabase Auth) در supabase/migrations است و با جداول
+--   این فایل یکی نیست. پیش از انتشار با دادهٔ واقعی باید یکی از دو مسیر به‌عنوان
+--   مرجع واحد انتخاب شود (B-02).
 -- Project URL: https://avpjfdkuqrglrmcscaso.supabase.co
 -- ============================================================================
 
@@ -129,7 +134,20 @@ CREATE TABLE IF NOT EXISTS public.app_users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 3. Configure Row-Level Security (RLS) Permissive Policies for Web Access
+-- 3. Row-Level Security (RLS)
+--
+-- B-02 (Bugs for fix, 2026-10-21): نسخهٔ قبلی این بخش برای همهٔ جداول policy
+-- «FOR ALL USING (true) WITH CHECK (true)» می‌ساخت؛ یعنی هر کسی با کلید anon مرورگر
+-- می‌توانست اعضا، امور مالی، audit و حتی app_users (password_hash) را بخواند و تغییر دهد.
+--
+-- تا زمانی که Supabase Auth و policyهای مبتنی بر هویت/tenant پیاده نشده‌اند:
+--   * فقط کاتالوگ حرکات و مشخصات عمومی باشگاه برای anon «فقط خواندنی» است.
+--   * هیچ policy نوشتنی برای anon وجود ندارد؛ RLS بقیهٔ جداول را به‌طور پیش‌فرض می‌بندد.
+--   * داده‌های حساس (اعضا، مربیان، جلسات، مالی، audit، کاربران) فقط با service role
+--     یا policyهای آینده‌ی مبتنی بر auth.uid() قابل دسترسی‌اند.
+--
+-- اگر نسخهٔ قدیمی این اسکریپت قبلاً اجرا شده است، migration
+-- supabase/migrations/20261021000000_revoke_public_access.sql را اجرا کنید.
 ALTER TABLE public.gyms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trainers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.members ENABLE ROW LEVEL SECURITY;
@@ -140,43 +158,28 @@ ALTER TABLE public.financial_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
 
-DO $$ 
+DO $$
 BEGIN
-  -- Gyms
+  -- حذف policyهای عمومی نسخهٔ قبلی (در صورت وجود)
   DROP POLICY IF EXISTS "Public access for gyms" ON public.gyms;
-  CREATE POLICY "Public access for gyms" ON public.gyms FOR ALL USING (true) WITH CHECK (true);
-
-  -- Trainers
   DROP POLICY IF EXISTS "Public access for trainers" ON public.trainers;
-  CREATE POLICY "Public access for trainers" ON public.trainers FOR ALL USING (true) WITH CHECK (true);
-
-  -- Members
   DROP POLICY IF EXISTS "Public access for members" ON public.members;
-  CREATE POLICY "Public access for members" ON public.members FOR ALL USING (true) WITH CHECK (true);
-
-  -- Exercises
   DROP POLICY IF EXISTS "Public access for exercises" ON public.exercises;
-  CREATE POLICY "Public access for exercises" ON public.exercises FOR ALL USING (true) WITH CHECK (true);
-
-  -- Daily Sessions
   DROP POLICY IF EXISTS "Public access for daily_sessions" ON public.daily_sessions;
-  CREATE POLICY "Public access for daily_sessions" ON public.daily_sessions FOR ALL USING (true) WITH CHECK (true);
-
-  -- Session Exercises
   DROP POLICY IF EXISTS "Public access for session_exercises" ON public.session_exercises;
-  CREATE POLICY "Public access for session_exercises" ON public.session_exercises FOR ALL USING (true) WITH CHECK (true);
-
-  -- Financial Records
   DROP POLICY IF EXISTS "Public access for financial_records" ON public.financial_records;
-  CREATE POLICY "Public access for financial_records" ON public.financial_records FOR ALL USING (true) WITH CHECK (true);
-
-  -- Audit Logs
   DROP POLICY IF EXISTS "Public access for audit_logs" ON public.audit_logs;
-  CREATE POLICY "Public access for audit_logs" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);
-
-  -- App Users
   DROP POLICY IF EXISTS "Public access for app_users" ON public.app_users;
-  CREATE POLICY "Public access for app_users" ON public.app_users FOR ALL USING (true) WITH CHECK (true);
+
+  -- کاتالوگ حرکات: فقط خواندنی برای همه
+  DROP POLICY IF EXISTS "Read-only catalog for exercises" ON public.exercises;
+  CREATE POLICY "Read-only catalog for exercises" ON public.exercises
+    FOR SELECT TO anon, authenticated USING (true);
+
+  -- مشخصات عمومی باشگاه (نام، ظرفیت): فقط خواندنی
+  DROP POLICY IF EXISTS "Read-only profile for gyms" ON public.gyms;
+  CREATE POLICY "Read-only profile for gyms" ON public.gyms
+    FOR SELECT TO anon, authenticated USING (true);
 END $$;
 
 -- 4. Initial Seed Data

@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '../../../components/LanguageProvider';
 import { cn } from '../../../lib/utils';
+import { useDialogA11y } from '../../../lib/useDialogA11y';
 
 export interface SheetProps {
   open: boolean;
@@ -26,15 +27,9 @@ export function Sheet({
 }: SheetProps) {
   const { t, isFa } = useI18n();
 
-  // بستن با Escape
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // بستن با Escape + مدیریت فوکوس (B-12)
+  useDialogA11y(panelRef, open, onClose);
 
   return (
     <AnimatePresence>
@@ -52,6 +47,7 @@ export function Sheet({
 
           {/* بدنه محتوا */}
           <motion.div
+            ref={panelRef}
             initial={isMobile ? { y: '100%' } : { x: '100%' }}
             animate={isMobile ? { y: 0 } : { x: 0 }}
             exit={isMobile ? { y: '100%' } : { x: '100%' }}

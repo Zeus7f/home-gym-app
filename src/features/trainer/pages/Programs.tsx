@@ -270,7 +270,7 @@ export function Programs() {
                 onClick={() => {
                   setSelectedMemberId(m.id);
                   setEditingProgramId(undefined);
-                  if (!title) setTitle(`${t.trainer.programs.title} — $displayName(m.name, isFa)`);
+                  if (!title) setTitle(`${t.trainer.programs.title} — ${displayName(m.name, isFa)}`);
                 }}
                 style={{
                   backgroundColor: selectedMemberId === m.id ? 'var(--c-ink)' : 'var(--c-surface-2)',
@@ -278,7 +278,7 @@ export function Programs() {
                 }}
                 className="px-3 py-1.5 rounded-xl text-[13px] font-bold border border-transparent transition-colors cursor-pointer"
               >
-                displayName(m.name, isFa)
+                {displayName(m.name, isFa)}
               </button>
             ))}
           </div>

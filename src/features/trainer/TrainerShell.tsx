@@ -16,6 +16,7 @@ import { getTrainer } from '../../api/trainers';
 import { DailySession, SessionExercise, Member, Trainer } from '../../lib/domain/gymManagement';
 import { normalizeExerciseSets } from '../../lib/domain/sessionSets';
 import { NotificationBell } from '../../components/ui/NotificationBell';
+import { resolveTab } from '../../lib/navigation';
 import { useI18n } from '../../components/LanguageProvider';
 import { displayName } from '../../lib/displayName';
 import type { WorkoutExercise } from './hooks/useSessionDraft';
@@ -46,6 +47,18 @@ const TABS: TrainerTabItem[] = [
   { key: 'cal', icon: CalendarDays, labelKey: 'calendar' },
 ];
 
+const TRAINER_TAB_KEYS = TABS.map(tab => tab.key);
+const TRAINER_TAB_ALIASES: Partial<Record<string, TrainerTabKey>> = {
+  members: 'mem',
+  history: 'hist',
+  exercises: 'cat',
+  catalog: 'cat',
+  programs: 'prog',
+  calendar: 'cal',
+};
+const toTrainerTab = (raw: string | null | undefined) =>
+  resolveTab(raw, TRAINER_TAB_KEYS, 'today', TRAINER_TAB_ALIASES);
+
 /** نگاشت کلید تب به عنوان صفحه — برای پرهیز از ساخت کلید پویا */
 const TAB_TITLES = {
   today: 'titleToday',
@@ -71,8 +84,8 @@ function toWorkoutExercises(exercises: SessionExercise[]): WorkoutExercise[] {
 }
 
 export function TrainerShell() {
-  const queryTab = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab') as TrainerTabKey;
-  const [activeTab, setActiveTab] = useState<TrainerTabKey>(queryTab || 'today');
+  const queryTab = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab');
+  const [activeTab, setActiveTab] = useState<TrainerTabKey>(toTrainerTab(queryTab));
   const [activeSession, setActiveSession] = useState<DailySession | null>(null);
   const [activeMember, setActiveMember] = useState<Member | undefined>(undefined);
   const [activeTrainer, setActiveTrainer] = useState<Trainer | undefined>(undefined);
@@ -132,7 +145,7 @@ export function TrainerShell() {
           </div>
         </div>
 
-        <NotificationBell onNavigateTab={t => setActiveTab(t as TrainerTabKey)} />
+        <NotificationBell onNavigateTab={raw => setActiveTab(toTrainerTab(raw))} />
       </header>
 
       {/* ۲. محتوای اسکرول‌پذیر صفحه فعال */}

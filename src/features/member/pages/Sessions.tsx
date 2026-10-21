@@ -12,7 +12,7 @@ import { getCurrentUser, subscribeToStore } from '../../../api/auth';
 import { getMemberSessions } from '../../../api/members';
 import { rescheduleSession, cancelSessionByMember } from '../../../api/sessions';
 import { getTrainer } from '../../../api/trainers';
-import { formatJalaliLocalized, getTodayJalaliString } from '../../../lib/date/jalali';
+import { formatJalaliLocalized, getTodayJalaliString, toCanonicalJalali } from '../../../lib/date/jalali';
 import { DailySession } from '../../../lib/domain/gymManagement';
 
 /** بازه ساعت‌های پیشنهادی برای تغییر نوبت */
@@ -57,29 +57,21 @@ export function Sessions() {
   /** روزهایی که ورزشکار مراجعه کرده (تکمیل‌شده یا غیبت) */
   const visitedDates = useMemo(
     () =>
-      past
-        .filter(s => s.date !== 'Today')
-        .map(s => s.date),
+      past.map(s => toCanonicalJalali(s.date)),
     [past]
   );
 
   /** روزهای رزروشدهٔ آینده */
   const bookedDates = useMemo(
     () =>
-      upcoming
-        .filter(s => s.date !== 'Today')
-        .map(s => s.date),
+      upcoming.map(s => toCanonicalJalali(s.date)),
     [upcoming]
   );
 
   /** جلسات همان روز انتخاب‌شده در تقویم */
   const daySessions = useMemo(() => {
-    const todayKey = getTodayJalaliString();
     return [...upcoming, ...past]
-      .filter(s => {
-        const dateKey = s.date === 'Today' ? todayKey : s.date;
-        return dateKey === selectedDate;
-      })
+      .filter(s => toCanonicalJalali(s.date) === selectedDate)
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [upcoming, past, selectedDate]);
 
@@ -203,7 +195,7 @@ export function Sessions() {
                       className="font-bold text-[14px] truncate"
                       style={{ color: 'var(--c-deep)' }}
                     >
-                      displayName(s.trainerName, isFa)
+                      {displayName(s.trainerName, isFa)}
                     </div>
                     <div
                       className="text-[12px] truncate"
@@ -278,7 +270,7 @@ export function Sessions() {
                   className="text-[13px] mt-1"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
-                  {t.member.sessions.trainer}: displayName(item.trainerName, isFa)
+                  {t.member.sessions.trainer}: {displayName(item.trainerName, isFa)}
                 </div>
 
                 <div className="mt-3.5 flex gap-2">
@@ -345,7 +337,7 @@ export function Sessions() {
                       {formatJalaliLocalized(item.date, isFa)}
                     </span>
                     <span className="text-[12px] opacity-75" style={{ color: 'var(--c-text-muted)' }}>
-                      {t.member.sessions.trainer}: displayName(item.trainerName, isFa) · {t.member.sessions.at} {item.time}
+                      {t.member.sessions.trainer}: {displayName(item.trainerName, isFa)} · {t.member.sessions.at} {item.time}
                     </span>
                   </div>
                   <span

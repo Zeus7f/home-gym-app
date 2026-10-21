@@ -8,6 +8,7 @@ import { Capacity } from '../../../components/ui/Capacity';
 import { MemberData } from '../components/MemberSheet';
 import { num, short, toman } from '../../../lib/format';
 import { useI18n } from '../../../components/LanguageProvider';
+import { Toast } from '../../../components/ui/Toast';
 import { displayName } from '../../../lib/displayName';
 import { getTodaySessions, completeSession, checkInSession } from '../../../api/sessions';
 import { getMembers } from '../../../api/members';
@@ -57,8 +58,12 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
   const totalReceivables = members.reduce((sum, m) => sum + m.outstandingBalance, 0);
 
   // اتمام جلسه به صورت زنده
+  const [toast, setToast] = useState<string | null>(null);
+
+  // B-06: تکمیل ناموفق (لغوشده، بدون اعتبار، بستهٔ منقضی) باید به مدیر نمایش داده شود
   const handleComplete = async (sessionId: string) => {
-    await completeSession(sessionId);
+    const res = await completeSession(sessionId);
+    if (!res.success) setToast(res.message);
     const updated = await getTodaySessions();
     setSessions(updated);
   };
@@ -116,7 +121,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                   className="font-semibold truncate"
                   style={{ color: 'var(--c-deep)' }}
                 >
-                  displayName(s.memberName, isFa)
+                  {displayName(s.memberName, isFa)}
                 </div>
                 <div
                   className="text-[14px] truncate"
@@ -209,7 +214,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                     className="font-semibold truncate"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    displayName(trainer.name, isFa)
+                    {displayName(trainer.name, isFa)}
                   </span>
                   <span
                     style={{
@@ -283,7 +288,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                 className="font-semibold text-[15px]"
                 style={{ color: 'var(--c-deep)' }}
               >
-                displayName(m.name, isFa)
+                {displayName(m.name, isFa)}
               </div>
               {m.outstandingBalance > 0 && (
                 <div
@@ -317,7 +322,14 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
       </div>
 
       {lowMembers.length > 0 && (
-        <Btn v="danger" className="mt-3 w-full gap-2">
+        // B-13: سرویس پیامک هنوز متصل نیست؛ دکمه غیرفعال و با توضیح نمایش داده می‌شود
+        <Btn
+          v="danger"
+          className="mt-3 w-full gap-2"
+          disabled
+          title={t.owner.dash.renewSmsUnavailable}
+          aria-label={`${t.owner.dash.renewSms} — ${t.owner.dash.renewSmsUnavailable}`}
+        >
           <MessageSquare size={16} />
           {t.owner.dash.renewSms}
         </Btn>
@@ -416,6 +428,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
           </div>
         </div>
       )}
+      <Toast message={toast} type="warning" onClose={() => setToast(null)} />
     </div>
   );
 }

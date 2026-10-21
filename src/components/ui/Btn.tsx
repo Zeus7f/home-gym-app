@@ -59,6 +59,7 @@ export const Btn = forwardRef<HTMLButtonElement, BtnProps>(
         className={cn(
           'h-10 px-4 rounded-lg text-[14px] font-semibold inline-flex items-center justify-center gap-2 select-none cursor-pointer',
           'transition-all duration-150 whitespace-nowrap active:scale-[0.98]',
+          'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--c-ink)]',
           config.border ? 'border' : 'border border-transparent',
           className

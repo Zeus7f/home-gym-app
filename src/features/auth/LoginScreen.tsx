@@ -257,7 +257,7 @@ export function LoginScreen({ lang: langProp, onLanguageChange: onLangProp }: Lo
                 className="py-2 px-1.5 rounded-xl text-center text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-1 shadow-2xs"
               >
                 <Dumbbell size={16} />
-                <span>{t.roles.trainer}s</span>
+                <span>{t.roles.trainer}</span>
               </button>
 
               {/* تب ورزشکار */}
@@ -481,7 +481,7 @@ export function LoginScreen({ lang: langProp, onLanguageChange: onLangProp }: Lo
 
       {/* فوتر پایین صفحه */}
       <footer className="relative z-10 text-center text-xs text-slate-400 py-2">
-        t.login.footer
+        {t.login.footer}
       </footer>
     </div>
   );

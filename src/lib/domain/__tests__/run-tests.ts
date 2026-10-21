@@ -2,6 +2,7 @@ import { runAllDomainTests } from './domain.test';
 import { runMemberAnalyticsTests } from './memberAnalytics.test';
 import { runStoreTests } from './store.test';
 import { runIntegrationTests } from './integration.test';
+import { runBugfixTests } from './bugfixes.test';
 import { runSessionDraftTests } from '../../../features/trainer/hooks/__tests__/useSessionDraft.test';
 
 async function main() {
@@ -13,6 +14,7 @@ async function main() {
     ['store', runStoreTests()],
     ['sessionDraft', runSessionDraftTests()],
     ['integration', await runIntegrationTests()],
+    ['bugfixes', runBugfixTests()],
   ] as const;
 
   let passed = 0;

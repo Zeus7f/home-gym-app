@@ -7,6 +7,7 @@
  */
 
 import { translations, type Language } from '../lib/i18n';
+import { displayName } from '../lib/displayName';
 import type {
   StoreMessageKey,
   StoreMessageParams,
@@ -33,7 +34,12 @@ export function translateStoreMessage(
   let text = template;
   if (params) {
     for (const [name, value] of Object.entries(params)) {
-      text = text.replace(new RegExp(`\\{${name}\\}`, 'g'), String(value));
+      // اعداد و نام افراد هم باید به زبان فعال نمایش داده شوند (ارقام لاتین در انگلیسی).
+      const shown =
+        typeof value === 'number'
+          ? new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-US').format(value)
+          : displayName(value, lang === 'fa');
+      text = text.replace(new RegExp(`\\{${name}\\}`, 'g'), () => shown);
     }
   }
   return text;

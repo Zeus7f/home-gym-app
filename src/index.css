@@ -52,6 +52,12 @@
 /* Tailwind utilities */
 @import "tailwindcss";
 
+/*
+ * B-10: variant `dark:` به theme انتخاب‌شده در برنامه (`data-theme`) وصل است،
+ * نه به prefers-color-scheme سیستم‌عامل. حالت System در lib/theme.ts حل می‌شود.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ---- Base styles ---- */
 html, body {
   margin: 0;

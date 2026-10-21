@@ -1,11 +1,29 @@
-import React from 'react';
-import { X, MessageSquare } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, MessageSquare, Minus, Plus } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Meter } from '../../../components/ui/Meter';
 import { Btn } from '../../../components/ui/Btn';
 import { useI18n } from '../../../components/LanguageProvider';
 import { num, toman } from '../../../lib/format';
+import { Seg } from '../../../components/ui/Seg';
+import { Toast } from '../../../components/ui/Toast';
+import { displayName, localizedLabel } from '../../../lib/displayName';
+import { exerciseName } from '../../../lib/exerciseLabels';
+import { formatJalaliLocalized, toCanonicalJalali } from '../../../lib/date/jalali';
+import {
+  getMember,
+  getMemberSessions,
+  recordMemberPayment,
+  adjustMemberSessions,
+  changeMemberTrainer,
+} from '../../../api/members';
+import { getTrainers } from '../../../api/trainers';
+import { subscribeToStore } from '../../../api/auth';
+import type { DailySession, Member, Trainer } from '../../../lib/domain/gymManagement';
+
+type SheetAction = 'payment' | 'adjust' | 'trainer' | null;
+type PaymentMethod = 'card' | 'cash' | 'transfer';
 
 export interface MemberData {
   id: string;
@@ -42,24 +60,105 @@ export function MemberSheet({
   onClose,
   isMobile = false,
 }: MemberSheetProps) {
-  const { t } = useI18n();
+  const { t, isFa } = useI18n();
+  const ms = t.owner.memberSheet;
+
+  // B-13: داده‌های زندهٔ عضو — پس از هر عملیات (پرداخت، اصلاح، تغییر مربی) به‌روز می‌شود
+  const [live, setLive] = useState<Member | undefined>(undefined);
+  const [recent, setRecent] = useState<DailySession[]>([]);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [action, setAction] = useState<SheetAction>(null);
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState<PaymentMethod>('card');
+  const [delta, setDelta] = useState(1);
+  const [reason, setReason] = useState('');
+  const [newTrainerId, setNewTrainerId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<{ message: string; ok: boolean } | null>(null);
+
+  const memberId = member?.id;
+
+  useEffect(() => {
+    if (!memberId) return;
+    setAction(null);
+    const load = async () => {
+      const [m, sessions, trs] = await Promise.all([
+        getMember(memberId),
+        getMemberSessions(memberId),
+        getTrainers(),
+      ]);
+      setLive(m);
+      setTrainers(trs);
+      setRecent(
+        sessions
+          .filter(s => s.status === 'completed')
+          .sort((a, b) =>
+            toCanonicalJalali(b.date).localeCompare(toCanonicalJalali(a.date)) ||
+            b.time.localeCompare(a.time)
+          )
+          .slice(0, 3)
+      );
+    };
+    load();
+    return subscribeToStore(load);
+  }, [memberId]);
+
   if (!member) return null;
 
-  const name = member.name || member.m || t.owner.memberSheet.athlete;
-  const phone = member.phone || member.ph || '—';
-  const pkg = member.packageName || member.pkg || t.owner.memberSheet.package;
-  const total = member.totalSessions ?? member.total ?? 12;
-  const used = member.usedSessions ?? member.used ?? 0;
+  const rawName = live?.name || member.name || member.m || ms.athlete;
+  const name = displayName(rawName, isFa);
+  const phone = live?.phone || member.phone || member.ph || '—';
+  const pkg = localizedLabel(live?.packageName || member.packageName || member.pkg || ms.package, isFa);
+  const total = live?.totalSessions ?? member.totalSessions ?? member.total ?? 12;
+  const used = live?.usedSessions ?? member.usedSessions ?? member.used ?? 0;
   const remaining = Math.max(0, total - used);
-  const price = member.packagePrice ?? member.price ?? 0;
-  const paid = member.paidAmount ?? member.paid ?? 0;
+  const price = live?.packagePrice ?? member.packagePrice ?? member.price ?? 0;
+  const paid = live?.paidAmount ?? member.paidAmount ?? member.paid ?? 0;
   const debt = Math.max(0, price - paid);
-  const trainer =
+  const rawTrainer =
+    live?.defaultTrainerName ||
     member.trainerName ||
     member.defaultTrainerName ||
     member.tr ||
-    t.owner.memberSheet.unknown;
-  const exp = member.expirationDate || member.exp || '—';
+    ms.unknown;
+  const trainer = displayName(rawTrainer, isFa);
+  const rawExp = live?.expirationDate || member.expirationDate || member.exp || '';
+  const exp = rawExp ? formatJalaliLocalized(rawExp, isFa) : '—';
+
+  const openAction = (next: SheetAction) => {
+    setAction(prev => (prev === next ? null : next));
+    setAmount(debt > 0 ? String(debt) : '');
+    setMethod('card');
+    setDelta(1);
+    setReason('');
+    setNewTrainerId(live?.defaultTrainerId ?? '');
+  };
+
+  const run = async (fn: () => Promise<{ success: boolean; message: string }>) => {
+    if (!memberId || busy) return;
+    setBusy(true);
+    try {
+      const res = await fn();
+      setToast({ message: res.message, ok: res.success });
+      if (res.success) setAction(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitPayment = () =>
+    run(() =>
+      recordMemberPayment(memberId!, Number(amount.replace(/[^\d]/g, '')), method, ms.paymentNote)
+    );
+  const submitAdjust = () =>
+    run(() => adjustMemberSessions(memberId!, delta, reason.trim() || ms.reasonDefault));
+  const submitTrainer = () => run(() => changeMemberTrainer(memberId!, newTrainerId));
+
+  const fieldStyle = {
+    backgroundColor: 'var(--c-surface-2)',
+    borderColor: 'var(--c-border)',
+    color: 'var(--c-text)',
+  } as const;
 
   return (
     <Sheet open={!!member} onClose={onClose} isMobile={isMobile}>
@@ -85,7 +184,7 @@ export function MemberSheet({
             type="button"
             onClick={onClose}
             className="h-9 w-9 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 grid place-items-center transition-colors"
-            aria-label={t.owner.memberSheet.close}
+            aria-label={ms.close}
           >
             <X size={20} />
           </button>
@@ -102,7 +201,7 @@ export function MemberSheet({
                 {pkg}
               </div>
               <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-                {t.owner.memberSheet.expires}: {exp}
+                {ms.expires}: {exp}
               </div>
             </div>
             <div
@@ -129,7 +228,7 @@ export function MemberSheet({
             className="rounded-xl border p-3"
           >
             <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-              {t.owner.memberSheet.defaultTrainer}
+              {ms.defaultTrainer}
             </div>
             <div className="font-bold mt-0.5" style={{ color: 'var(--c-deep)' }}>
               {trainer}
@@ -144,7 +243,7 @@ export function MemberSheet({
             className="rounded-xl border p-3"
           >
             <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-              {t.owner.memberSheet.debt}
+              {ms.debt}
             </div>
             <div
               style={{
@@ -159,33 +258,183 @@ export function MemberSheet({
 
         {/* دکمه‌های عملیات */}
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <Btn v="primary">{t.owner.memberSheet.recordPayment}</Btn>
-          <Btn v="brass">{t.owner.memberSheet.extendPackage}</Btn>
-          <Btn v="ghost">{t.owner.memberSheet.changeTrainer}</Btn>
-          <Btn v="ghost">{t.owner.memberSheet.adjustBalance}</Btn>
+          <Btn v="primary" onClick={() => openAction('payment')} aria-expanded={action === 'payment'}>
+            {ms.recordPayment}
+          </Btn>
+          {/* تمدید بسته هنوز workflow ندارد؛ به‌جای دکمهٔ بی‌اثر، غیرفعال و با توضیح نمایش داده می‌شود */}
+          <Btn v="brass" disabled title={ms.comingSoon} aria-label={`${ms.extendPackage} — ${ms.comingSoon}`}>
+            {ms.extendPackage}
+          </Btn>
+          <Btn v="ghost" onClick={() => openAction('trainer')} aria-expanded={action === 'trainer'}>
+            {ms.changeTrainer}
+          </Btn>
+          <Btn v="ghost" onClick={() => openAction('adjust')} aria-expanded={action === 'adjust'}>
+            {ms.adjustBalance}
+          </Btn>
         </div>
+
+        {action === 'payment' && (
+          <form
+            className="mt-3 rounded-xl border p-3 space-y-3"
+            style={{ borderColor: 'var(--c-border)' }}
+            onSubmit={e => {
+              e.preventDefault();
+              submitPayment();
+            }}
+          >
+            <label className="block text-[13px] font-bold" style={{ color: 'var(--c-text-muted)' }}>
+              {ms.amount}
+              <input
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                className="mt-1 w-full h-10 px-3 rounded-xl border text-[15px] font-bold tnum"
+                style={fieldStyle}
+                autoFocus
+              />
+            </label>
+            <div>
+              <div className="text-[13px] font-bold mb-1" style={{ color: 'var(--c-text-muted)' }}>
+                {ms.method}
+              </div>
+              <Seg<PaymentMethod>
+                value={method}
+                onChange={setMethod}
+                ariaLabel={ms.method}
+                full
+                items={[
+                  ['card', ms.methods.card],
+                  ['cash', ms.methods.cash],
+                  ['transfer', ms.methods.transfer],
+                ]}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Btn v="primary" type="submit" disabled={busy}>{ms.submit}</Btn>
+              <Btn v="ghost" type="button" onClick={() => setAction(null)}>{ms.cancel}</Btn>
+            </div>
+          </form>
+        )}
+
+        {action === 'adjust' && (
+          <form
+            className="mt-3 rounded-xl border p-3 space-y-3"
+            style={{ borderColor: 'var(--c-border)' }}
+            onSubmit={e => {
+              e.preventDefault();
+              submitAdjust();
+            }}
+          >
+            <div>
+              <div className="text-[13px] font-bold mb-1" style={{ color: 'var(--c-text-muted)' }}>
+                {ms.sessionsDelta}
+              </div>
+              <div className="flex items-center gap-2">
+                <Btn v="soft" type="button" className="w-9 h-9 p-0" onClick={() => setDelta(d => d - 1)} aria-label="−1">
+                  <Minus size={15} />
+                </Btn>
+                <span className="w-14 text-center font-bold text-[18px] tnum" style={{ color: 'var(--c-deep)' }} aria-live="polite">
+                  {delta > 0 ? `+${num(delta)}` : num(delta)}
+                </span>
+                <Btn v="soft" type="button" className="w-9 h-9 p-0" onClick={() => setDelta(d => d + 1)} aria-label="+1">
+                  <Plus size={15} />
+                </Btn>
+              </div>
+            </div>
+            <label className="block text-[13px] font-bold" style={{ color: 'var(--c-text-muted)' }}>
+              {ms.reason}
+              <input
+                type="text"
+                value={reason}
+                placeholder={ms.reasonDefault}
+                onChange={e => setReason(e.target.value)}
+                className="mt-1 w-full h-10 px-3 rounded-xl border text-[14px]"
+                style={fieldStyle}
+              />
+            </label>
+            <div className="flex gap-2">
+              <Btn v="primary" type="submit" disabled={busy || delta === 0}>{ms.submit}</Btn>
+              <Btn v="ghost" type="button" onClick={() => setAction(null)}>{ms.cancel}</Btn>
+            </div>
+          </form>
+        )}
+
+        {action === 'trainer' && (
+          <form
+            className="mt-3 rounded-xl border p-3 space-y-3"
+            style={{ borderColor: 'var(--c-border)' }}
+            onSubmit={e => {
+              e.preventDefault();
+              submitTrainer();
+            }}
+          >
+            <label className="block text-[13px] font-bold" style={{ color: 'var(--c-text-muted)' }}>
+              {ms.newTrainer}
+              <select
+                value={newTrainerId}
+                onChange={e => setNewTrainerId(e.target.value)}
+                className="mt-1 w-full h-10 px-3 rounded-xl border text-[14px] font-bold"
+                style={fieldStyle}
+              >
+                {trainers
+                  .filter(tr => tr.status === 'active')
+                  .map(tr => (
+                    <option key={tr.id} value={tr.id}>
+                      {displayName(tr.name, isFa)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="flex gap-2">
+              <Btn
+                v="primary"
+                type="submit"
+                disabled={busy || !newTrainerId || newTrainerId === live?.defaultTrainerId}
+              >
+                {ms.submit}
+              </Btn>
+              <Btn v="ghost" type="button" onClick={() => setAction(null)}>{ms.cancel}</Btn>
+            </div>
+          </form>
+        )}
 
         {/* آخرین جلسات */}
         <div className="mt-6">
           <div className="text-[15px] font-bold mb-2" style={{ color: 'var(--c-deep)' }}>
-            {t.owner.memberSheet.recentSessions}
+            {ms.recentSessions}
           </div>
-          {t.owner.memberSheet.sessionLog.map(session => (
+          {recent.length === 0 && (
+            <div className="py-3 text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
+              {ms.noRecentSessions}
+            </div>
+          )}
+          {recent.map(session => (
             <div
-              key={session.date}
+              key={session.id}
               style={{ borderColor: 'var(--c-surface-2)' }}
               className="flex gap-3 py-3 border-b last:border-0"
             >
-              <span className="w-14 text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
-                {session.date}
+              <span className="w-24 shrink-0 text-[13px]" style={{ color: 'var(--c-text-muted)' }}>
+                {formatJalaliLocalized(session.date, isFa)}
               </span>
               <span className="text-[15px] flex-1 truncate" style={{ color: 'var(--c-text)' }}>
-                {session.exercises}
+                {session.exercises.length > 0
+                  ? session.exercises
+                      .map(e => exerciseName(e.exerciseId, e.name, isFa))
+                      .join(isFa ? '، ' : ', ')
+                  : ms.noExercises}
               </span>
             </div>
           ))}
         </div>
       </div>
+      <Toast
+        message={toast?.message ?? null}
+        type={toast?.ok === false ? 'warning' : 'success'}
+        onClose={() => setToast(null)}
+      />
     </Sheet>
   );
 }

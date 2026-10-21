@@ -4,11 +4,13 @@ import { Seg } from '../../../components/ui/Seg';
 import { Btn } from '../../../components/ui/Btn';
 import { Avatar } from '../../../components/ui/Avatar';
 import { useI18n } from '../../../components/LanguageProvider';
-import { displayName } from '../../../lib/displayName';
+import { displayName, localizedLabel } from '../../../lib/displayName';
 import { num } from '../../../lib/format';
-import { getGym } from '../../../api/gym';
+import { getGym, updateGymSettings } from '../../../api/gym';
+import { Toast } from '../../../components/ui/Toast';
 import { getTrainers } from '../../../api/trainers';
 import { Gym, Trainer } from '../../../lib/domain/gymManagement';
+import { useThemePreference, type ThemePreference } from '../../../lib/theme';
 
 export interface SettingsProps {
   isMobile?: boolean;
@@ -20,11 +22,10 @@ export function Settings({ isMobile = false }: SettingsProps) {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [capacity, setCapacity] = useState(30);
   const [hourlyCapacity, setHourlyCapacity] = useState(6);
-  const [noShowDeducts, setNoShowDeducts] = useState(true);
+  const [noShowDeducts, setNoShowDeducts] = useState(false);
+  const [toast, setToast] = useState<{ message: string; ok: boolean } | null>(null);
 
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
-    return (localStorage.getItem('hg_theme') as 'light' | 'dark' | 'system') || 'system';
-  });
+  const [theme, setThemePreference] = useThemePreference();
 
   useEffect(() => {
     async function load() {
@@ -32,6 +33,8 @@ export function Settings({ isMobile = false }: SettingsProps) {
         const [gymData, trData] = await Promise.all([getGym(), getTrainers()]);
         setGym(gymData);
         if (gymData.capacity) setCapacity(gymData.capacity);
+        if (gymData.hourlyCapacity) setHourlyCapacity(gymData.hourlyCapacity);
+        setNoShowDeducts(Boolean(gymData.noShowDeductsSession));
         setTrainers(trData);
       } catch (err) {
         console.error('Error fetching settings:', err);
@@ -40,17 +43,41 @@ export function Settings({ isMobile = false }: SettingsProps) {
     load();
   }, []);
 
-  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
-    setTheme(newTheme);
-    localStorage.setItem('hg_theme', newTheme);
-    const root = document.documentElement;
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  /**
+   * B-13: هر تغییر بلافاصله در استور ذخیره می‌شود (و در قوانین رزرو اعمال می‌شود).
+   * در صورت خطا، مقدار قبلی برمی‌گردد.
+   */
+  const persist = async (
+    patch: Parameters<typeof updateGymSettings>[0],
+    rollback: () => void
+  ) => {
+    const res = await updateGymSettings(patch);
+    if (!res.success) rollback();
+    setToast({ message: res.message, ok: res.success });
+  };
 
-    if (newTheme === 'dark' || (newTheme === 'system' && mediaQuery.matches)) {
-      root.setAttribute('data-theme', 'dark');
-    } else {
-      root.removeAttribute('data-theme');
-    }
+  const changeCapacity = (next: number) => {
+    const prev = capacity;
+    const value = Math.max(1, next);
+    setCapacity(value);
+    persist({ capacity: value }, () => setCapacity(prev));
+  };
+
+  const changeHourlyCapacity = (next: number) => {
+    const prev = hourlyCapacity;
+    const value = Math.max(1, next);
+    setHourlyCapacity(value);
+    persist({ hourlyCapacity: value }, () => setHourlyCapacity(prev));
+  };
+
+  const toggleNoShowDeducts = () => {
+    const prev = noShowDeducts;
+    setNoShowDeducts(!prev);
+    persist({ noShowDeductsSession: !prev }, () => setNoShowDeducts(prev));
+  };
+
+  const handleThemeChange = (newTheme: ThemePreference) => {
+    setThemePreference(newTheme);
   };
 
   const handleLangChange = (newLang: 'fa' | 'en') => {
@@ -132,7 +159,9 @@ export function Settings({ isMobile = false }: SettingsProps) {
             <Btn
               v="soft"
               className="w-9 h-9 p-0"
-              onClick={() => setCapacity(c => Math.max(1, c - 1))}
+              onClick={() => changeCapacity(capacity - 1)}
+              disabled={capacity <= 1}
+              aria-label={`${t.owner.settings.maxDailyCapacity} −1`}
             >
               <Minus size={15} />
             </Btn>
@@ -145,7 +174,8 @@ export function Settings({ isMobile = false }: SettingsProps) {
             <Btn
               v="soft"
               className="w-9 h-9 p-0"
-              onClick={() => setCapacity(c => c + 1)}
+              onClick={() => changeCapacity(capacity + 1)}
+              aria-label={`${t.owner.settings.maxDailyCapacity} +1`}
             >
               <Plus size={15} />
             </Btn>
@@ -160,7 +190,9 @@ export function Settings({ isMobile = false }: SettingsProps) {
             <Btn
               v="soft"
               className="w-9 h-9 p-0"
-              onClick={() => setHourlyCapacity(c => Math.max(1, c - 1))}
+              onClick={() => changeHourlyCapacity(hourlyCapacity - 1)}
+              disabled={hourlyCapacity <= 1}
+              aria-label={`${t.owner.settings.slotsPerHour} −1`}
             >
               <Minus size={15} />
             </Btn>
@@ -173,7 +205,8 @@ export function Settings({ isMobile = false }: SettingsProps) {
             <Btn
               v="soft"
               className="w-9 h-9 p-0"
-              onClick={() => setHourlyCapacity(c => c + 1)}
+              onClick={() => changeHourlyCapacity(hourlyCapacity + 1)}
+              aria-label={`${t.owner.settings.slotsPerHour} +1`}
             >
               <Plus size={15} />
             </Btn>
@@ -202,7 +235,9 @@ export function Settings({ isMobile = false }: SettingsProps) {
         >
           <button
             type="button"
-            onClick={() => setNoShowDeducts(!noShowDeducts)}
+            onClick={toggleNoShowDeducts}
+            role="switch"
+            aria-checked={noShowDeducts}
             style={{
               backgroundColor: noShowDeducts
                 ? 'var(--c-ink)'
@@ -271,7 +306,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
         >
           <Seg
             value={theme}
-            onChange={v => handleThemeChange(v as 'light' | 'dark' | 'system')}
+            onChange={v => handleThemeChange(v as ThemePreference)}
             ariaLabel={t.owner.settings.theme}
             items={[
               ['light', t.owner.settings.light],
@@ -306,13 +341,13 @@ export function Settings({ isMobile = false }: SettingsProps) {
                   className="font-bold text-[14px]"
                   style={{ color: 'var(--c-deep)' }}
                 >
-                  displayName(trainer.name, isFa)
+                  {displayName(trainer.name, isFa)}
                 </div>
                 <div
                   className="text-[12px]"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
-                  {trainer.specialty}
+                  {localizedLabel(trainer.specialty, isFa)}
                 </div>
               </div>
               <span
@@ -335,6 +370,11 @@ export function Settings({ isMobile = false }: SettingsProps) {
           </Btn>
         </div>
       </section>
+      <Toast
+        message={toast?.message ?? null}
+        type={toast?.ok === false ? 'warning' : 'success'}
+        onClose={() => setToast(null)}
+      />
     </div>
   );
 }

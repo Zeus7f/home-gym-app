@@ -32,3 +32,23 @@ export function initials(name: string, isFa: boolean): string {
   const shown = displayName(name, isFa);
   return shown.trim().charAt(0) || '?';
 }
+
+/**
+ * برچسب‌های دادهٔ نمونه که معادل لاتین داخل پرانتز ندارند (مثلاً نام بسته‌ها).
+ * PROJECT_STATUS P1: «Localization of seed data».
+ */
+const SEED_LABELS_EN: Record<string, string> = {
+  'بسته خصوصی ۱۲ جلسه‌ای': '12-session private package',
+  'بسته VIP بیست جلسه‌ای': '20-session VIP package',
+  'بسته پایه ۱۰ جلسه‌ای': '10-session basic package',
+  'بسته سلامتی ۸ جلسه‌ای': '8-session wellness package',
+};
+
+/**
+ * برچسب داده‌محور (نام بسته، تخصص مربی و …) به زبان فعال.
+ * ابتدا معادل شناخته‌شدهٔ داده‌های نمونه، سپس بخش لاتین داخل پرانتز بررسی می‌شود.
+ */
+export function localizedLabel(label: string, isFa: boolean): string {
+  if (isFa || !label) return label;
+  return SEED_LABELS_EN[label.trim()] ?? displayName(label, isFa);
+}

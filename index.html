@@ -16,8 +16,14 @@
         const savedLang = localStorage.getItem('hg_lang') || 'fa';
         document.documentElement.lang = savedLang;
         document.documentElement.dir = savedLang === 'fa' ? 'rtl' : 'ltr';
-        const savedTheme = localStorage.getItem('hg_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        document.documentElement.setAttribute('data-theme', savedTheme);
+        // 'system' (یا مقدار نامعتبر) باید پیش از رندر به light/dark واقعی تبدیل شود.
+        const storedTheme = localStorage.getItem('hg_theme');
+        const preference = storedTheme === 'light' || storedTheme === 'dark' ? storedTheme : 'system';
+        const effectiveTheme = preference === 'system'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : preference;
+        document.documentElement.setAttribute('data-theme', effectiveTheme);
+        document.documentElement.style.colorScheme = effectiveTheme;
       } catch (e) {}
     </script>
   </head>

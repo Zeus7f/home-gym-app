@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
 import { X } from 'lucide-react';
+import { useDialogA11y } from '../../lib/useDialogA11y';
+import { useI18n } from '../LanguageProvider';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -22,29 +24,18 @@ export const Modal: React.FC<ModalProps> = ({
   className
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedElement = useRef<HTMLElement | null>(null);
+  const { t } = useI18n();
+
+  // B-12: focus-on-open، focus trap، Escape و بازگرداندن فوکوس
+  useDialogA11y(modalRef, isOpen, onClose);
 
   useEffect(() => {
-    if (isOpen) {
-      previouslyFocusedElement.current = document.activeElement as HTMLElement;
-      document.body.style.overflow = 'hidden';
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onClose();
-        }
-      };
-
-      window.addEventListener('keydown', handleKeyDown);
-      return () => {
-        document.body.style.overflow = '';
-        window.removeEventListener('keydown', handleKeyDown);
-        if (previouslyFocusedElement.current) {
-          previouslyFocusedElement.current.focus();
-        }
-      };
-    }
-  }, [isOpen, onClose]);
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -91,7 +82,7 @@ export const Modal: React.FC<ModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            aria-label="بستن پنجره"
+            aria-label={t.actions.close}
             className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { cn } from '../../lib/utils';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
+import { useI18n } from '../LanguageProvider';
 
 export interface ToastProps {
   message: string | null;
@@ -15,6 +16,7 @@ export const Toast: React.FC<ToastProps> = ({
   type = 'success',
   duration = 4000
 }) => {
+  const { t } = useI18n();
   useEffect(() => {
     if (!message) return;
     const timer = setTimeout(() => {
@@ -48,7 +50,7 @@ export const Toast: React.FC<ToastProps> = ({
       role="status"
       aria-live="polite"
       className={cn(
-        'fixed bottom-6 start-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl border backdrop-blur-md shadow-2xl text-xs font-bold animate-fade-in max-w-md',
+        'fixed bottom-24 md:bottom-6 start-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl border backdrop-blur-md shadow-2xl text-xs font-bold animate-fade-in max-w-md',
         style
       )}
     >
@@ -56,7 +58,7 @@ export const Toast: React.FC<ToastProps> = ({
       <span className="flex-1 leading-snug">{message}</span>
       <button
         onClick={onClose}
-        aria-label="بستن اعلان"
+        aria-label={t.actions.close}
         className="text-white/60 hover:text-white p-1 transition-colors cursor-pointer"
       >
         <X className="w-3.5 h-3.5" />

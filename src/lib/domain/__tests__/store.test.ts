@@ -24,7 +24,8 @@ function makeMember(over: Partial<Member> = {}): Member {
     paidAmount: 1000000,
     outstandingBalance: 0,
     startDate: '1405/01/01',
-    expirationDate: '1405/12/29',
+    // انقضای دور تا تست‌ها با گذشت زمان (و قانون انقضای بسته در B-06) شکننده نشوند
+    expirationDate: '1499/12/29',
     status: 'active',
     registrationDate: '1405/01/01',
     ...over,

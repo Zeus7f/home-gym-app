@@ -24,6 +24,8 @@ import { useI18n } from '../../components/LanguageProvider';
 import { displayName } from '../../lib/displayName';
 import { getGym } from '../../api/gym';
 import { NotificationBell } from '../../components/ui/NotificationBell';
+import { resolveTab } from '../../lib/navigation';
+import { useIsMobile } from '../../lib/useMediaQuery';
 
 // صفحات اپ مدیر
 import { Dash } from './pages/Dash';
@@ -62,8 +64,23 @@ const NAV_ITEMS: NavItem[] = [
 
 const MOBILE_TABS: OwnerTabKey[] = ['dash', 'sched', 'mem', 'fin'];
 
+const OWNER_TAB_KEYS = NAV_ITEMS.map(n => n.key);
+/** نام‌های کامل مقصد (مثلاً از اعلان‌ها) به کلید تب مالک */
+const OWNER_TAB_ALIASES: Partial<Record<string, OwnerTabKey>> = {
+  dashboard: 'dash',
+  schedule: 'sched',
+  members: 'mem',
+  trainers: 'tr',
+  finance: 'fin',
+  reports: 'rep',
+  settings: 'set',
+};
+const toOwnerTab = (raw: string | null | undefined) =>
+  resolveTab(raw, OWNER_TAB_KEYS, 'dash', OWNER_TAB_ALIASES);
+
 export function OwnerShell() {
   const [activeTab, setActiveTab] = useState<OwnerTabKey>('dash');
+  const isMobile = useIsMobile();
   const { t, isFa } = useI18n();
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberData | null>(null);
@@ -80,8 +97,8 @@ export function OwnerShell() {
     });
   }, []);
 
-  const goToTab = (key: OwnerTabKey) => {
-    setActiveTab(key);
+  const goToTab = (key: string) => {
+    setActiveTab(toOwnerTab(key));
     setShowMoreSheet(false);
   };
 
@@ -224,7 +241,7 @@ export function OwnerShell() {
             </div>
 
             <NotificationBell
-              onNavigateTab={t => goToTab(t as OwnerTabKey)}
+              onNavigateTab={goToTab}
               badgeOnlyWhenUrgent
             />
 
@@ -256,7 +273,7 @@ export function OwnerShell() {
           </div>
 
           <NotificationBell
-            onNavigateTab={t => goToTab(t as OwnerTabKey)}
+            onNavigateTab={goToTab}
             badgeOnlyWhenUrgent
             className="!h-9 !w-9"
           />
@@ -266,16 +283,17 @@ export function OwnerShell() {
         <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-24 md:pb-8 thin-scroll">
           {activeTab === 'dash' && (
             <Dash
-              onNavigate={key => goToTab(key as OwnerTabKey)}
+              onNavigate={goToTab}
               onOpenMember={setSelectedMember}
+              isMobile={isMobile}
             />
           )}
-          {activeTab === 'sched' && <Sched />}
-          {activeTab === 'mem' && <Members onOpenMember={setSelectedMember} />}
-          {activeTab === 'tr' && <Trainers />}
-          {activeTab === 'fin' && <Finance />}
-          {activeTab === 'rep' && <Reports />}
-          {activeTab === 'set' && <Settings />}
+          {activeTab === 'sched' && <Sched isMobile={isMobile} />}
+          {activeTab === 'mem' && <Members onOpenMember={setSelectedMember} isMobile={isMobile} />}
+          {activeTab === 'tr' && <Trainers isMobile={isMobile} />}
+          {activeTab === 'fin' && <Finance isMobile={isMobile} />}
+          {activeTab === 'rep' && <Reports isMobile={isMobile} />}
+          {activeTab === 'set' && <Settings isMobile={isMobile} />}
         </div>
       </div>
 
@@ -385,6 +403,7 @@ export function OwnerShell() {
       <MemberSheet
         member={selectedMember}
         onClose={() => setSelectedMember(null)}
+        isMobile={isMobile}
       />
     </div>
   );

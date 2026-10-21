@@ -38,7 +38,16 @@ export type { ExerciseItem } from '../exercises/catalog';
 import { EXERCISE_CATALOG, ExerciseItem } from '../exercises/catalog';
 import { getTodayJalaliString, getTodayJalali } from '../date/jalali';
 import { isWithinCutoff, RESCHEDULE_CUTOFF_HOURS } from '../domain/sessionPolicy';
-import { type StoreResult } from '../domain/storeMessages';
+import { type StoreResult, type StoreMessageKey, type StoreMessageParams } from '../domain/storeMessages';
+import {
+  LEGACY_TODAY,
+  canonicalDate,
+  compareJalaliDates,
+  isSameDate,
+  validateBooking,
+  checkCompletable,
+} from '../domain/bookingPolicy';
+import { translations } from '../i18n';
 import { supabase, isLiveSupabase } from './client';
 
 /**
@@ -48,6 +57,25 @@ import { supabase, isLiveSupabase } from './client';
  * یک میلی‌ثانیه شناسهٔ یکسان می‌گیرند (مثلاً دو برنامهٔ تمرینی یا دو ورودی
  * پیامِ ممیزی). ترکیب زمان با یک شمارندهٔ یکنوا این برخورد را حذف می‌کند.
  */
+/**
+ * ساخت نتیجهٔ استور از روی کلید پیام.
+ * متن فارسی پیش‌فرض از همان فرهنگ لغت ساخته می‌شود تا دو نسخهٔ متفاوت از یک پیام وجود نداشته باشد.
+ */
+function storeResult(
+  success: boolean,
+  messageKey: StoreMessageKey,
+  params?: StoreMessageParams
+): StoreResult {
+  const template = (translations.fa.storeMessages as Record<string, string>)[messageKey] ?? '';
+  let message = template;
+  if (params) {
+    for (const [name, value] of Object.entries(params)) {
+      message = message.replace(new RegExp(`\\{${name}\\}`, 'g'), () => String(value));
+    }
+  }
+  return { success, messageKey, params, message };
+}
+
 let idCounter = 0;
 function nextId(prefix: string): string {
   idCounter += 1;
@@ -65,7 +93,8 @@ const INITIAL_GYM: Gym = {
   name: 'Iron Haven Fitness Club',
   capacity: 30, // 30 members max daily capacity
   currency: 'تومان',
-  noShowDeductsSession: false
+  noShowDeductsSession: false,
+  hourlyCapacity: 6
 };
 
 const INITIAL_TRAINERS: Trainer[] = [
@@ -174,10 +203,13 @@ const INITIAL_MEMBERS: Member[] = [
   }
 ];
 
+/** تاریخ امروز هنگام بارگذاری داده‌های نمونه — جلسات نمونهٔ «امروز» با تاریخ واقعی ذخیره می‌شوند (B-05) */
+const SEED_TODAY = getTodayJalaliString();
+
 const INITIAL_TODAY_SESSIONS: DailySession[] = [
   {
     id: 'sess-1',
-    date: 'Today',
+    date: SEED_TODAY,
     time: '09:00',
     memberId: 'm-reza',
     memberName: 'رضا کمالی (Reza)',
@@ -214,7 +246,7 @@ const INITIAL_TODAY_SESSIONS: DailySession[] = [
   },
   {
     id: 'sess-2',
-    date: 'Today',
+    date: SEED_TODAY,
     time: '10:30',
     memberId: 'm-mohammad',
     memberName: 'محمد صادقی (Mohammad)',
@@ -226,7 +258,7 @@ const INITIAL_TODAY_SESSIONS: DailySession[] = [
   },
   {
     id: 'sess-3',
-    date: 'Today',
+    date: SEED_TODAY,
     time: '14:30',
     memberId: 'm-sara-m',
     memberName: 'سارا محمدی (Sara M.)',
@@ -263,7 +295,7 @@ const INITIAL_TODAY_SESSIONS: DailySession[] = [
   },
   {
     id: 'sess-4',
-    date: 'Today',
+    date: SEED_TODAY,
     time: '16:00',
     memberId: 'm-chloe',
     memberName: 'نیلوفر بهرامی (Niloofar)',
@@ -1224,6 +1256,31 @@ class GymStore {
   users: UserAccount[] = INITIAL_USERS;
   currentUser: UserAccount | null = null; // Unauthenticated by default (F3)
 
+  /**
+   * B-07: کاربر پیش‌نمایش نقش — فقط وقتی کاربر واقعی مدیر باشگاه است.
+   * ذخیره نمی‌شود و هویت داده‌ای همهٔ صفحات (نه فقط پوستهٔ UI) را تعیین می‌کند.
+   */
+  previewUser: UserAccount | null = null;
+
+  /** هویتی که صفحات با آن داده می‌خوانند: کاربر پیش‌نمایش یا کاربر واردشده */
+  get actingUser(): UserAccount | null {
+    return this.previewUser ?? this.currentUser;
+  }
+
+  /**
+   * تنظیم بی‌صدا و idempotent کاربر پیش‌نمایش (بدون notify، چون در حین render فراخوانی می‌شود).
+   * @returns آیا مقدار تغییر کرد؟
+   */
+  setPreviewUser(userId: string | null): boolean {
+    const next =
+      userId && this.currentUser?.role === 'owner'
+        ? this.users.find(u => u.id === userId) ?? null
+        : null;
+    if ((next?.id ?? null) === (this.previewUser?.id ?? null)) return false;
+    this.previewUser = next;
+    return true;
+  }
+
   dailyCapacityConfigs: Record<string, DailyCapacityConfig> = {};
 
   /** برنامه‌های تمرینی مربیان که به ورزشکاران منتشر می‌شوند */
@@ -1260,6 +1317,15 @@ class GymStore {
         if (parsed.users) this.users = parsed.users;
         if (parsed.dailyCapacityConfigs) this.dailyCapacityConfigs = parsed.dailyCapacityConfigs;
         if (parsed.programs) this.programs = parsed.programs;
+
+        // B-05: مهاجرت داده‌های قدیمی — «Today» به تاریخ روزی که ذخیره شده بود تبدیل می‌شود،
+        // نه تاریخ امروز؛ وگرنه جلسات دیروز تا ابد «امروز» دیده می‌شدند.
+        const savedOn: string =
+          typeof parsed.savedOn === 'string' && parsed.savedOn ? parsed.savedOn : getTodayJalaliString();
+        const migrate = (s: DailySession) =>
+          s.date === LEGACY_TODAY ? { ...s, date: savedOn } : s;
+        this.todaySessions = this.todaySessions.map(migrate);
+        this.pastSessions = this.pastSessions.map(migrate);
       }
 
       // Restore session
@@ -1291,7 +1357,8 @@ class GymStore {
         exercises: this.exercises,
         users: this.users,
         dailyCapacityConfigs: this.dailyCapacityConfigs,
-        programs: this.programs
+        programs: this.programs,
+        savedOn: getTodayJalaliString()
       };
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
     } catch (e) {
@@ -1349,6 +1416,7 @@ class GymStore {
 
   logout() {
     this.currentUser = null;
+    this.previewUser = null;
     try {
       sessionStorage.removeItem(this.SESSION_KEY);
       localStorage.removeItem(this.SESSION_KEY);
@@ -1360,6 +1428,7 @@ class GymStore {
     const user = this.users.find(u => u.id === userId);
     if (user) {
       this.currentUser = user;
+      this.previewUser = null;
       this.notify();
     }
   }
@@ -1431,11 +1500,48 @@ class GymStore {
   getSessionsForDate(date: string, trainerId?: string, memberId?: string): DailySession[] {
     const today = getTodayJalaliString();
     return this.todaySessions.filter(s => {
-      const matchesDate = s.date === date || (date === today && s.date === 'Today');
+      const matchesDate = isSameDate(s.date, date, today);
       const matchesTrainer = !trainerId || s.trainerId === trainerId;
       const matchesMember = !memberId || s.memberId === memberId;
       return matchesDate && matchesTrainer && matchesMember;
     });
+  }
+
+  /** همهٔ جلسات (برنامه‌ریزی‌شده و تاریخچه) بدون تکرار — برای validator ظرفیت */
+  private allSessions(): DailySession[] {
+    const seen = new Set<string>();
+    return [...this.todaySessions, ...this.pastSessions].filter(s => {
+      if (seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }
+
+  /**
+   * B-04: validator واحد برای ایجاد، افزودن سریع، جابه‌جایی ساعت و انتقال مربی.
+   */
+  private checkBooking(
+    req: { date: string; time: string; memberId: string; trainerId: string; excludeSessionId?: string },
+    names: { trainerName: string; memberName: string },
+    options: { allowPastDate?: boolean } = {}
+  ) {
+    const today = getTodayJalaliString();
+    const date = canonicalDate(req.date, today);
+    return validateBooking(this.allSessions(), { ...req, date }, {
+      today,
+      gymDailyCapacity: this.getGymDailyCapacity(date),
+      trainerDailyCapacity: this.getTrainerDailyCapacity(date, req.trainerId),
+      gymHourlyCapacity: this.gym.hourlyCapacity,
+      trainerName: names.trainerName,
+      memberName: names.memberName,
+      allowPastDate: options.allowPastDate,
+    });
+  }
+
+  /** آیا تاریخ ذخیره‌شده امروز است؟ (مقدار قدیمی «Today» هم پشتیبانی می‌شود) */
+  private isTodayDate(date: string): boolean {
+    const today = getTodayJalaliString();
+    return isSameDate(date, today, today);
   }
 
   getSessionById(sessionId: string): DailySession | undefined {
@@ -1459,20 +1565,16 @@ class GymStore {
       };
     }
 
-    const capacity = this.getTrainerDailyCapacity(date, trainerId);
-    const currentSessions = this.getSessionsForDate(date, trainerId);
-    if (currentSessions.length >= capacity) {
-      return {
-        success: false,
-        messageKey: 'session.capacityFull',
-        params: { trainer: trainer.name, date, capacity },
-        message: `ظرفیت مربی ${trainer.name} برای تاریخ ${date} تکمیل است (حداکثر ${capacity} نفر).`,
-      };
-    }
+    // B-04: ظرفیت مربی، ظرفیت باشگاه، تداخل زمانی و نوبت تکراری — لغوشده‌ها ظرفیت نمی‌گیرند
+    const check = this.checkBooking(
+      { date, time, memberId, trainerId },
+      { trainerName: trainer.name, memberName: member.name }
+    );
+    if (!check.ok) return storeResult(false, check.messageKey!, check.params);
 
     const newSess: DailySession = {
       id: nextId('sess'),
-      date,
+      date: canonicalDate(date, getTodayJalaliString()),
       time,
       memberId: member.id,
       memberName: member.name,
@@ -1499,7 +1601,8 @@ class GymStore {
   // ==========================================
   completeMemberSession(
     sessionId: string,
-    exercises?: SessionExercise[]
+    exercises?: SessionExercise[],
+    today: string = getTodayJalaliString()
   ): StoreResult & { idempotent: boolean; remainingSessions: number } {
     const session = this.todaySessions.find(s => s.id === sessionId);
     if (!session) throw new Error('SESSION_NOT_FOUND');
@@ -1522,6 +1625,16 @@ class GymStore {
 
     const member = this.members.find(m => m.id === session.memberId);
     if (!member) throw new Error('MEMBER_NOT_FOUND');
+
+    // B-06: جلسهٔ لغوشده/غیبت، عضو بدون اعتبار یا بستهٔ منقضی نباید اعتبار و دستمزد را مصرف کند
+    const completable = checkCompletable(session, member, today);
+    if (!completable.ok) {
+      return {
+        ...storeResult(false, completable.messageKey!, completable.params),
+        idempotent: false,
+        remainingSessions: member.remainingSessions,
+      };
+    }
 
     const trainer = this.trainers.find(t => t.id === session.trainerId);
 
@@ -1569,12 +1682,32 @@ class GymStore {
   // ==========================================
   // FLEXIBLE DAILY REASSIGNMENT (Section 17 & 39)
   // ==========================================
-  reassignDailyTrainer(sessionId: string, newTrainerId: string) {
+  reassignDailyTrainer(sessionId: string, newTrainerId: string): StoreResult {
     const session = this.todaySessions.find(s => s.id === sessionId);
-    if (!session) return;
+    if (!session) return storeResult(false, 'session.notFound');
 
     const newTrainer = this.trainers.find(t => t.id === newTrainerId);
-    if (!newTrainer) return;
+    if (!newTrainer) return storeResult(false, 'session.memberOrTrainerNotFound');
+
+    // B-04: فقط نوبت پیش‌رو قابل انتقال است و مربی جدید باید ظرفیت و ساعت آزاد داشته باشد
+    if (session.status !== 'scheduled' && session.status !== 'in_progress') {
+      return storeResult(false, 'session.notReassignable');
+    }
+    if (session.trainerId === newTrainer.id) {
+      return storeResult(true, 'session.reassigned', { trainer: newTrainer.name });
+    }
+    const check = this.checkBooking(
+      {
+        date: session.date,
+        time: session.time,
+        memberId: session.memberId,
+        trainerId: newTrainer.id,
+        excludeSessionId: session.id,
+      },
+      { trainerName: newTrainer.name, memberName: session.memberName },
+      { allowPastDate: true }
+    );
+    if (!check.ok) return storeResult(false, check.messageKey!, check.params);
 
     const oldTrainerName = session.trainerName;
     session.trainerId = newTrainer.id;
@@ -1588,10 +1721,11 @@ class GymStore {
       entityId: sessionId,
       details: `جابجایی روزانه نوبت ${session.memberName}: از ${oldTrainerName} به ${newTrainer.name} (فقط برای امروز). مربی دائم عضو تغییری نکرد.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      user: 'مدیر باشگاه'
+      user: this.currentUser?.displayName || 'مدیر باشگاه'
     });
 
     this.notify();
+    return storeResult(true, 'session.reassigned', { trainer: newTrainer.name });
   }
 
   // Attendance check in (Scheduled -> In Progress)
@@ -1603,22 +1737,28 @@ class GymStore {
     }
   }
 
-  // Cancel session (Does NOT deduct session!)
-  cancelSession(sessionId: string, reason: string = 'درخواست لغو توسط کاربر') {
+  /**
+   * لغو نوبت توسط مربی یا مدیر باشگاه (Does NOT deduct session!).
+   * مهلت ۴ ساعته فقط برای درخواست خود ورزشکار است؛ کادر باشگاه می‌تواند در هر زمان لغو کند.
+   */
+  cancelSession(sessionId: string, reason: string = 'درخواست لغو توسط کاربر'): StoreResult {
     const session = this.todaySessions.find(s => s.id === sessionId);
-    if (session && session.status !== 'completed') {
-      session.status = 'cancelled';
-      this.auditLogs.unshift({
-        id: nextId('aud'),
-        action: 'SESSION_CANCELLED',
-        entityType: 'DailySession',
-        entityId: sessionId,
-        details: `لغو نوبت ${session.memberName} (${reason}). هیچ جلسه‌ای از اعتبار عضو کسر نشد.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        user: 'مدیر باشگاه'
-      });
-      this.notify();
-    }
+    if (!session) return storeResult(false, 'session.notFound');
+    if (session.status === 'completed') return storeResult(false, 'session.completedNotChangeable');
+    if (session.status === 'cancelled') return storeResult(false, 'session.alreadyCancelled');
+
+    session.status = 'cancelled';
+    this.auditLogs.unshift({
+      id: nextId('aud'),
+      action: 'SESSION_CANCELLED',
+      entityType: 'DailySession',
+      entityId: sessionId,
+      details: `لغو نوبت ${session.memberName} (${reason}). هیچ جلسه‌ای از اعتبار عضو کسر نشد.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      user: this.currentUser?.displayName || 'مدیر باشگاه'
+    });
+    this.notify();
+    return storeResult(true, 'session.cancelledByStaff');
   }
 
   /**
@@ -1658,12 +1798,12 @@ class GymStore {
         message: 'این نوبت لغو شده است.',
       };
     }
-    if (session.date !== 'Today') {
-      return {
-        success: false,
-        messageKey: 'session.futureReschedule',
-        message: 'تغییر ساعت نوبت‌های آینده از طریق مدیر باشگاه انجام می‌شود.',
-      };
+    // B-05: مقایسه با تاریخ واقعی امروز، نه مقدار ثابت «Today»
+    if (!this.isTodayDate(session.date)) {
+      const today = getTodayJalaliString();
+      return compareJalaliDates(session.date, today, today) < 0
+        ? storeResult(false, 'session.pastNotChangeable')
+        : storeResult(false, 'session.futureReschedule');
     }
 
     // بررسی مهلت ۴ ساعته
@@ -1675,22 +1815,18 @@ class GymStore {
       };
     }
 
-    // ساعت جدید نباید با سانس دیگری از همان مربی تداخل داشته باشد
-    const conflict = this.todaySessions.find(
-      s =>
-        s.id !== sessionId &&
-        s.trainerId === session.trainerId &&
-        s.status !== 'cancelled' &&
-        s.time === newTime
+    // B-04: ساعت جدید — تداخل مربی/عضو و ظرفیت هم‌زمان باشگاه، فقط در همان تاریخ
+    const check = this.checkBooking(
+      {
+        date: session.date,
+        time: newTime,
+        memberId: session.memberId,
+        trainerId: session.trainerId,
+        excludeSessionId: session.id,
+      },
+      { trainerName: session.trainerName, memberName: session.memberName }
     );
-    if (conflict) {
-      return {
-        success: false,
-        messageKey: 'session.timeTaken',
-        params: { time: newTime, trainer: session.trainerName, member: conflict.memberName },
-        message: `ساعت ${newTime} برای ${session.trainerName} قبلاً به ${conflict.memberName} اختصاص داده شده است.`,
-      };
-    }
+    if (!check.ok) return storeResult(false, check.messageKey!, check.params);
 
     const oldTime = session.time;
     session.time = newTime;
@@ -1745,12 +1881,11 @@ class GymStore {
         message: 'این نوبت قبلاً لغو شده است.',
       };
     }
-    if (session.date !== 'Today') {
-      return {
-        success: false,
-        messageKey: 'session.futureCancel',
-        message: 'لغو نوبت‌های آینده از طریق مدیر باشگاه انجام می‌شود.',
-      };
+    if (!this.isTodayDate(session.date)) {
+      const today = getTodayJalaliString();
+      return compareJalaliDates(session.date, today, today) < 0
+        ? storeResult(false, 'session.pastNotChangeable')
+        : storeResult(false, 'session.futureCancel');
     }
 
     if (isWithinCutoff(session.time, now, RESCHEDULE_CUTOFF_HOURS)) {
@@ -1800,39 +1935,17 @@ class GymStore {
       };
     }
 
-    // ظرفیت روزانه مربی
-    const capacity = this.getTrainerDailyCapacity('Today', trainerId);
-    const currentCount = this.getSessionsForDate('Today', trainerId).filter(
-      s => s.status !== 'cancelled'
-    ).length;
-    if (currentCount >= capacity) {
-      return {
-        success: false,
-        messageKey: 'session.capacityFull',
-        params: { trainer: trainer.name, date: 'Today', capacity },
-        message: `ظرفیت امروز ${trainer.name} تکمیل است (حداکثر ${capacity} نوبت).`,
-      };
-    }
-
-    // نوبت تکراری برای همان ورزشکار در همان ساعت
-    const duplicate = this.todaySessions.find(
-      s =>
-        s.memberId === memberId &&
-        s.time === time &&
-        s.status !== 'cancelled'
+    // B-04: همان validator مسیر تقویم — ظرفیت مربی و باشگاه، تداخل زمانی، نوبت تکراری
+    const today = getTodayJalaliString();
+    const check = this.checkBooking(
+      { date: today, time, memberId, trainerId },
+      { trainerName: trainer.name, memberName: member.name }
     );
-    if (duplicate) {
-      return {
-        success: false,
-        messageKey: 'session.duplicateSlot',
-        params: { member: member.name, time },
-        message: `برای ${member.name} در ساعت ${time} نوبتی ثبت شده است.`,
-      };
-    }
+    if (!check.ok) return storeResult(false, check.messageKey!, check.params);
 
     const newSession: DailySession = {
       id: nextId('sess'),
-      date: 'Today',
+      date: today,
       time,
       memberId: member.id,
       memberName: member.name,
@@ -1927,6 +2040,72 @@ class GymStore {
 
     this.notify();
     return newMember;
+  }
+
+  /**
+   * تغییر مربی دائم یک ورزشکار (B-13).
+   * نوبت‌های قبلی دست نمی‌خورند؛ فقط مربی پیش‌فرض نوبت‌های بعدی عوض می‌شود.
+   */
+  changeMemberDefaultTrainer(memberId: string, trainerId: string): StoreResult {
+    const member = this.members.find(m => m.id === memberId);
+    if (!member) return storeResult(false, 'member.notFound');
+    const trainer = this.trainers.find(t => t.id === trainerId);
+    if (!trainer) return storeResult(false, 'session.memberOrTrainerNotFound');
+    if (member.defaultTrainerId === trainer.id) {
+      return storeResult(true, 'member.trainerChanged', { trainer: trainer.name });
+    }
+
+    const oldTrainerName = member.defaultTrainerName;
+    member.defaultTrainerId = trainer.id;
+    member.defaultTrainerName = trainer.name;
+
+    this.auditLogs.unshift({
+      id: nextId('aud'),
+      action: 'DEFAULT_TRAINER_CHANGED',
+      entityType: 'Member',
+      entityId: member.id,
+      details: `تغییر مربی دائم ${member.name}: از ${oldTrainerName} به ${trainer.name}.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      user: this.currentUser?.displayName || 'مدیر باشگاه'
+    });
+
+    this.notify();
+    return storeResult(true, 'member.trainerChanged', { trainer: trainer.name });
+  }
+
+  /**
+   * ذخیرهٔ تنظیمات عملیاتی باشگاه (B-13).
+   * ظرفیت روزانه و هم‌زمان مستقیماً در validator رزرو مصرف می‌شوند.
+   */
+  updateGymSettings(
+    patch: Partial<Pick<Gym, 'capacity' | 'hourlyCapacity' | 'noShowDeductsSession' | 'name'>>
+  ): StoreResult {
+    const isValidCap = (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v >= 1;
+    if (patch.capacity !== undefined && !isValidCap(patch.capacity)) {
+      return storeResult(false, 'gym.invalidCapacity');
+    }
+    if (patch.hourlyCapacity !== undefined && !isValidCap(patch.hourlyCapacity)) {
+      return storeResult(false, 'gym.invalidCapacity');
+    }
+
+    const changes = Object.entries(patch)
+      .filter(([key, value]) => value !== undefined && (this.gym as any)[key] !== value)
+      .map(([key, value]) => `${key}: ${String((this.gym as any)[key])} → ${String(value)}`);
+
+    this.gym = { ...this.gym, ...patch };
+    if (changes.length > 0) {
+      this.auditLogs.unshift({
+        id: nextId('aud'),
+        action: 'GYM_SETTINGS_UPDATED',
+        entityType: 'Gym',
+        entityId: this.gym.id,
+        details: `به‌روزرسانی تنظیمات باشگاه — ${changes.join('، ')}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        user: this.currentUser?.displayName || 'مدیر باشگاه'
+      });
+    }
+    this.notify();
+    return storeResult(true, 'gym.settingsSaved');
   }
 
   // Record Member Payment (with validation)
@@ -2338,15 +2517,36 @@ class GymStore {
   }
 
   // ==========================================
-  // SUPABASE TWO-WAY CLOUD DATA SYNC
+  // SUPABASE CLOUD SYNC (READ-ONLY, PARTIAL)
   // ==========================================
+  /**
+   * B-03: این مسیر فقط جداول کاتالوگ، باشگاه، مربیان و اعضا را *می‌خواند*.
+   * جلسات، حضور، امور مالی، برنامه‌ها و کاربران فقط در مرورگر ذخیره می‌شوند.
+   * بنابراین «connected» فقط یعنی خواندن موفق همین جداول، نه همگام‌سازی کامل.
+   */
   isSupabaseConnected = false;
+  /** جداولی که آخرین بار با موفقیت از Supabase خوانده شدند */
+  supabaseSyncedTables: string[] = [];
+  /** وضعیت همگام‌سازی برای نمایش صادقانه در رابط کاربری */
+  supabaseSyncStatus: 'off' | 'partial' | 'error' = 'off';
+  /** داده‌هایی که هیچ مسیر خواندن/نوشتن ابری ندارند */
+  static readonly LOCAL_ONLY_DATA = [
+    'sessions',
+    'attendance',
+    'payments',
+    'payouts',
+    'audit_logs',
+    'programs',
+    'users',
+  ] as const;
 
   async syncWithSupabase() {
     if (!isLiveSupabase || !supabase) return;
+    const synced: string[] = [];
     try {
       // 1. Fetch exercises from Supabase
       const { data: exData, error: exErr } = await supabase.from('exercises').select('*');
+      if (!exErr) synced.push('exercises');
       if (!exErr && exData && exData.length > 0) {
         this.exercises = exData.map(row => ({
           id: row.id,
@@ -2369,10 +2569,12 @@ class GymStore {
         }));
       }
 
-      // 2. Fetch gym settings
+      // 2. Fetch gym settings (فیلدهای محلی مانند hourlyCapacity حفظ می‌شوند)
       const { data: gymData, error: gymErr } = await supabase.from('gyms').select('*').limit(1).maybeSingle();
+      if (!gymErr) synced.push('gyms');
       if (!gymErr && gymData) {
         this.gym = {
+          ...this.gym,
           id: gymData.id,
           name: gymData.name,
           capacity: gymData.capacity,
@@ -2383,6 +2585,7 @@ class GymStore {
 
       // 3. Fetch trainers
       const { data: trData, error: trErr } = await supabase.from('trainers').select('*');
+      if (!trErr) synced.push('trainers');
       if (!trErr && trData && trData.length > 0) {
         trData.forEach(row => {
           const existing = this.trainers.find(t => t.id === row.id);
@@ -2398,6 +2601,7 @@ class GymStore {
 
       // 4. Fetch members
       const { data: memData, error: memErr } = await supabase.from('members').select('*');
+      if (!memErr) synced.push('members');
       if (!memErr && memData && memData.length > 0) {
         memData.forEach(row => {
           const existing = this.members.find(m => m.id === row.id);
@@ -2411,12 +2615,14 @@ class GymStore {
           }
         });
       }
-
-      this.isSupabaseConnected = true;
-      this.notify();
     } catch (e) {
       console.warn('Supabase sync warning:', e);
     }
+
+    this.supabaseSyncedTables = synced;
+    this.isSupabaseConnected = synced.length > 0;
+    this.supabaseSyncStatus = synced.length > 0 ? 'partial' : 'error';
+    this.notify();
   }
 }
 

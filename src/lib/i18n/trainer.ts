@@ -15,6 +15,11 @@ export const trainerDict = {
       titleCalendar: 'My Monthly Calendar',
     },
     today: {
+      cancelSlot: 'Cancel',
+      cancelTitle: 'Cancel this slot?',
+      cancelMessage: "{name}'s slot at {time} will be cancelled. No session credit is deducted.",
+      cancelConfirm: 'Cancel slot',
+      cancelKeep: 'Keep',
       capacityTitle: "My capacity today",
       completed: 'Completed',
       inGym: 'In gym',
@@ -169,6 +174,11 @@ export const trainerDict = {
       titleCalendar: 'تقویم ماهانه من',
     },
     today: {
+      cancelSlot: 'لغو',
+      cancelTitle: 'این نوبت لغو شود؟',
+      cancelMessage: 'نوبت {name} در ساعت {time} لغو می‌شود. اعتبار جلسه کسر نمی‌شود.',
+      cancelConfirm: 'لغو نوبت',
+      cancelKeep: 'منصرف شدم',
       capacityTitle: 'ظرفیت امروز من',
       completed: 'تکمیل',
       inGym: 'در سالن',

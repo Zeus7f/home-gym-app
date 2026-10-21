@@ -7,6 +7,8 @@ export interface Gym {
   capacity: number; // Daily maximum gym capacity (e.g. 30 members)
   currency: string; // 'تومان' or 'USD'
   noShowDeductsSession: boolean;
+  /** حداکثر جلسهٔ هم‌زمان در کل باشگاه (در هر سانس) — توسط validator رزرو اعمال می‌شود */
+  hourlyCapacity?: number;
 }
 
 export interface Member {
@@ -65,7 +67,7 @@ export type SessionStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancell
 
 export interface DailySession {
   id: string;
-  date: string; // YYYY-MM-DD or 'Today'
+  date: string; // Canonical Jalali 'YYYY/MM/DD' (legacy persisted data may still contain 'Today' until migrated)
   time: string; // e.g. "09:00"
   memberId: string;
   memberName: string;

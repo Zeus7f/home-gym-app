@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Bell,
@@ -13,6 +13,7 @@ import { getNotifications, type AppNotification } from '../../api/notifications'
 import { useI18n } from '../LanguageProvider';
 import { subscribeToStore } from '../../api/auth';
 import { num } from '../../lib/format';
+import { useDialogA11y } from '../../lib/useDialogA11y';
 
 /**
  * NotificationBell — دکمه زنگ + کشوی اعلان‌ها.
@@ -44,6 +45,8 @@ export function NotificationBell({
 }: NotificationBellProps) {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(drawerRef, open, () => setOpen(false));
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   const load = () => {
@@ -98,6 +101,7 @@ export function NotificationBell({
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs"
           >
             <motion.div
+              ref={drawerRef}
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
@@ -110,7 +114,7 @@ export function NotificationBell({
               className="absolute inset-y-0 end-0 w-full max-w-sm border-s flex flex-col shadow-2xl"
               role="dialog"
               aria-modal="true"
-              aria-label="اعلان‌ها"
+              aria-label={t.notifications.title}
             >
               {/* سربرگ کشو */}
               <div
@@ -138,7 +142,7 @@ export function NotificationBell({
                   onClick={() => setOpen(false)}
                   className="h-9 w-9 rounded-lg grid place-items-center cursor-pointer"
                   style={{ color: 'var(--c-text-muted)' }}
-                  aria-label="بستن اعلان‌ها"
+                  aria-label={t.notifications.close}
                 >
                   <X size={18} />
                 </button>

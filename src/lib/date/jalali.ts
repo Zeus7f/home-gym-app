@@ -188,6 +188,19 @@ export function getTodayJalaliString(): string {
   return formatJalali(getTodayJalali());
 }
 
+/**
+ * تاریخ ذخیره‌شده به شکل canonical «YYYY/MM/DD».
+ * مقدار قدیمی «Today» (داده‌های ذخیره‌شدهٔ پیش از B-05) به تاریخ امروز تبدیل می‌شود.
+ */
+export function toCanonicalJalali(dateStr: string): string {
+  return dateStr === 'Today' ? getTodayJalaliString() : dateStr;
+}
+
+/** آیا تاریخ ذخیره‌شده، امروز است؟ */
+export function isJalaliToday(dateStr: string): boolean {
+  return toCanonicalJalali(dateStr) === getTodayJalaliString();
+}
+
 // Format to human-readable string: "شنبه ۱ مهر ۱۴۰۳"
 export function formatJalaliHuman(j: JalaliDate): string {
   const dayOfWeek = PERSIAN_WEEK_DAYS[getJalaliDayOfWeek(j.jy, j.jm, j.jd)];
@@ -242,7 +255,7 @@ export const PERSIAN_WEEK_DAYS_EN = [
 
 /**
  * قالب‌بندی تاریخ جلالی برای نمایش در رابط کاربری.
- * - 'Today' → «امروز»
+ * - امروز (یا مقدار قدیمی 'Today') → «امروز»
  * - 'YYYY/MM/DD' → «شنبه ۱۶ مهر»
  *
  * @example
@@ -250,7 +263,7 @@ export const PERSIAN_WEEK_DAYS_EN = [
  */
 export function formatJalaliDisplay(dateStr: string): string {
   if (!dateStr) return '';
-  if (dateStr === 'Today') return 'امروز';
+  if (isJalaliToday(dateStr)) return 'امروز';
 
   const parsed = parseJalali(dateStr);
   if (!parsed) return dateStr;
@@ -268,7 +281,7 @@ export function formatJalaliDisplay(dateStr: string): string {
  */
 export function formatJalaliDisplayEn(dateStr: string): string {
   if (!dateStr) return '';
-  if (dateStr === 'Today') return 'Today';
+  if (isJalaliToday(dateStr)) return 'Today';
 
   const parsed = parseJalali(dateStr);
   if (!parsed) return dateStr;

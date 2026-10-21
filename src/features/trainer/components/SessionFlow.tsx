@@ -91,6 +91,12 @@ export function SessionFlow({
 
       if (sessionId) {
         const res = await completeSession(sessionId, recordedExercises);
+        // B-06: جلسهٔ نامعتبر یا عضو بدون اعتبار — پیش‌نویس حفظ می‌شود و خطا نمایش داده می‌شود
+        if (!res.success) {
+          setErrorMessage(res.message);
+          setShowErrorModal(true);
+          return;
+        }
         setCompletionResult({
           remainingSessions: res.remainingSessions,
           message: res.message,

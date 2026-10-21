@@ -95,7 +95,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
                     className="font-bold text-[14px]"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    displayName(m.name, isFa)
+                    {displayName(m.name, isFa)}
                   </div>
                   <div
                     style={{ backgroundColor: 'var(--c-surface-2)' }}
@@ -166,7 +166,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
                 className="font-bold text-[14px] truncate"
                 style={{ color: 'var(--c-deep)' }}
               >
-                displayName(p.memberName, isFa)
+                {displayName(p.memberName, isFa)}
               </div>
               <div
                 className="text-[13px] truncate"

@@ -3,7 +3,7 @@ import { Avatar } from '../../../components/ui/Avatar';
 import { Btn } from '../../../components/ui/Btn';
 import { num, short, toman } from '../../../lib/format';
 import { useI18n } from '../../../components/LanguageProvider';
-import { displayName } from '../../../lib/displayName';
+import { displayName, localizedLabel } from '../../../lib/displayName';
 import { getTrainers, recordTrainerPayout } from '../../../api/trainers';
 import { getTodaySessions } from '../../../api/sessions';
 import { Trainer, DailySession } from '../../../lib/domain/gymManagement';
@@ -81,13 +81,13 @@ export function Trainers({ isMobile = false }: TrainersProps) {
                     className="text-[17px] font-bold truncate"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    displayName(trainer.name, isFa)
+                    {displayName(trainer.name, isFa)}
                   </div>
                   <div
                     className="text-[13px] truncate"
                     style={{ color: 'var(--c-text-muted)' }}
                   >
-                    {trainer.specialty}
+                    {localizedLabel(trainer.specialty, isFa)}
                   </div>
                 </div>
               </div>

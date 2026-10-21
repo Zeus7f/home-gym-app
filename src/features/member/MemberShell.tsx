@@ -5,6 +5,7 @@ import { useI18n } from '../../components/LanguageProvider';
 import { displayName } from '../../lib/displayName';
 import { formatJalaliHumanTodayLocalized } from '../../lib/date/jalali';
 import { NotificationBell } from '../../components/ui/NotificationBell';
+import { resolveTab } from '../../lib/navigation';
 
 // صفحات اپ ورزشکار
 import { Home } from './pages/Home';
@@ -28,6 +29,15 @@ const TABS: MemberTabItem[] = [
   { key: 'hist', icon: HistoryIcon, labelKey: 'history' },
 ];
 
+const MEMBER_TAB_KEYS = TABS.map(tab => tab.key);
+const MEMBER_TAB_ALIASES: Partial<Record<string, MemberTabKey>> = {
+  sessions: 'ses',
+  exercises: 'ex',
+  history: 'hist',
+};
+const toMemberTab = (raw: string | null | undefined) =>
+  resolveTab(raw, MEMBER_TAB_KEYS, 'home', MEMBER_TAB_ALIASES);
+
 /** نگاشت کلید تب به عنوان صفحه */
 const TAB_TITLES = {
   home: 'titleHome',
@@ -37,8 +47,8 @@ const TAB_TITLES = {
 } as const;
 
 export function MemberShell() {
-  const queryTab = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab') as MemberTabKey;
-  const [activeTab, setActiveTab] = useState<MemberTabKey>(queryTab || 'home');
+  const queryTab = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab');
+  const [activeTab, setActiveTab] = useState<MemberTabKey>(toMemberTab(queryTab));
   const { t, isFa } = useI18n();
   const memberName = displayName(getCurrentUser()?.displayName || 'Niloofar Bahrami', isFa);
   const todayShamsi = formatJalaliHumanTodayLocalized(isFa);
@@ -74,13 +84,13 @@ export function MemberShell() {
             </div>
           </div>
 
-          <NotificationBell onNavigateTab={t => setActiveTab(t as MemberTabKey)} />
+          <NotificationBell onNavigateTab={raw => setActiveTab(toMemberTab(raw))} />
         </header>
       )}
 
       {/* محتوای فعال صفحه */}
       <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 pb-24 thin-scroll">
-        {activeTab === 'home' && <Home onNavigateTab={t => setActiveTab(t as MemberTabKey)} />}
+        {activeTab === 'home' && <Home onNavigateTab={raw => setActiveTab(toMemberTab(raw))} />}
         {activeTab === 'ses' && <Sessions />}
         {activeTab === 'ex' && <Exercises />}
         {activeTab === 'hist' && <History />}

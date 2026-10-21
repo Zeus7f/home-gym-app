@@ -6,7 +6,7 @@ import { exerciseName } from '../../../lib/exerciseLabels';
 import { getCurrentUser, subscribeToStore } from '../../../api/auth';
 import { getTrainer } from '../../../api/trainers';
 import { getTodaySessions, getTrainerPastSessions } from '../../../api/sessions';
-import { formatJalaliLocalized, getTodayJalaliKey } from '../../../lib/date/jalali';
+import { formatJalaliLocalized, getTodayJalaliKey, toCanonicalJalali, isJalaliToday } from '../../../lib/date/jalali';
 import { formatDate } from '../../../lib/format';
 import type { DailySession } from '../../../lib/domain/gymManagement';
 
@@ -34,7 +34,8 @@ function groupSessionsByDate(
   const groups = new Map<string, HistoryItem[]>();
 
   for (const session of sessions) {
-    const items = groups.get(session.date) || [];
+    const dateKey = toCanonicalJalali(session.date);
+    const items = groups.get(dateKey) || [];
 
     const exerciseSummary =
       session.exercises && session.exercises.length > 0
@@ -56,17 +57,17 @@ function groupSessionsByDate(
         : '—',
     });
 
-    groups.set(session.date, items);
+    groups.set(dateKey, items);
   }
 
   return Array.from(groups.entries())
     .sort((a, b) => {
-      const keyA = a[0] === 'Today' ? todayKey : Number(a[0].replace(/\//g, '')) || 0;
-      const keyB = b[0] === 'Today' ? todayKey : Number(b[0].replace(/\//g, '')) || 0;
+      const keyA = Number(a[0].replace(/\//g, '')) || todayKey;
+      const keyB = Number(b[0].replace(/\//g, '')) || todayKey;
       return keyB - keyA;
     })
     .map(([date, items]) => ({
-      dayTitle: date === 'Today' ? t.actions.today : formatJalaliLocalized(date, isFa),
+      dayTitle: isJalaliToday(date) ? t.actions.today : formatJalaliLocalized(date, isFa),
       items,
     }));
 }
@@ -98,7 +99,7 @@ export function History() {
   }, [currentTrainerId]);
 
   const todayCompleted = sessions.filter(
-    s => s.trainerId === currentTrainerId && s.status === 'completed' && s.date === 'Today'
+    s => s.trainerId === currentTrainerId && s.status === 'completed' && isJalaliToday(s.date)
   );
 
   const completedCount = trainer?.completedSessions || 0;
@@ -161,7 +162,7 @@ export function History() {
               className="py-3 flex items-center justify-between gap-3 text-sm"
             >
               <span className="font-semibold" style={{ color: 'var(--c-deep)' }}>
-                displayName(s.memberName, isFa)
+                {displayName(s.memberName, isFa)}
               </span>
               <span className="text-[12px] tnum" style={{ color: 'var(--c-text-muted)' }}>
                 {s.completedAt ? `تکمیل در ${s.completedAt}` : formatDate(s.time)}

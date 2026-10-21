@@ -12,6 +12,7 @@ import {
 } from '../lib/domain/notifications';
 import { getTodayJalaliKey } from '../lib/date/jalali';
 import { translations, type Language } from '../lib/i18n';
+import { displayName } from '../lib/displayName';
 
 /**
  * اعلان‌های نقش‌محور برای کاربر واردشده.
@@ -21,7 +22,7 @@ import { translations, type Language } from '../lib/i18n';
  */
 export async function getNotifications(lang: Language = 'fa'): Promise<AppNotification[]> {
   return buildNotifications({
-    currentUser: gymStore.currentUser,
+    currentUser: gymStore.actingUser,
     members: gymStore.members,
     trainers: gymStore.trainers,
     todaySessions: gymStore.todaySessions,
@@ -29,6 +30,8 @@ export async function getNotifications(lang: Language = 'fa'): Promise<AppNotifi
     programs: gymStore.programs,
     todayKey: getTodayJalaliKey(),
     labels: translations[lang].notifications as NotificationLabels,
+    lang,
+    nameOf: raw => displayName(raw, lang === 'fa'),
   });
 }
 

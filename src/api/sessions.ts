@@ -42,7 +42,7 @@ export async function scheduleSession(
   trainerId: string,
   exercises?: SessionExercise[],
 ): Promise<{ success: boolean; message: string; session?: DailySession }> {
-  return gymStore.scheduleSessionOnDate(date, time, memberId, trainerId, exercises);
+  return localizeResult(gymStore.scheduleSessionOnDate(date, time, memberId, trainerId, exercises));
 }
 
 /**
@@ -53,6 +53,7 @@ export async function completeSession(
   sessionId: string,
   exercises?: SessionExercise[],
 ): Promise<{
+  success: boolean;
   idempotent: boolean;
   remainingSessions: number;
   message: string;
@@ -70,9 +71,15 @@ export async function checkInSession(sessionId: string): Promise<void> {
   gymStore.checkInSession(sessionId);
 }
 
-/** Cancel a session (does NOT deduct session credit). */
-export async function cancelSession(sessionId: string, reason?: string): Promise<void> {
-  gymStore.cancelSession(sessionId, reason);
+/**
+ * لغو نوبت توسط مربی یا مدیر (does NOT deduct session credit).
+ * محدودیت ۴ ساعته فقط برای درخواست خود ورزشکار است.
+ */
+export async function cancelSession(
+  sessionId: string,
+  reason?: string
+): Promise<{ success: boolean; message: string }> {
+  return localizeResult(gymStore.cancelSession(sessionId, reason));
 }
 
 /**
@@ -107,12 +114,15 @@ export async function addSessionToToday(
   return localizeResult(gymStore.addSessionToToday(memberId, trainerId, time));
 }
 
-/** Reassign today's session to a different trainer (daily override). */
+/**
+ * Reassign a session to a different trainer (daily override).
+ * ظرفیت و تداخل زمانی مربی جدید بررسی می‌شود.
+ */
 export async function reassignDailyTrainer(
   sessionId: string,
   newTrainerId: string,
-): Promise<void> {
-  gymStore.reassignDailyTrainer(sessionId, newTrainerId);
+): Promise<{ success: boolean; message: string }> {
+  return localizeResult(gymStore.reassignDailyTrainer(sessionId, newTrainerId));
 }
 
 /** Get configured gym capacity for a date. */

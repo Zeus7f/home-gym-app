@@ -6,7 +6,7 @@ import { Meter } from '../../../components/ui/Meter';
 import { MemberData } from '../components/MemberSheet';
 import { num, short, toman } from '../../../lib/format';
 import { useI18n } from '../../../components/LanguageProvider';
-import { displayName } from '../../../lib/displayName';
+import { displayName, localizedLabel } from '../../../lib/displayName';
 import { getMembers } from '../../../api/members';
 import { Member } from '../../../lib/domain/gymManagement';
 
@@ -115,13 +115,13 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                     className="font-bold text-[15px]"
                     style={{ color: 'var(--c-deep)' }}
                   >
-                    displayName(m.name, isFa)
+                    {displayName(m.name, isFa)}
                   </div>
                   <div
                     className="text-[13px] truncate"
                     style={{ color: 'var(--c-text-muted)' }}
                   >
-                    {displayName(m.defaultTrainerName, isFa)} · {m.packageName}
+                    {displayName(m.defaultTrainerName, isFa)} · {localizedLabel(m.packageName, isFa)}
                   </div>
                 </div>
                 <div
@@ -215,7 +215,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                           className="font-bold text-[15px]"
                           style={{ color: 'var(--c-deep)' }}
                         >
-                          displayName(m.name, isFa)
+                          {displayName(m.name, isFa)}
                         </div>
                         <div
                           className="text-[13px] tnum"

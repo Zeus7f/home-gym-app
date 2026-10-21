@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useDialogA11y } from '../lib/useDialogA11y';
+import { num } from '../lib/format';
 import { useI18n } from './LanguageProvider';
 import { translations, Language } from '../lib/i18n';
 import { Compass, ArrowRight, ArrowLeft, CheckCircle2, Shield, LayoutDashboard, Activity, User, Sparkles, X, ExternalLink } from 'lucide-react';
@@ -11,6 +13,9 @@ interface UserJourneyGuideProps {
 
 export function UserJourneyGuide({ lang, onClose, onSelectRole }: UserJourneyGuideProps) {
   const [currentStep, setCurrentStep] = useState(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // B-12: نقش dialog، فوکوس اولیه، focus trap و بستن با Escape
+  useDialogA11y(dialogRef, true, onClose);
   const t = translations[lang].userJourney;
   const step = t.steps[currentStep];
 
@@ -29,8 +34,19 @@ export function UserJourneyGuide({ lang, onClose, onSelectRole }: UserJourneyGui
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-[#11151A] rounded-3xl max-w-xl w-full p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-6">
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="journey-guide-title"
+        aria-describedby="journey-guide-subtitle"
+        className="bg-white dark:bg-[#11151A] rounded-3xl max-w-xl w-full p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
           <div className="flex items-center gap-3">
@@ -38,11 +54,16 @@ export function UserJourneyGuide({ lang, onClose, onSelectRole }: UserJourneyGui
               <Compass className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">{t.title}</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{t.subtitle}</p>
+              <h2 id="journey-guide-title" className="text-base font-bold text-slate-900 dark:text-white">{t.title}</h2>
+              <p id="journey-guide-subtitle" className="text-xs text-slate-500 dark:text-slate-400">{t.subtitle}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t.close}
+            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -52,7 +73,10 @@ export function UserJourneyGuide({ lang, onClose, onSelectRole }: UserJourneyGui
           {t.steps.map((s, idx) => (
             <button
               key={idx}
+              type="button"
               onClick={() => setCurrentStep(idx)}
+              aria-label={`${t.stepBadge} ${idx + 1}`}
+              aria-current={idx === currentStep ? 'step' : undefined}
               className={`flex-1 h-2 rounded-full transition-all ${
                 idx === currentStep
                   ? 'bg-teal-500'
@@ -68,7 +92,7 @@ export function UserJourneyGuide({ lang, onClose, onSelectRole }: UserJourneyGui
         <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300">
-              {t.stepBadge} {currentStep + 1} / {t.steps.length}
+              {t.stepBadge} {num(currentStep + 1)} / {num(t.steps.length)}
             </span>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
               {roleIcons[step.role]}

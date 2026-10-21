@@ -234,7 +234,7 @@ export function Reports({ isMobile = false }: ReportsProps) {
                       className="font-bold text-[15px]"
                       style={{ color: 'var(--c-deep)' }}
                     >
-                      displayName(tr.name, isFa)
+                      {displayName(tr.name, isFa)}
                     </span>
                     <span
                       style={{ color: 'var(--c-brass)' }}
