@@ -117,7 +117,7 @@ export function MonthlyCalendar({
           <CalendarIcon size={16} style={{ color: 'var(--c-steel)' }} />
           <h3
             className="text-[15px] font-bold truncate"
-            style={{ color: 'var(--c-deep)' }}
+            style={{ color: 'var(--c-heading)' }}
           >
             {monthNames[viewMonth - 1]} {num(viewYear)}
           </h3>

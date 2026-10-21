@@ -42,7 +42,8 @@ export type NotificationKind =
   | 'payment_due'
   | 'trainer_payout_due'
   | 'no_show'
-  | 'package_exhausted';
+  | 'package_exhausted'
+  | 'package_pending';
 
 export interface AppNotification {
   id: string;
@@ -78,6 +79,7 @@ export interface NotificationLabels {
   paymentDue: { title: string; body: string };
   trainerPayoutDue: { title: string; body: string };
   noShow: { title: string; body: string };
+  ownerPendingPackage: { title: string; body: string };
 }
 
 export interface NotificationInput {
@@ -157,7 +159,8 @@ export function buildNotifications({
 
   if (currentUser.role === 'member') {
     const member = members.find(m => m.id === currentUser.entityId);
-    if (member) {
+    // ورزشکارِ منتظر بسته هنوز اعتباری ندارد؛ بنر صفحه کافی است
+    if (member && !member.packagePending) {
       // اعتبار رو به اتمام
       const status = packageStatus(member, todayKey);
       if (status === 'exhausted') {
@@ -292,7 +295,7 @@ export function buildNotifications({
 
     // ورزشکاران با اعتبار رو به اتمام
     const myMembers = members.filter(m => m.defaultTrainerId === currentUser.entityId);
-    const lowMembers = myMembers.filter(m => packageStatus(m, todayKey) !== 'healthy');
+    const lowMembers = myMembers.filter(m => !m.packagePending && packageStatus(m, todayKey) !== 'healthy');
     if (lowMembers.length > 0) {
       add({
         kind: 'low_balance',
@@ -342,8 +345,20 @@ export function buildNotifications({
   }
 
   if (currentUser.role === 'owner') {
+    // ورزشکارانی که مربی ساخته و منتظر تعیین بسته‌اند
+    const pending = members.filter(m => m.packagePending);
+    if (pending.length > 0) {
+      add({
+        kind: 'package_pending',
+        severity: 'critical',
+        title: labels.ownerPendingPackage.title,
+        body: labels.ownerPendingPackage.body.replace('{members}', pending.map(m => nameOf(m.name)).join(sep)),
+        targetTab: NOTIFICATION_TABS.owner.members,
+      });
+    }
+
     // اعضای با اعتبار رو به اتمام
-    const lowMembers = members.filter(m => packageStatus(m, todayKey) !== 'healthy');
+    const lowMembers = members.filter(m => !m.packagePending && packageStatus(m, todayKey) !== 'healthy');
     if (lowMembers.length > 0) {
       add({
         kind: 'low_balance',

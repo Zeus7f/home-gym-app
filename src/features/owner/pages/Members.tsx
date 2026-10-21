@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ChevronLeft } from 'lucide-react';
+import { Search, ChevronLeft, Plus } from 'lucide-react';
 import { Chips } from '../../../components/ui/Chips';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Meter } from '../../../components/ui/Meter';
@@ -9,6 +9,11 @@ import { useI18n } from '../../../components/LanguageProvider';
 import { displayName, localizedLabel } from '../../../lib/displayName';
 import { getMembers } from '../../../api/members';
 import { Member } from '../../../lib/domain/gymManagement';
+import { subscribeToStore } from '../../../api/auth';
+import { Btn } from '../../../components/ui/Btn';
+import { StatusPill } from '../../../components/ui/Page';
+import { Toast } from '../../../components/ui/Toast';
+import { NewMemberSheet } from '../../accounts/AccountForms';
 
 export interface MembersProps {
   onOpenMember?: (member: MemberData) => void;
@@ -17,7 +22,9 @@ export interface MembersProps {
 
 export function Members({ onOpenMember, isMobile = false }: MembersProps) {
   const { t, isFa } = useI18n();
-  const [filter, setFilter] = useState<'all' | 'low' | 'debt' | 'exp'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'low' | 'debt' | 'exp'>('all');
+  const [creating, setCreating] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +41,10 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
       }
     }
     load();
+    return subscribeToStore(load);
   }, []);
+
+  const pendingCount = members.filter(m => m.packagePending).length;
 
   const filtered = members.filter(m => {
     // جستجو بر اساس نام یا شماره تماس
@@ -45,6 +55,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
       if (!matchName && !matchPhone) return false;
     }
 
+    if (filter === 'pending') return !!m.packagePending;
     if (filter === 'low') return m.status === 'active' && m.remainingSessions <= 2;
     if (filter === 'debt') return m.outstandingBalance > 0;
     if (filter === 'exp') return m.status === 'expired';
@@ -53,16 +64,14 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
 
   return (
     <div className="space-y-4">
-      {/* ردیف جستجو و فیلترها */}
-      <div
-        className={`flex ${isMobile ? 'flex-col' : 'items-center justify-between'} gap-3`}
-      >
+      {/* ردیف جستجو، فیلترها و افزودن ورزشکار */}
+      <div className="flex flex-wrap items-center gap-3 min-w-0">
         <div
           style={{
             backgroundColor: 'var(--c-surface-1)',
             borderColor: 'var(--c-border)',
           }}
-          className={`flex items-center gap-2 h-11 px-3 rounded-xl border text-slate-400 ${isMobile ? 'w-full' : 'w-80'}`}
+          className="flex items-center gap-2 h-11 px-3 rounded-xl border text-slate-400 flex-1 min-w-0 basis-60 sm:max-w-80"
         >
           <Search size={18} className="shrink-0" />
           <input
@@ -74,11 +83,19 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
           />
         </div>
 
-        <Chips<'all' | 'low' | 'debt' | 'exp'>
+        <Btn v="primary" className="h-11 shrink-0" onClick={() => setCreating(true)}>
+          <Plus size={18} /> {t.accounts.newMember}
+        </Btn>
+
+        <Chips<'all' | 'pending' | 'low' | 'debt' | 'exp'>
           value={filter}
           onChange={setFilter}
+          className="w-full lg:w-auto"
           items={[
             ['all', `${t.owner.members.filterAll} · ${num(members.length)}`],
+            ...(pendingCount > 0
+              ? ([['pending', `${t.accounts.pendingFilter} · ${num(pendingCount)}`]] as const)
+              : []),
             ['low', t.owner.members.filterLow],
             ['debt', t.owner.members.filterDebtor],
             ['exp', t.owner.members.filterExpired],
@@ -113,7 +130,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                 <div className="flex-1 min-w-0">
                   <div
                     className="font-bold text-[15px]"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                   >
                     {displayName(m.name, isFa)}
                   </div>
@@ -121,9 +138,16 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                     className="text-[13px] truncate"
                     style={{ color: 'var(--c-text-muted)' }}
                   >
-                    {displayName(m.defaultTrainerName, isFa)} · {localizedLabel(m.packageName, isFa)}
+                    {displayName(m.defaultTrainerName, isFa)}
+                    {m.packageName ? ` · ${localizedLabel(m.packageName, isFa)}` : ''}
                   </div>
+                  {m.packagePending && (
+                    <div className="mt-1">
+                      <StatusPill tone="warn">{t.accounts.packagePending}</StatusPill>
+                    </div>
+                  )}
                 </div>
+                {!m.packagePending && (
                 <div
                   style={{
                     color:
@@ -131,10 +155,11 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                         ? 'var(--c-rubber)'
                         : 'var(--c-ink)',
                   }}
-                  className="font-display text-[26px] leading-none tnum"
+                  className="font-display text-[26px] leading-none tnum shrink-0"
                 >
                   {num(m.remainingSessions)}
                 </div>
+                )}
               </div>
 
               <div className="mt-3">
@@ -173,25 +198,25 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                 className="text-[14px] border-b"
               >
                 <th
-                  className="text-right font-medium px-5 py-3"
+                  className="text-start font-medium px-5 py-3"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
                   {t.owner.members.member}
                 </th>
                 <th
-                  className="text-right font-medium py-3"
+                  className="text-start font-medium py-3"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
                   {t.owner.members.trainer}
                 </th>
                 <th
-                  className="text-right font-medium py-3 w-[34%]"
+                  className="text-start font-medium py-3 w-[34%]"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
                   {t.owner.members.packageLeft}
                 </th>
                 <th
-                  className="text-right font-medium py-3"
+                  className="text-start font-medium py-3"
                   style={{ color: 'var(--c-text-muted)' }}
                 >
                   {t.owner.members.debt}
@@ -213,7 +238,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                       <div>
                         <div
                           className="font-bold text-[15px]"
-                          style={{ color: 'var(--c-deep)' }}
+                          style={{ color: 'var(--c-heading)' }}
                         >
                           {displayName(m.name, isFa)}
                         </div>
@@ -223,6 +248,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                         >
                           {m.phone}
                         </div>
+                        {m.packagePending && <StatusPill tone="warn">{t.accounts.packagePending}</StatusPill>}
                       </div>
                     </div>
                   </td>
@@ -243,7 +269,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                               ? 'var(--c-rubber)'
                               : 'var(--c-deep)',
                         }}
-                        className="w-14 tnum text-[13px] font-bold text-left"
+                        className="w-14 tnum text-[13px] font-bold text-end"
                       >
                         {num(m.remainingSessions)}/{num(m.totalSessions)}
                       </span>
@@ -265,8 +291,8 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                     )}
                   </td>
 
-                  <td className="py-3 px-5 text-left">
-                    <ChevronLeft size={18} className="text-slate-400 inline" />
+                  <td className="py-3 px-5 text-end">
+                    <ChevronLeft size={18} className={`text-slate-400 inline ${isFa ? '' : 'rotate-180'}`} />
                   </td>
                 </tr>
               ))}
@@ -283,6 +309,16 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
           )}
         </div>
       )}
+      <NewMemberSheet
+        open={creating}
+        mode="owner"
+        onClose={() => setCreating(false)}
+        onDone={msg => {
+          setCreating(false);
+          setToast(msg);
+        }}
+      />
+      <Toast message={toast} onClose={() => setToast(null)} />
     </div>
   );
 }

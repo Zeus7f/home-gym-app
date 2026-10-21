@@ -350,7 +350,7 @@ export function Catalog() {
               <div>
                 <div
                   className="font-bold text-[13px] sm:text-[14px] leading-snug line-clamp-2"
-                  style={{ color: 'var(--c-deep)' }}
+                  style={{ color: 'var(--c-heading)' }}
                   title={exName(ex)}
                 >
                   {exName(ex)}
@@ -473,7 +473,7 @@ export function Catalog() {
               <div>
                 <h3
                   className="text-lg font-black"
-                  style={{ color: 'var(--c-deep)' }}
+                  style={{ color: 'var(--c-heading)' }}
                 >
                   {exName(selectedExercise)}
                 </h3>

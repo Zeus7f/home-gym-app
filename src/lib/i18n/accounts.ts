@@ -107,6 +107,7 @@ export const accountsDict = {
       resetPassword: 'Reset password',
       pendingFilter: 'Waiting for package',
       memberPendingBanner: 'Your package has not been set yet. The gym manager will activate it shortly.',
+      noTrainers: 'No trainers yet. Add the first trainer and give them a sign-in password.',
     },
   },
   fa: {
@@ -212,6 +213,7 @@ export const accountsDict = {
       resetPassword: 'تغییر رمز',
       pendingFilter: 'منتظر بسته',
       memberPendingBanner: 'بستهٔ شما هنوز تعیین نشده است. مدیر باشگاه به‌زودی آن را فعال می‌کند.',
+      noTrainers: 'هنوز مربی‌ای ثبت نشده است. اولین مربی را با رمز ورود اضافه کنید.',
     },
   },
 };

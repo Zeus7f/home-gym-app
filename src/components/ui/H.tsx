@@ -19,7 +19,7 @@ export function H({ children, sub, action, className }: HProps) {
       <div className="min-w-0">
         <h2
           className="text-[17px] font-bold leading-snug"
-          style={{ color: 'var(--c-deep)' }}
+          style={{ color: 'var(--c-heading)' }}
         >
           {children}
         </h2>

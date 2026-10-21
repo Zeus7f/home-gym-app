@@ -21,7 +21,7 @@ export interface TodayProps {
 
 export function Today({ onOpenSession }: TodayProps) {
   const { t, isFa } = useI18n();
-  const currentTrainerId = getCurrentUser()?.entityId || 't-ali';
+  const currentTrainerId = getCurrentUser()?.entityId || '';
   const [sessions, setSessions] = useState<DailySession[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,24 +163,24 @@ export function Today({ onOpenSession }: TodayProps) {
           </div>
 
           <div
-            className="text-left text-[13px] leading-6"
+            className="text-end text-[13px] leading-6"
             style={{ color: 'var(--c-text-muted)' }}
           >
             <div>
               {t.trainer.today.completed}:{' '}
-              <b style={{ color: 'var(--c-deep)' }} className="tnum font-bold">
+              <b style={{ color: 'var(--c-heading)' }} className="tnum font-bold">
                 {num(doneSessions.length)}
               </b>
             </div>
             <div>
               {t.trainer.today.inGym}:{' '}
-              <b style={{ color: 'var(--c-deep)' }} className="tnum font-bold">
+              <b style={{ color: 'var(--c-heading)' }} className="tnum font-bold">
                 {num(liveSessions.length)}
               </b>
             </div>
             <div>
               {t.trainer.today.waiting}:{' '}
-              <b style={{ color: 'var(--c-deep)' }} className="tnum font-bold">
+              <b style={{ color: 'var(--c-heading)' }} className="tnum font-bold">
                 {num(waitSessions.length)}
               </b>
             </div>
@@ -239,7 +239,7 @@ export function Today({ onOpenSession }: TodayProps) {
                 backgroundColor: 'var(--c-ink)',
                 color: '#ffffff',
               }}
-              className="w-full text-right rounded-2xl p-4 flex items-center gap-3.5 shadow-md active:scale-[0.99] transition-transform cursor-pointer"
+              className="w-full text-start rounded-2xl p-4 flex items-center gap-3.5 shadow-md active:scale-[0.99] transition-transform cursor-pointer"
             >
               <Avatar name={displayName(s.memberName, isFa)} size={46} tone="brass" />
               <div className="flex-1 min-w-0">
@@ -254,7 +254,7 @@ export function Today({ onOpenSession }: TodayProps) {
               <span
                 style={{
                   backgroundColor: 'var(--c-brass)',
-                  color: 'var(--c-deep)',
+                  color: 'var(--c-heading)',
                 }}
                 className="h-10 px-3.5 rounded-xl text-[13px] font-extrabold grid place-items-center shrink-0 shadow-xs"
               >
@@ -302,7 +302,7 @@ export function Today({ onOpenSession }: TodayProps) {
                 <div className="flex-1 min-w-0">
                   <div
                     className="font-bold text-[15px]"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                   >
                     {displayName(s.memberName, isFa)}
                   </div>
@@ -355,7 +355,7 @@ export function Today({ onOpenSession }: TodayProps) {
                 className="flex items-center gap-3 px-3 py-2 rounded-lg border text-sm"
               >
                 <Check size={16} style={{ color: 'var(--c-avail-fg)' }} />
-                <span className="flex-1 font-semibold" style={{ color: 'var(--c-deep)' }}>
+                <span className="flex-1 font-semibold" style={{ color: 'var(--c-heading)' }}>
                   {displayName(s.memberName, isFa)}
                 </span>
                 <span className="text-xs tnum" style={{ color: 'var(--c-text-muted)' }}>
@@ -395,7 +395,7 @@ export function Today({ onOpenSession }: TodayProps) {
             <label
               htmlFor="add-athlete"
               className="block text-[13px] font-bold mb-2"
-              style={{ color: 'var(--c-deep)' }}
+              style={{ color: 'var(--c-heading)' }}
             >
               {t.trainer.today.addAthleteField}
             </label>
@@ -421,7 +421,7 @@ export function Today({ onOpenSession }: TodayProps) {
             <label
               htmlFor="add-time"
               className="block text-[13px] font-bold mb-2"
-              style={{ color: 'var(--c-deep)' }}
+              style={{ color: 'var(--c-heading)' }}
             >
               {t.trainer.today.addAthleteTime}
             </label>

@@ -184,6 +184,10 @@ export const commonDict = {
         title: 'Packages expiring soon',
         body: '{members}',
       },
+      ownerPendingPackage: {
+        title: 'New athletes waiting for a package',
+        body: '{members}',
+      },
       paymentDue: {
         title: 'Outstanding member balances',
         body: '{count} members owe {total} Toman in total.',
@@ -375,8 +379,12 @@ export const commonDict = {
         title: 'بسته‌های در شرف انقضا',
         body: '{members}',
       },
+      ownerPendingPackage: {
+        title: 'ورزشکاران جدید منتظر تعیین بسته',
+        body: '{members}',
+      },
       paymentDue: {
-        title: 'بهدهی باز اعضا',
+        title: 'بدهی باز اعضا',
         body: '{count} عضو مجموعاً {total} تومان بدهکار هستند.',
       },
       trainerPayoutDue: {

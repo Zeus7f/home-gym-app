@@ -32,7 +32,7 @@ function toStatusKey(status: DailySession['status']): SessionStatusKey {
 
 export function Calendar() {
   const { t, isFa } = useI18n();
-  const currentTrainerId = getCurrentUser()?.entityId || 't-ali';
+  const currentTrainerId = getCurrentUser()?.entityId || '';
 
   const [sessions, setSessions] = useState<DailySession[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(getTodayJalaliString());
@@ -119,7 +119,7 @@ export function Calendar() {
             <CalendarDays size={16} style={{ color: 'var(--c-steel)' }} />
             <h2
               className="text-[15px] font-bold truncate"
-              style={{ color: 'var(--c-deep)' }}
+              style={{ color: 'var(--c-heading)' }}
             >
               {t.trainer.calendar.selectDay}
             </h2>
@@ -160,7 +160,7 @@ export function Calendar() {
                 <div className="flex-1 min-w-0">
                   <div
                     className="font-bold text-[14px] truncate"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                   >
                     {displayName(s.memberName, isFa)}
                   </div>

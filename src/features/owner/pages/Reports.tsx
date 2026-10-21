@@ -88,7 +88,7 @@ export function Reports({ isMobile = false }: ReportsProps) {
                 >
                   <span
                     className="text-[13px] font-bold tnum"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                   >
                     {w.count > 0 ? num(w.count) : ''}
                   </span>
@@ -146,7 +146,7 @@ export function Reports({ isMobile = false }: ReportsProps) {
                 {t.owner.reports.dailyAverage}
               </div>
               <div
-                style={{ color: 'var(--c-deep)' }}
+                style={{ color: 'var(--c-heading)' }}
                 className="font-display text-[26px] tnum mt-0.5"
               >
                 {num(avgVisits)}
@@ -191,7 +191,7 @@ export function Reports({ isMobile = false }: ReportsProps) {
               >
                 <div
                   className="font-bold text-[15px]"
-                  style={{ color: 'var(--c-deep)' }}
+                  style={{ color: 'var(--c-heading)' }}
                 >
                   {log.athlete}
                 </div>
@@ -232,7 +232,7 @@ export function Reports({ isMobile = false }: ReportsProps) {
                   <div className="flex items-center justify-between">
                     <span
                       className="font-bold text-[15px]"
-                      style={{ color: 'var(--c-deep)' }}
+                      style={{ color: 'var(--c-heading)' }}
                     >
                       {displayName(tr.name, isFa)}
                     </span>

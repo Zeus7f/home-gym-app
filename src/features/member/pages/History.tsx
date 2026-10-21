@@ -51,7 +51,7 @@ export function History() {
   const [version, setVersion] = useState(0);
   const [sessions, setSessions] = useState<DailySession[]>([]);
 
-  const memberId = getCurrentUser()?.entityId || 'm-reza';
+  const memberId = getCurrentUser()?.entityId || '';
 
   useEffect(() => {
     const load = () => {
@@ -109,7 +109,7 @@ export function History() {
           className="p-8 rounded-2xl border text-center"
         >
           <Trophy size={28} className="mx-auto" style={{ color: 'var(--c-brass)' }} />
-          <p className="mt-3 text-[15px] font-bold" style={{ color: 'var(--c-deep)' }}>
+          <p className="mt-3 text-[15px] font-bold" style={{ color: 'var(--c-heading)' }}>
             {t.member.history.noSessionsTitle}
           </p>
           <p className="mt-1 text-[13px]" style={{ color: 'var(--c-text-muted)' }}>
@@ -185,13 +185,13 @@ export function History() {
                 <Trophy size={18} style={{ color: 'var(--c-brass)' }} />
                 <span
                   className="flex-1 font-semibold text-[15px] min-w-0 truncate"
-                  style={{ color: 'var(--c-deep)' }}
+                  style={{ color: 'var(--c-heading)' }}
                 >
                   {exerciseName(item.exerciseId, item.exerciseName, isFa)}
                 </span>
                 <span
                   className="font-bold tnum text-[14px] whitespace-nowrap"
-                  style={{ color: 'var(--c-deep)' }}
+                  style={{ color: 'var(--c-heading)' }}
                 >
                   {num(Math.round(item.value))}{' '}
                   <span className="text-[11px] font-normal opacity-70">
@@ -201,7 +201,7 @@ export function History() {
                 {item.previousValue > 0 && (
                   <span
                     style={{ color: 'var(--c-avail-fg)' }}
-                    className="text-[13px] tnum font-bold w-12 text-left"
+                    className="text-[13px] tnum font-bold w-12 text-end"
                   >
                     +{num(Math.round(item.value - item.previousValue))}
                   </span>
@@ -374,8 +374,8 @@ export function History() {
                         />
                       </div>
                       <span
-                        className="text-[12px] tnum font-bold w-10 text-left"
-                        style={{ color: 'var(--c-deep)' }}
+                        className="text-[12px] tnum font-bold w-10 text-end"
+                        style={{ color: 'var(--c-heading)' }}
                       >
                         {num(value)}
                       </span>
@@ -443,7 +443,7 @@ export function History() {
               .slice(0, 8)
               .map(w => (
                 <div key={w.muscleId} className="flex items-center justify-between gap-3">
-                  <span className="text-[13px]" style={{ color: 'var(--c-deep)' }}>
+                  <span className="text-[13px]" style={{ color: 'var(--c-heading)' }}>
                     {muscleName(w.muscleId, w.muscleName, isFa)}
                   </span>
                   <div className="flex items-center gap-2">
@@ -451,7 +451,7 @@ export function History() {
                       {num(w.totalVolumeKg)} {t.member.history.volumeUnit}
                     </span>
                     <span
-                      className="text-[13px] tnum font-bold w-8 text-left"
+                      className="text-[13px] tnum font-bold w-8 text-end"
                       style={{ color: 'var(--c-ink)' }}
                     >
                       {num(w.effectiveSets)}

@@ -38,7 +38,7 @@ export function Sessions() {
   const [showCalendar, setShowCalendar] = useState(false);
 
   const { t, isFa } = useI18n();
-  const memberId = getCurrentUser()?.entityId || 'm-reza';
+  const memberId = getCurrentUser()?.entityId || '';
 
   const loadSessions = () => {
     getMemberSessions(memberId).then(all => {
@@ -193,7 +193,7 @@ export function Sessions() {
                   <div className="flex-1 min-w-0">
                     <div
                       className="font-bold text-[14px] truncate"
-                      style={{ color: 'var(--c-deep)' }}
+                      style={{ color: 'var(--c-heading)' }}
                     >
                       {displayName(s.trainerName, isFa)}
                     </div>
@@ -254,7 +254,7 @@ export function Sessions() {
                 <div className="flex justify-between items-center">
                   <span
                     className="font-bold text-[16px]"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                   >
                     {formatJalaliLocalized(item.date, isFa)}
                   </span>
@@ -333,7 +333,7 @@ export function Sessions() {
                   className="py-3.5 flex items-center justify-between text-sm"
                 >
                   <div>
-                    <span className="font-semibold block" style={{ color: 'var(--c-deep)' }}>
+                    <span className="font-semibold block" style={{ color: 'var(--c-heading)' }}>
                       {formatJalaliLocalized(item.date, isFa)}
                     </span>
                     <span className="text-[12px] opacity-75" style={{ color: 'var(--c-text-muted)' }}>
@@ -382,7 +382,7 @@ export function Sessions() {
           </div>
 
           <div>
-            <div className="text-[13px] font-bold mb-2" style={{ color: 'var(--c-deep)' }}>
+            <div className="text-[13px] font-bold mb-2" style={{ color: 'var(--c-heading)' }}>
               {t.member.sessions.suggestedTime}
             </div>
             <div className="grid grid-cols-4 gap-1.5 max-h-48 overflow-y-auto thin-scroll">

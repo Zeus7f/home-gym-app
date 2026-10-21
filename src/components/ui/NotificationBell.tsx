@@ -126,7 +126,7 @@ export function NotificationBell({
               >
                 <div className="flex items-center gap-2">
                   <Bell size={18} style={{ color: 'var(--c-steel)' }} />
-                  <h2 className="font-bold text-[16px]" style={{ color: 'var(--c-deep)' }}>{t.notifications.title}</h2>
+                  <h2 className="font-bold text-[16px]" style={{ color: 'var(--c-heading)' }}>{t.notifications.title}</h2>
                   {notifications.length > 0 && (
                     <span
                       style={{ backgroundColor: 'var(--c-surface-2)', color: 'var(--c-text-muted)' }}
@@ -157,7 +157,7 @@ export function NotificationBell({
                       className="mx-auto"
                       style={{ color: 'var(--c-avail-fg)' }}
                     />
-                    <p className="mt-3 text-[14px] font-bold" style={{ color: 'var(--c-deep)' }}>
+                    <p className="mt-3 text-[14px] font-bold" style={{ color: 'var(--c-heading)' }}>
                       {t.notifications.empty}
                     </p>
                     <p className="mt-1 text-[12px]" style={{ color: 'var(--c-text-muted)' }}>
@@ -180,7 +180,7 @@ export function NotificationBell({
                           backgroundColor: 'var(--c-surface-1)',
                           borderColor: 'var(--c-border)',
                         }}
-                        className={`w-full p-3.5 rounded-2xl border text-right flex items-start gap-3 ${
+                        className={`w-full p-3.5 rounded-2xl border text-start flex items-start gap-3 ${
                           clickable
                             ? 'hover:border-slate-300 dark:hover:border-slate-700 transition-colors cursor-pointer'
                             : 'cursor-default'
@@ -196,7 +196,7 @@ export function NotificationBell({
                         <div className="flex-1 min-w-0">
                           <div
                             className="font-bold text-[14px] leading-snug"
-                            style={{ color: 'var(--c-deep)' }}
+                            style={{ color: 'var(--c-heading)' }}
                           >
                             {n.title}
                           </div>

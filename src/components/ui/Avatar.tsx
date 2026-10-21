@@ -32,7 +32,7 @@ export function Avatar({
     tone === 'ink'
       ? { background: 'var(--c-ink)', color: '#fff' }
       : tone === 'brass'
-        ? { background: 'var(--c-brass)', color: 'var(--c-deep)' }
+        ? { background: 'var(--c-brass)', color: 'var(--c-heading)' }
         : { background: 'var(--c-surface-3)', color: 'var(--c-ink)' };
 
   return (

@@ -19,7 +19,7 @@ export interface CapacitySessionItem {
 export interface CapacityProps {
   /** حالت فشرده برای نمایش در موبایل یا سایدبار */
   compact?: boolean;
-  /** لیست جلسات روز (در صورت خالی بودن، نمونه نمایشی استفاده می‌شود) */
+  /** لیست جلسات روز */
   sessions?: CapacitySessionItem[];
   /** ظرفیت کل روزانه باشگاه (پیش‌فرض: ۳۰) */
   totalCapacity?: number;
@@ -49,7 +49,7 @@ function normalizeStatus(st?: string): SessionStatus {
   if (lower === 'done' || lower === 'completed') return 'done';
   if (lower === 'live' || lower === 'in_progress') return 'live';
   if (lower === 'cancel' || lower === 'cancelled') return 'cancel';
-  if (lower === 'noshow') return 'noshow';
+  if (lower === 'noshow' || lower === 'no_show') return 'noshow';
   return 'wait';
 }
 
@@ -67,7 +67,8 @@ function parseHour(item: CapacitySessionItem): number {
 }
 
 // داده‌های پیش‌فرض پروتوتایپ جهت نمایش مستقل
-const DEFAULT_SESSIONS: CapacitySessionItem[] = [
+/** نمونهٔ نمایشی — فقط برای صفحهٔ توسعهٔ UIShowcase */
+export const DEMO_CAPACITY_SESSIONS: CapacitySessionItem[] = [
   { h: 8, s: 'done' }, { h: 8, s: 'done' },
   { h: 9, s: 'done' }, { h: 10, s: 'done' }, { h: 10, s: 'noshow' },
   { h: 17, s: 'done' }, { h: 18, s: 'done' }, { h: 18, s: 'done' },
@@ -85,7 +86,7 @@ const DEFAULT_SESSIONS: CapacitySessionItem[] = [
  */
 export function Capacity({
   compact = false,
-  sessions = DEFAULT_SESSIONS,
+  sessions = [],
   totalCapacity = 30,
   hourCap = 6,
   currentHour,
@@ -156,7 +157,7 @@ export function Capacity({
           </div>
         </div>
 
-        <div className="text-left">
+        <div className="text-end">
           <div
             style={{
               backgroundColor: 'var(--c-avail-bg)',
@@ -233,7 +234,7 @@ export function Capacity({
             </span>
             <span
               className="text-[15px] font-bold tnum"
-              style={{ color: 'var(--c-deep)' }}
+              style={{ color: 'var(--c-heading)' }}
             >
               {num(counts[k])}
             </span>
@@ -257,7 +258,7 @@ export function Capacity({
             </span>
             <span
               className="text-[15px] font-bold tnum"
-              style={{ color: 'var(--c-deep)' }}
+              style={{ color: 'var(--c-heading)' }}
             >
               {num(free)}
             </span>
@@ -271,7 +272,7 @@ export function Capacity({
         className={cn('pt-4 border-t', compact ? 'mt-5' : 'mt-6')}
       >
         <div className="flex items-center justify-between mb-3">
-          <span className="text-[14px] font-semibold" style={{ color: 'var(--c-deep)' }}>
+          <span className="text-[14px] font-semibold" style={{ color: 'var(--c-heading)' }}>
             {t.owner.capacity.hourlyTitle}
           </span>
           <span className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>

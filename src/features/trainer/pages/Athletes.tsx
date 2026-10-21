@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Meter } from '../../../components/ui/Meter';
 import { num } from '../../../lib/format';
@@ -8,12 +8,18 @@ import { useI18n } from '../../../components/LanguageProvider';
 import { getMemberSessions } from '../../../api/members';
 import { formatJalaliLocalized, toCanonicalJalali } from '../../../lib/date/jalali';
 import { getMembers } from '../../../api/members';
-import { getCurrentUser } from '../../../api/auth';
+import { getCurrentUser, subscribeToStore } from '../../../api/auth';
+import { Btn } from '../../../components/ui/Btn';
+import { StatusPill } from '../../../components/ui/Page';
+import { Toast } from '../../../components/ui/Toast';
+import { NewMemberSheet } from '../../accounts/AccountForms';
 import { Member } from '../../../lib/domain/gymManagement';
 
 export function Athletes() {
   const { t, isFa } = useI18n();
-  const currentTrainerId = getCurrentUser()?.entityId || 't-ali';
+  const currentTrainerId = getCurrentUser()?.entityId || '';
+  const [creating, setCreating] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [lastSessionBy, setLastSessionBy] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
@@ -51,6 +57,7 @@ export function Athletes() {
       }
     }
     load();
+    return subscribeToStore(load);
   }, [currentTrainerId]);
 
   const filtered = members.filter(m => {
@@ -61,13 +68,14 @@ export function Athletes() {
 
   return (
     <div className="space-y-3">
-      {/* نوار جستجوی ورزشکار */}
+      {/* نوار جستجو و افزودن ورزشکار */}
+      <div className="flex flex-wrap gap-3 min-w-0">
       <div
         style={{
           backgroundColor: 'var(--c-surface-1)',
           borderColor: 'var(--c-border)',
         }}
-        className="flex items-center gap-2 h-11 px-3 rounded-xl border text-slate-400"
+        className="flex items-center gap-2 h-11 px-3 rounded-xl border text-slate-400 flex-1 min-w-0 basis-56"
       >
         <Search size={18} className="shrink-0" />
         <input
@@ -77,6 +85,10 @@ export function Athletes() {
           placeholder={t.trainer.athletes.searchPlaceholder}
           className="w-full bg-transparent border-none outline-hidden text-[14px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
         />
+      </div>
+      <Btn v="primary" className="h-11 shrink-0" onClick={() => setCreating(true)}>
+        <Plus size={18} /> {t.accounts.newMember}
+      </Btn>
       </div>
 
       {loading && (
@@ -107,7 +119,7 @@ export function Athletes() {
                   <div className="flex-1 min-w-0">
                     <div
                       className="font-bold text-[15px] truncate"
-                      style={{ color: 'var(--c-deep)' }}
+                      style={{ color: 'var(--c-heading)' }}
                     >
                       {displayName(m.name, isFa)}
                     </div>
@@ -115,7 +127,7 @@ export function Athletes() {
                       className="text-[13px] truncate"
                       style={{ color: 'var(--c-text-muted)' }}
                     >
-                      {localizedLabel(m.packageName, isFa)} ·{' '}
+                      {m.packageName ? `${localizedLabel(m.packageName, isFa)} · ` : ''}
                       {lastSessionBy[m.id]
                         ? t.trainer.athletes.lastSession.replace(
                             '{date}',
@@ -124,6 +136,9 @@ export function Athletes() {
                         : t.trainer.athletes.noLastSession}
                     </div>
                   </div>
+                  {m.packagePending ? (
+                    <StatusPill tone="warn">{t.accounts.packagePending}</StatusPill>
+                  ) : (
                   <span
                     style={{
                       color: isLow ? 'var(--c-rubber)' : 'var(--c-ink)',
@@ -135,6 +150,7 @@ export function Athletes() {
                       {t.units.sessions}
                     </span>
                   </span>
+                  )}
                 </div>
 
                 <div className="mt-3">
@@ -157,6 +173,16 @@ export function Athletes() {
           )}
         </div>
       )}
+      <NewMemberSheet
+        open={creating}
+        mode="trainer"
+        onClose={() => setCreating(false)}
+        onDone={msg => {
+          setCreating(false);
+          setToast(msg);
+        }}
+      />
+      <Toast message={toast} onClose={() => setToast(null)} />
     </div>
   );
 }

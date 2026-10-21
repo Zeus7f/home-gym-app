@@ -102,7 +102,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
       <div>
         <div
           className="font-bold text-[15px]"
-          style={{ color: 'var(--c-deep)' }}
+          style={{ color: 'var(--c-heading)' }}
         >
           {label}
         </div>
@@ -166,7 +166,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
               <Minus size={15} />
             </Btn>
             <span
-              style={{ color: 'var(--c-deep)' }}
+              style={{ color: 'var(--c-heading)' }}
               className="w-12 text-center font-bold text-[18px] tnum"
             >
               {num(capacity)}
@@ -197,7 +197,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
               <Minus size={15} />
             </Btn>
             <span
-              style={{ color: 'var(--c-deep)' }}
+              style={{ color: 'var(--c-heading)' }}
               className="w-12 text-center font-bold text-[18px] tnum"
             >
               {num(hourlyCapacity)}
@@ -339,7 +339,7 @@ export function Settings({ isMobile = false }: SettingsProps) {
               <div className="flex-1 min-w-0">
                 <div
                   className="font-bold text-[14px]"
-                  style={{ color: 'var(--c-deep)' }}
+                  style={{ color: 'var(--c-heading)' }}
                 >
                   {displayName(trainer.name, isFa)}
                 </div>

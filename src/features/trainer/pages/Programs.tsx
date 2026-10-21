@@ -59,7 +59,7 @@ function emptyDay(index: number, isFa: boolean): ProgramDay {
 
 export function Programs() {
   const { t, isFa } = useI18n();
-  const currentTrainerId = getCurrentUser()?.entityId || 't-ali';
+  const currentTrainerId = getCurrentUser()?.entityId || '';
   const [trainerName, setTrainerName] = useState('Trainer');
 
   const [version, setVersion] = useState(0);
@@ -325,7 +325,7 @@ export function Programs() {
                     value={day.title}
                     onChange={e => updateDayTitle(day.id, e.target.value)}
                     className="flex-1 bg-transparent border-none outline-hidden text-[14px] font-bold"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                     aria-label={t.trainer.programs.dayTitle}
                   />
                   <button
@@ -357,7 +357,7 @@ export function Programs() {
                         <div className="flex items-center gap-2">
                           <span
                             className="flex-1 text-[13px] font-bold truncate min-w-0"
-                            style={{ color: 'var(--c-deep)' }}
+                            style={{ color: 'var(--c-heading)' }}
                           >
                             {item.name}
                           </span>
@@ -519,7 +519,7 @@ export function Programs() {
                 <div className="flex items-center gap-2">
                   <span
                     className="flex-1 text-[14px] font-bold truncate min-w-0"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                   >
                     {program.title}
                   </span>
@@ -654,10 +654,10 @@ export function Programs() {
                   backgroundColor: 'var(--c-surface-1)',
                   borderColor: 'var(--c-border)',
                 }}
-                className="w-full p-3 rounded-xl border flex items-center justify-between gap-3 hover:border-slate-400 dark:hover:border-slate-600 transition-colors cursor-pointer text-right"
+                className="w-full p-3 rounded-xl border flex items-center justify-between gap-3 hover:border-slate-400 dark:hover:border-slate-600 transition-colors cursor-pointer text-start"
               >
                 <div className="min-w-0">
-                  <div className="font-bold text-[13px] truncate" style={{ color: 'var(--c-deep)' }}>
+                  <div className="font-bold text-[13px] truncate" style={{ color: 'var(--c-heading)' }}>
                     {item.nameFa}
                   </div>
                   <div dir="ltr" className="text-[11px] text-slate-400 font-mono truncate text-end">

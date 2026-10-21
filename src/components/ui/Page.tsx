@@ -63,9 +63,9 @@ export function StatTile({
 }) {
   const color = { ink: 'var(--c-ink)', brass: 'var(--c-brass)', rubber: 'var(--c-rubber)', steel: 'var(--c-steel)' }[tone];
   return (
-    <Panel className="flex items-center gap-3">
+    <Panel className="flex items-center gap-3 !p-3 sm:!p-5">
       {Icon && (
-        <span className="h-11 w-11 rounded-xl grid place-items-center shrink-0" style={{ backgroundColor: 'var(--c-surface-2)', color }}>
+        <span className="hidden sm:grid h-11 w-11 rounded-xl place-items-center shrink-0" style={{ backgroundColor: 'var(--c-surface-2)', color }}>
           <Icon size={20} />
         </span>
       )}
@@ -73,7 +73,7 @@ export function StatTile({
         <div className="text-[12.5px] font-semibold truncate" style={{ color: 'var(--c-text-muted)' }}>
           {label}
         </div>
-        <div className="text-[22px] font-extrabold leading-tight truncate" style={{ color: 'var(--c-heading)' }}>
+        <div className="text-[20px] sm:text-[22px] font-extrabold leading-tight truncate" style={{ color: 'var(--c-heading)' }}>
           {value}
         </div>
       </div>

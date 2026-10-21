@@ -87,6 +87,8 @@ export function AppShell({
   const bottomItems = nav.filter(n => bottomKeys.includes(n.key));
   const moreItems = nav.filter(n => !bottomKeys.includes(n.key));
   const moreActive = moreItems.some(n => n.key === activeKey);
+  /** با یک بخش، نوار پایین چیزی برای جابه‌جایی ندارد */
+  const showBottomNav = nav.length > 1;
 
   const go = (key: string) => {
     setMoreOpen(false);
@@ -227,11 +229,12 @@ export function AppShell({
         )}
 
         <main id="main" className="flex-1 min-w-0 overflow-x-clip">
-          <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 pb-28 lg:pb-10">{children}</div>
+          <div className={cn('w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 lg:pb-10', showBottomNav ? 'pb-28' : 'pb-10')}>{children}</div>
         </main>
       </div>
 
       {/* ── نوار پایین موبایل ───────────────────────────────────────── */}
+      {showBottomNav && (
       <nav
         aria-label={t.shell.mainNav}
         className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t select-none"
@@ -260,6 +263,7 @@ export function AppShell({
           )}
         </div>
       </nav>
+      )}
 
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} isMobile>
         <div className="text-[17px] font-bold mb-2" style={{ color: 'var(--c-heading)' }}>

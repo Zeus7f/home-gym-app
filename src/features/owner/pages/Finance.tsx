@@ -93,7 +93,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
                 <div className="flex-1 min-w-0">
                   <div
                     className="font-bold text-[14px]"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                   >
                     {displayName(m.name, isFa)}
                   </div>
@@ -113,7 +113,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
 
                 <span
                   style={{ color: 'var(--c-rubber)' }}
-                  className="tnum font-bold text-[15px] text-left min-w-[70px]"
+                  className="tnum font-bold text-[15px] text-end min-w-[70px]"
                 >
                   {short(m.outstandingBalance)}
                 </span>
@@ -164,7 +164,7 @@ export function Finance({ isMobile = false }: FinanceProps) {
             <div className="flex-1 min-w-0">
               <div
                 className="font-bold text-[14px] truncate"
-                style={{ color: 'var(--c-deep)' }}
+                style={{ color: 'var(--c-heading)' }}
               >
                 {displayName(p.memberName, isFa)}
               </div>

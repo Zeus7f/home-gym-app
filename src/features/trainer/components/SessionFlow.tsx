@@ -157,7 +157,7 @@ export function SessionFlow({
             </div>
           </div>
 
-          <div className="text-left">
+          <div className="text-end">
             <div
               style={{ color: 'var(--c-brass)' }}
               className="text-[12px] font-semibold"
@@ -218,7 +218,7 @@ export function SessionFlow({
               <button
                 type="button"
                 onClick={() => setOpenExerciseIndex(isOpen ? -1 : ei)}
-                className="w-full p-4 flex items-center gap-3 text-right cursor-pointer"
+                className="w-full p-4 flex items-center gap-3 text-start cursor-pointer"
               >
                 <span
                   style={{
@@ -239,7 +239,7 @@ export function SessionFlow({
                 <div className="flex-1 min-w-0">
                   <div
                     className="font-bold text-[16px] truncate"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                   >
                     {ex.name}
                   </div>
@@ -396,7 +396,7 @@ export function SessionFlow({
 
               <div
                 className="font-display text-[30px] mt-4"
-                style={{ color: 'var(--c-deep)' }}
+                style={{ color: 'var(--c-heading)' }}
               >
                 {t.trainer.session.completedTitle}
               </div>
@@ -406,7 +406,7 @@ export function SessionFlow({
                 style={{ color: 'var(--c-text-muted)' }}
               >
                 {t.trainer.session.remainingFor.replace('{name}', memberName)}:{' '}
-                <b style={{ color: 'var(--c-deep)' }}>
+                <b style={{ color: 'var(--c-heading)' }}>
                   {num(completionResult?.remainingSessions ?? 0)} {t.units.sessions}
                 </b>{' '}
                 · {t.trainer.session.yourPay}:{' '}
@@ -462,7 +462,7 @@ export function SessionFlow({
               >
                 <X size={28} strokeWidth={2.5} />
               </div>
-              <h3 className="font-bold text-[18px]" style={{ color: 'var(--c-deep)' }}>
+              <h3 className="font-bold text-[18px]" style={{ color: 'var(--c-heading)' }}>
                 {t.trainer.session.errorTitle}
               </h3>
               <p className="text-[14px] mt-2 leading-relaxed" style={{ color: 'var(--c-text-muted)' }}>
@@ -499,7 +499,7 @@ export function SessionFlow({
             <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--c-border)' }}>
               <div className="flex items-center gap-2">
                 <Dumbbell size={18} style={{ color: 'var(--c-steel)' }} />
-                <h3 className="font-bold text-[15px]" style={{ color: 'var(--c-deep)' }}>{t.trainer.session.pickerTitle}</h3>
+                <h3 className="font-bold text-[15px]" style={{ color: 'var(--c-heading)' }}>{t.trainer.session.pickerTitle}</h3>
               </div>
               <button
                 type="button"
@@ -563,7 +563,7 @@ export function SessionFlow({
                     className="p-3 rounded-xl border flex items-center justify-between hover:border-slate-400 dark:hover:border-slate-600 transition-colors cursor-pointer group"
                   >
                     <div>
-                      <div className="font-bold text-[14px]" style={{ color: 'var(--c-deep)' }}>
+                      <div className="font-bold text-[14px]" style={{ color: 'var(--c-heading)' }}>
                         {item.nameFa}
                       </div>
                       <div dir="ltr" className="text-[11px] text-slate-400 font-mono text-end">

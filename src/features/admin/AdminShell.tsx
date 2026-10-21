@@ -72,8 +72,7 @@ function GymsPage() {
   return (
     <>
       <PageHeader
-        title={t.admin.title}
-        description={t.admin.subtitle}
+        title={t.admin.subtitle}
         actions={
           <Btn v="primary" className="h-11" onClick={() => setCreating(true)}>
             <Plus size={18} /> {t.admin.newGym}
@@ -81,7 +80,7 @@ function GymsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
         <StatTile label={t.admin.totalGyms} value={num(gyms?.length ?? 0)} icon={Building2} />
         <StatTile label={t.admin.totalTrainers} value={num(totals.trainers)} icon={Dumbbell} tone="steel" />
         <StatTile label={t.admin.totalMembers} value={num(totals.members)} icon={Users} tone="brass" />

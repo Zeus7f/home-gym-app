@@ -13,7 +13,10 @@ import { displayName } from '../../../lib/displayName';
 import { getTodaySessions, completeSession, checkInSession } from '../../../api/sessions';
 import { getMembers } from '../../../api/members';
 import { getTrainers } from '../../../api/trainers';
-import { DailySession, Member, Trainer } from '../../../lib/domain/gymManagement';
+import { DailySession, Gym, Member, Trainer } from '../../../lib/domain/gymManagement';
+import { getGym } from '../../../api/gym';
+import { subscribeToStore } from '../../../api/auth';
+import { NewMemberSheet } from '../../accounts/AccountForms';
 
 export interface DashProps {
   onNavigate?: (tab: string) => void;
@@ -27,16 +30,21 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
   const [members, setMembers] = useState<Member[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [gym, setGym] = useState<Gym | null>(null);
+  const [creatingMember, setCreatingMember] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // واکشی داده‌ها از لایه API
   useEffect(() => {
     async function loadData() {
       try {
-        const [sessData, memData, trData] = await Promise.all([
+        const [sessData, memData, trData, gymData] = await Promise.all([
           getTodaySessions(),
           getMembers(),
           getTrainers(),
+          getGym(),
         ]);
+        setGym(gymData);
         setSessions(sessData);
         setMembers(memData);
         setTrainers(trData);
@@ -47,7 +55,14 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
       }
     }
     loadData();
+    return subscribeToStore(loadData);
   }, []);
+
+  const capacityProps = {
+    sessions: sessions.map(s => ({ time: s.time, status: s.status })),
+    totalCapacity: gym?.capacity ?? 30,
+    hourCap: gym?.hourlyCapacity ?? 6,
+  };
 
   const live = sessions.filter(s => s.status === 'in_progress');
   const next = sessions.filter(s => s.status === 'scheduled');
@@ -119,7 +134,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
               <div className="flex-1 min-w-0">
                 <div
                   className="font-semibold truncate"
-                  style={{ color: 'var(--c-deep)' }}
+                  style={{ color: 'var(--c-heading)' }}
                 >
                   {displayName(s.memberName, isFa)}
                 </div>
@@ -212,7 +227,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                 <div className="flex justify-between text-[14px]">
                   <span
                     className="font-semibold truncate"
-                    style={{ color: 'var(--c-deep)' }}
+                    style={{ color: 'var(--c-heading)' }}
                   >
                     {displayName(trainer.name, isFa)}
                   </span>
@@ -281,12 +296,12 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
                 expirationDate: m.expirationDate,
               })
             }
-            className="w-full flex items-center justify-between py-2.5 text-right hover:opacity-85 transition-opacity cursor-pointer"
+            className="w-full flex items-center justify-between py-2.5 text-start hover:opacity-85 transition-opacity cursor-pointer"
           >
             <div>
               <div
                 className="font-semibold text-[15px]"
-                style={{ color: 'var(--c-deep)' }}
+                style={{ color: 'var(--c-heading)' }}
               >
                 {displayName(m.name, isFa)}
               </div>
@@ -398,18 +413,18 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
       {isMobile ? (
         <div className="space-y-4">
           <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 py-1">
-            {[
-              `+ ${t.owner.dash.quickMember}`,
-              t.owner.dash.quickPayment,
-              t.owner.dash.quickCheckIn,
-              t.owner.dash.quickPayout,
-            ].map(x => (
-              <Btn key={x} v="soft" className="shrink-0 text-xs h-9">
-                {x}
+            {([
+              [`+ ${t.owner.dash.quickMember}`, () => setCreatingMember(true)],
+              [t.owner.dash.quickPayment, () => onNavigate?.('fin')],
+              [t.owner.dash.quickCheckIn, () => onNavigate?.('sched')],
+              [t.owner.dash.quickPayout, () => onNavigate?.('tr')],
+            ] as const).map(([label, go]) => (
+              <Btn key={label} v="soft" className="shrink-0 text-xs h-9" onClick={go}>
+                {label}
               </Btn>
             ))}
           </div>
-          <Capacity compact />
+          <Capacity compact {...capacityProps} />
           {FloorSection}
           {LowSection}
           {LoadSection}
@@ -418,7 +433,7 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
           <div className="space-y-6">
-            <Capacity />
+            <Capacity {...capacityProps} />
             {FloorSection}
           </div>
           <div className="space-y-6">
@@ -428,7 +443,17 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
           </div>
         </div>
       )}
+      <NewMemberSheet
+        open={creatingMember}
+        mode="owner"
+        onClose={() => setCreatingMember(false)}
+        onDone={msg => {
+          setCreatingMember(false);
+          setNotice(msg);
+        }}
+      />
       <Toast message={toast} type="warning" onClose={() => setToast(null)} />
+      <Toast message={notice} onClose={() => setNotice(null)} />
     </div>
   );
 }

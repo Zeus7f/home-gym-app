@@ -25,6 +25,12 @@ export function Meter({
   className,
   ...props
 }: MeterProps) {
+  // بدون بسته (مثلاً ورزشکارِ منتظر تعیین بسته): فقط ریل خالی
+  if (!(total > 0)) {
+    return (
+      <div className={cn('w-full rounded-[2px]', className)} style={{ height: h, backgroundColor: 'var(--c-border)' }} aria-hidden="true" {...props} />
+    );
+  }
   const safeTotal = Math.max(1, total);
   const remaining = Math.max(0, safeTotal - used);
   const isLow = remaining <= 2 && remaining > 0;

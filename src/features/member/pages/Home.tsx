@@ -29,12 +29,12 @@ export interface HomeProps {
 export function Home({ onNavigateTab }: HomeProps) {
   const { t, isFa } = useI18n();
   const currentUser = getCurrentUser();
-  const memberName = displayName(currentUser?.displayName || 'Niloofar Bahrami', isFa);
+  const memberName = displayName(currentUser?.displayName || '', isFa);
 
   const [memberData, setMemberData] = useState<Member | null>(null);
-  const [gymName, setGymName] = useState('Iron Haven Fitness Club');
+  const [gymName, setGymName] = useState('');
   const [memberSessions, setMemberSessions] = useState<import('../../../lib/domain/gymManagement').DailySession[]>([]);
-  const memberId = currentUser?.entityId || 'm-reza';
+  const memberId = currentUser?.entityId || '';
 
   useEffect(() => {
     async function load() {
@@ -59,8 +59,8 @@ export function Home({ onNavigateTab }: HomeProps) {
     });
   }, [currentUser]);
 
-  const total = memberData?.totalSessions || 12;
-  const used = memberData?.usedSessions || 8;
+  const total = memberData?.totalSessions ?? 0;
+  const used = memberData?.usedSessions ?? 0;
   const remaining = memberData?.remainingSessions ?? Math.max(0, total - used);
   const debt = memberData?.outstandingBalance || 0;
   const expDate = memberData?.expirationDate || '';
@@ -102,7 +102,6 @@ export function Home({ onNavigateTab }: HomeProps) {
             </div>
           </div>
 
-          <NotificationBell onNavigateTab={onNavigateTab} />
         </div>
 
         {/* جلسات باقیمانده و صفحات وزنه PlateHero */}
@@ -151,7 +150,7 @@ export function Home({ onNavigateTab }: HomeProps) {
         <div className="text-center w-16 shrink-0">
           {(() => {
             const nextSess = memberSessions.find(
-              s => s.memberId === (currentUser?.entityId || 'm-reza') && s.status === 'scheduled'
+              s => s.memberId === (currentUser?.entityId || '') && s.status === 'scheduled'
             );
             const target =
               (nextSess?.date ? parseJalali(toCanonicalJalali(nextSess.date)) : null) ?? getTodayJalali();
@@ -188,19 +187,19 @@ export function Home({ onNavigateTab }: HomeProps) {
           </div>
           <div
             className="font-extrabold text-[15px] mt-0.5"
-            style={{ color: 'var(--c-deep)' }}
+            style={{ color: 'var(--c-heading)' }}
           >
             {(() => {
               const nextSess = memberSessions.find(
-                s => s.memberId === (currentUser?.entityId || 'm-reza') && s.status === 'scheduled'
+                s => s.memberId === memberId && s.status === 'scheduled'
               );
               if (nextSess) {
                 return t.member.home.todayAt
                   .replace('{time}', nextSess.time)
                   .replace('{trainer}', nextSess.trainerName);
               }
-              const trainer = memberData?.defaultTrainerName || 'Sara Jalali';
-              return t.member.home.nextWith.replace('{trainer}', displayName(trainer, isFa));
+              const trainer = memberData?.defaultTrainerName;
+              return trainer ? t.member.home.nextWith.replace('{trainer}', displayName(trainer, isFa)) : '—';
             })()}
           </div>
         </div>
@@ -229,7 +228,6 @@ export function Home({ onNavigateTab }: HomeProps) {
 
         <div className="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
           {(() => {
-            const memberId = currentUser?.entityId || 'm-reza';
             const lastSession = memberSessions.find(
               s => s.memberId === memberId && s.status === 'completed' && s.exercises && s.exercises.length > 0
             );
@@ -239,18 +237,22 @@ export function Home({ onNavigateTab }: HomeProps) {
               `${num(e.sets)} × ${num(e.reps)}${
                 e.weightKg ? ` · ${num(e.weightKg)} ${t.units.kg}` : ''
               }`,
-            ]) || [
-              ['Goblet Squat', '3 × 12 · 16 kg'],
-              ['Dumbbell Lunge', '3 × 10 · 10 kg'],
-              ['Plank', '3 × 45 sec'],
-            ];
+            ]);
+
+            if (!displayExercises?.length) {
+              return (
+                <p className="py-3 text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
+                  {t.member.home.noWorkout}
+                </p>
+              );
+            }
 
             return displayExercises.map(([name, desc]) => (
               <div
                 key={name}
                 className="flex items-center justify-between py-2.5 text-sm"
               >
-                <span className="font-semibold" style={{ color: 'var(--c-deep)' }}>
+                <span className="font-semibold" style={{ color: 'var(--c-heading)' }}>
                   {name}
                 </span>
                 <span className="tnum font-medium" style={{ color: 'var(--c-text-muted)' }}>
@@ -272,11 +274,11 @@ export function Home({ onNavigateTab }: HomeProps) {
         aria-label={t.member.home.attendance}
       >
         <div className="flex justify-between items-center mb-3">
-          <span className="font-bold text-[15px]" style={{ color: 'var(--c-deep)' }}>
+          <span className="font-bold text-[15px]" style={{ color: 'var(--c-heading)' }}>
             {t.member.home.weeklyActivity}
           </span>
           <span className="text-[13px]" style={{ color: 'var(--c-text-muted)' }}>
-            {t.member.home.weeklyVisits.replace('{count}', num(2))}
+            {t.member.home.weeklyVisits.replace('{count}', num(weekVisits.filter(v => v.status === 2).length))}
           </span>
         </div>
 

@@ -75,7 +75,7 @@ export function Exercises() {
   const [version, setVersion] = useState(0);
   const [program, setProgram] = useState<WorkoutProgram | undefined>(undefined);
 
-  const memberId = getCurrentUser()?.entityId || 'm-reza';
+  const memberId = getCurrentUser()?.entityId || '';
 
   useEffect(() => {
     const unsub = subscribeToStore(() => setVersion(v => v + 1));
@@ -195,7 +195,7 @@ export function Exercises() {
                 aria-label={day.title}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-[15px]" style={{ color: 'var(--c-deep)' }}>
+                  <h3 className="font-bold text-[15px]" style={{ color: 'var(--c-heading)' }}>
                     {day.title}
                   </h3>
                   <span
@@ -227,7 +227,7 @@ export function Exercises() {
                       <div className="flex-1 min-w-0">
                         <div
                           className="font-bold text-[14px] truncate"
-                          style={{ color: 'var(--c-deep)' }}
+                          style={{ color: 'var(--c-heading)' }}
                         >
                           {item.name}
                         </div>
@@ -236,7 +236,7 @@ export function Exercises() {
                         </div>
                       </div>
 
-                      <div className="text-left shrink-0">
+                      <div className="text-end shrink-0">
                         <div className="text-[12px] font-bold tnum" style={{ color: 'var(--c-ink)' }}>
                           {num(item.sets)} × {num(item.repsMin)}-{num(item.repsMax)}
                         </div>
@@ -263,7 +263,7 @@ export function Exercises() {
               className="p-8 rounded-2xl border text-center"
             >
               <Dumbbell size={26} className="mx-auto" style={{ color: 'var(--c-steel)' }} />
-              <p className="mt-3 text-[15px] font-bold" style={{ color: 'var(--c-deep)' }}>
+              <p className="mt-3 text-[15px] font-bold" style={{ color: 'var(--c-heading)' }}>
                 {t.member.exercises.emptyTitle}
               </p>
               <p className="mt-1 text-[13px] leading-6" style={{ color: 'var(--c-text-muted)' }}>
@@ -326,7 +326,7 @@ export function Exercises() {
                     <div>
                       <h3
                         className="font-bold text-[15px] sm:text-[16px] group-hover:text-sky-600 transition-colors"
-                        style={{ color: 'var(--c-deep)' }}
+                        style={{ color: 'var(--c-heading)' }}
                       >
                         {ex.name}
                       </h3>
@@ -365,7 +365,7 @@ export function Exercises() {
                       </div>
                       <div
                         className="font-bold tnum text-[13px] sm:text-[14px] mt-0.5"
-                        style={{ color: 'var(--c-deep)' }}
+                        style={{ color: 'var(--c-heading)' }}
                       >
                         {typeof set.reps === 'number' ? num(set.reps) : set.reps}
                         {set.weight !== '-' && (
@@ -441,7 +441,7 @@ export function Exercises() {
                   <div className="min-w-0">
                     <div
                       className="font-bold text-[13px] sm:text-[14px] truncate"
-                      style={{ color: 'var(--c-deep)' }}
+                      style={{ color: 'var(--c-heading)' }}
                     >
                       {item.nameFa}
                     </div>
@@ -522,7 +522,7 @@ export function Exercises() {
               <div>
                 <h3
                   className="text-lg font-black"
-                  style={{ color: 'var(--c-deep)' }}
+                  style={{ color: 'var(--c-heading)' }}
                 >
                   {selectedDemo.nameFa}
                 </h3>

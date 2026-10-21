@@ -78,7 +78,7 @@ export function History() {
   const [trainer, setTrainer] = useState<Awaited<ReturnType<typeof getTrainer>>>(undefined);
   const [sessions, setSessions] = useState<DailySession[]>([]);
 
-  const currentTrainerId = getCurrentUser()?.entityId || 't-ali';
+  const currentTrainerId = getCurrentUser()?.entityId || '';
 
   useEffect(() => {
     const load = () => {
@@ -161,7 +161,7 @@ export function History() {
               key={s.id}
               className="py-3 flex items-center justify-between gap-3 text-sm"
             >
-              <span className="font-semibold" style={{ color: 'var(--c-deep)' }}>
+              <span className="font-semibold" style={{ color: 'var(--c-heading)' }}>
                 {displayName(s.memberName, isFa)}
               </span>
               <span className="text-[12px] tnum" style={{ color: 'var(--c-text-muted)' }}>
@@ -204,7 +204,7 @@ export function History() {
                 {grp.items.map((row, i) => (
                   <div key={`${row.athlete}-${i}`} className="py-3.5">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-[15px]" style={{ color: 'var(--c-deep)' }}>
+                      <span className="font-bold text-[15px]" style={{ color: 'var(--c-heading)' }}>
                         {row.athlete}
                       </span>
                       <span

@@ -21,6 +21,7 @@ import {
 import { getTrainers } from '../../../api/trainers';
 import { subscribeToStore } from '../../../api/auth';
 import type { DailySession, Member, Trainer } from '../../../lib/domain/gymManagement';
+import { AccountPanel, PackageSheet } from '../../accounts/AccountForms';
 
 type SheetAction = 'payment' | 'adjust' | 'trainer' | null;
 type PaymentMethod = 'card' | 'cash' | 'transfer';
@@ -75,6 +76,7 @@ export function MemberSheet({
   const [newTrainerId, setNewTrainerId] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ message: string; ok: boolean } | null>(null);
+  const [packageFor, setPackageFor] = useState<Member | null>(null);
 
   const memberId = member?.id;
 
@@ -169,7 +171,7 @@ export function MemberSheet({
           <div className="flex-1 min-w-0">
             <div
               className="text-[19px] font-extrabold truncate"
-              style={{ color: 'var(--c-deep)' }}
+              style={{ color: 'var(--c-heading)' }}
             >
               {name}
             </div>
@@ -189,6 +191,19 @@ export function MemberSheet({
             <X size={20} />
           </button>
         </div>
+
+        {/* ورزشکار ساختهٔ مربی: تا تعیین بسته رزرو ندارد */}
+        {live?.packagePending && (
+          <div
+            className="mt-4 rounded-2xl border p-3.5 flex flex-wrap items-center gap-3"
+            style={{ backgroundColor: 'var(--c-status-live-bg)', borderColor: 'var(--c-brass)', color: 'var(--c-status-live-fg)' }}
+          >
+            <p className="text-[13.5px] font-semibold flex-1 min-w-[12rem]">{t.accounts.packagePendingHint}</p>
+            <Btn v="primary" className="h-10" onClick={() => setPackageFor(live)}>
+              {t.accounts.setPackage}
+            </Btn>
+          </div>
+        )}
 
         {/* کارت مانده جلسات */}
         <div
@@ -230,7 +245,7 @@ export function MemberSheet({
             <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
               {ms.defaultTrainer}
             </div>
-            <div className="font-bold mt-0.5" style={{ color: 'var(--c-deep)' }}>
+            <div className="font-bold mt-0.5" style={{ color: 'var(--c-heading)' }}>
               {trainer}
             </div>
           </div>
@@ -335,7 +350,7 @@ export function MemberSheet({
                 <Btn v="soft" type="button" className="w-9 h-9 p-0" onClick={() => setDelta(d => d - 1)} aria-label="−1">
                   <Minus size={15} />
                 </Btn>
-                <span className="w-14 text-center font-bold text-[18px] tnum" style={{ color: 'var(--c-deep)' }} aria-live="polite">
+                <span className="w-14 text-center font-bold text-[18px] tnum" style={{ color: 'var(--c-heading)' }} aria-live="polite">
                   {delta > 0 ? `+${num(delta)}` : num(delta)}
                 </span>
                 <Btn v="soft" type="button" className="w-9 h-9 p-0" onClick={() => setDelta(d => d + 1)} aria-label="+1">
@@ -400,9 +415,16 @@ export function MemberSheet({
           </form>
         )}
 
+        {/* حساب ورود ورزشکار */}
+        {memberId && (
+          <div className="mt-5">
+            <AccountPanel role="member" entityId={memberId} />
+          </div>
+        )}
+
         {/* آخرین جلسات */}
         <div className="mt-6">
-          <div className="text-[15px] font-bold mb-2" style={{ color: 'var(--c-deep)' }}>
+          <div className="text-[15px] font-bold mb-2" style={{ color: 'var(--c-heading)' }}>
             {ms.recentSessions}
           </div>
           {recent.length === 0 && (
@@ -430,6 +452,14 @@ export function MemberSheet({
           ))}
         </div>
       </div>
+      <PackageSheet
+        member={packageFor}
+        onClose={() => setPackageFor(null)}
+        onDone={msg => {
+          setPackageFor(null);
+          setToast({ message: msg, ok: true });
+        }}
+      />
       <Toast
         message={toast?.message ?? null}
         type={toast?.ok === false ? 'warning' : 'success'}

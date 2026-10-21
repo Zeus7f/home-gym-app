@@ -215,6 +215,7 @@ export function LoginScreen({ lang: langProp, onLanguageChange: onLangProp }: Lo
                           v="ghost"
                           className="h-9 !px-3 shrink-0"
                           disabled={busy}
+                          aria-label={`${t.auth.demoUse}: ${displayName(a.name, isFa)}`}
                           onClick={() => {
                             setPhone(a.phone);
                             setPassword('123');

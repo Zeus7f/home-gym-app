@@ -5,7 +5,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Meter } from '../../components/ui/Meter';
 import { Seg } from '../../components/ui/Seg';
 import { Chips } from '../../components/ui/Chips';
-import { Capacity } from '../../components/ui/Capacity';
+import { Capacity, DEMO_CAPACITY_SESSIONS } from '../../components/ui/Capacity';
 import { Button } from '../../components/ui/Button';
 
 export default function UIShowcase() {
@@ -35,7 +35,7 @@ export default function UIShowcase() {
       className="max-w-5xl mx-auto space-y-10 py-6"
     >
       <div className="border-b pb-4" style={{ borderColor: 'var(--c-border)' }}>
-        <h1 className="text-2xl font-black" style={{ color: 'var(--c-deep)' }}>
+        <h1 className="text-2xl font-black" style={{ color: 'var(--c-heading)' }}>
           ویترین کامپوننت‌های مشترک UI (فاز ۳)
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--c-text-muted)' }}>
@@ -161,11 +161,11 @@ export default function UIShowcase() {
         <div className="space-y-6">
           <div>
             <div className="text-xs mb-2 font-medium">حالت استاندارد دسکتاپ:</div>
-            <Capacity />
+            <Capacity sessions={DEMO_CAPACITY_SESSIONS} />
           </div>
           <div className="max-w-md">
             <div className="text-xs mb-2 font-medium">حالت فشرده (Compact - مناسب موبایل/سایدبار):</div>
-            <Capacity compact />
+            <Capacity compact sessions={DEMO_CAPACITY_SESSIONS} />
           </div>
         </div>
       </section>

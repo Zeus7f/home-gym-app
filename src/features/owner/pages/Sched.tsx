@@ -190,7 +190,7 @@ export function Sched({ isMobile = false }: SchedProps) {
                     <span
                       style={{
                         backgroundColor: 'var(--c-brass)',
-                        color: 'var(--c-deep)',
+                        color: 'var(--c-heading)',
                       }}
                       className="h-6 px-2.5 rounded-md text-[13px] font-bold inline-flex items-center"
                     >
