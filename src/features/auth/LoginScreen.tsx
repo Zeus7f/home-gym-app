@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { login } from '../../api/auth';
+import { isServerAuth, login } from '../../api/auth';
 import { useI18n } from '../../components/LanguageProvider';
 import { getGym } from '../../api/gym';
 import { Language, translations } from '../../lib/i18n';
@@ -39,6 +39,7 @@ export function LoginScreen({ lang: langProp, onLanguageChange: onLangProp }: Lo
   const [loading, setLoading] = useState(false);
 
   const t = translations[activeLang];
+  const demoAuth = !isServerAuth();
 
   const [gymName, setGymName] = useState('Iron Haven Fitness Club');
 
@@ -205,6 +206,9 @@ export function LoginScreen({ lang: langProp, onLanguageChange: onLangProp }: Lo
             </div>
           )}
 
+          {/* B-01: حساب‌های تستی فقط در دموی محلی؛ با Supabase Auth ورود فقط با حساب واقعی است */}
+          {demoAuth && (
+          <>
           {/* کارت‌های انتخاب سریع نقش (مدیر، مربی، شاگرد) */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
@@ -384,6 +388,8 @@ export function LoginScreen({ lang: langProp, onLanguageChange: onLangProp }: Lo
               {t.login.orManual}
             </span>
           </div>
+          </>
+          )}
 
           {/* فرم اصلی ورود */}
           <form onSubmit={handleSubmit} className="space-y-3.5">
@@ -409,7 +415,7 @@ export function LoginScreen({ lang: langProp, onLanguageChange: onLangProp }: Lo
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder={t.login.usernamePlaceholder}
+                  placeholder={demoAuth ? t.login.usernamePlaceholder : t.login.username}
                   autoComplete="username"
                   required
                   className="w-full bg-transparent border-none outline-hidden text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400"

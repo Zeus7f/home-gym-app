@@ -9,6 +9,16 @@ export type StoreMessageKey =
   | 'login.success'
   | 'login.userNotFound'
   | 'login.badPassword'
+  | 'login.badCredentials'
+  | 'login.noProfile'
+  | 'login.inactive'
+  | 'login.authUnavailable'
+  // حساب‌های ورود (B-01)
+  | 'account.created'
+  | 'account.usernameTaken'
+  | 'account.invalidUsername'
+  | 'account.weakPassword'
+  | 'account.failed'
   // جلسات
   | 'session.notFound'
   | 'session.memberOrTrainerNotFound'

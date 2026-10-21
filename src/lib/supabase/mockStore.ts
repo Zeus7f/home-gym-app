@@ -49,6 +49,9 @@ import {
 } from '../domain/bookingPolicy';
 import { translations } from '../i18n';
 import { supabase, isLiveSupabase } from './client';
+import { resolveAuthMode, type AuthMode } from '../auth/accountMapping';
+
+const viteEnv = (import.meta as any).env || {};
 
 /**
  * تولید شناسهٔ یکتا.
@@ -1257,6 +1260,18 @@ class GymStore {
   currentUser: UserAccount | null = null; // Unauthenticated by default (F3)
 
   /**
+   * B-01: با Supabase پیکربندی‌شده، هویت فقط از Supabase Auth می‌آید و رمزهای محلی
+   * (حساب‌های دمو) پذیرفته نمی‌شوند. بدون Supabase، برنامه دموی محلی است.
+   */
+  authMode: AuthMode = resolveAuthMode({
+    hasSupabase: isLiveSupabase,
+    requested: viteEnv.VITE_AUTH_MODE,
+    isDev: viteEnv.DEV === true,
+  });
+  /** آیا وضعیت نشست مشخص شده است؟ در حالت Supabase تا بازیابی نشست false است. */
+  authReady = this.authMode === 'demo';
+
+  /**
    * B-07: کاربر پیش‌نمایش نقش — فقط وقتی کاربر واقعی مدیر باشگاه است.
    * ذخیره نمی‌شود و هویت داده‌ای همهٔ صفحات (نه فقط پوستهٔ UI) را تعیین می‌کند.
    */
@@ -1328,8 +1343,11 @@ class GymStore {
         this.pastSessions = this.pastSessions.map(migrate);
       }
 
-      // Restore session
-      const savedUserId = sessionStorage.getItem(this.SESSION_KEY) || localStorage.getItem(this.SESSION_KEY);
+      // Restore session — فقط در دموی محلی؛ در حالت Supabase نشست از توکن Auth بازیابی می‌شود
+      const savedUserId =
+        this.authMode === 'demo'
+          ? sessionStorage.getItem(this.SESSION_KEY) || localStorage.getItem(this.SESSION_KEY)
+          : null;
       if (savedUserId) {
         const found = this.users.find(u => u.id === savedUserId);
         if (found) {
@@ -1385,6 +1403,13 @@ class GymStore {
   // AUTHENTICATION & USER MANAGEMENT
   // ==========================================
   login(username: string, password: string): StoreResult {
+    if (this.authMode !== 'demo') {
+      return {
+        success: false,
+        messageKey: 'login.authUnavailable',
+        message: 'ورود فقط از طریق سرویس احراز هویت ممکن است.',
+      };
+    }
     const user = this.users.find(
       u => u.username.toLowerCase() === username.trim().toLowerCase()
     );
@@ -1424,7 +1449,16 @@ class GymStore {
     this.notify();
   }
 
+  /** B-01: کاربری که Supabase Auth تأیید کرده است (یا null پس از خروج) */
+  setAuthenticatedUser(user: UserAccount | null) {
+    this.currentUser = user;
+    this.previewUser = null;
+    this.authReady = true;
+    this.notify();
+  }
+
   setCurrentUser(userId: string) {
+    if (this.authMode !== 'demo') return;
     const user = this.users.find(u => u.id === userId);
     if (user) {
       this.currentUser = user;
@@ -2031,7 +2065,8 @@ class GymStore {
     if (initialPassword && initialPassword.trim()) {
       this.createUserAccount({
         username: data.phone || `member_${nextId('x').split('-').pop()}`,
-        password: initialPassword.trim(),
+        // B-01: در حالت Supabase رمز فقط به سرویس Auth می‌رود و در مرورگر ذخیره نمی‌شود
+        password: this.authMode === 'demo' ? initialPassword.trim() : '',
         role: 'member',
         entityId: newMember.id,
         displayName: newMember.name
@@ -2196,7 +2231,8 @@ class GymStore {
     if (initialPassword && initialPassword.trim()) {
       this.createUserAccount({
         username: data.phone || `trainer_${nextId('x').split('-').pop()}`,
-        password: initialPassword.trim(),
+        // B-01: در حالت Supabase رمز فقط به سرویس Auth می‌رود و در مرورگر ذخیره نمی‌شود
+        password: this.authMode === 'demo' ? initialPassword.trim() : '',
         role: 'trainer',
         entityId: newTrainer.id,
         displayName: newTrainer.name

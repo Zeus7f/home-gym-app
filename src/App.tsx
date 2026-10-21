@@ -9,6 +9,7 @@ import {
 } from 'react-router-dom';
 import { mockStore } from './lib/supabase/mockStore';
 import { LoginScreen } from './features/auth/LoginScreen';
+import { initAuth, isAuthReady, logout } from './api/auth';
 import { UserJourneyGuide } from './components/UserJourneyGuide';
 
 // Lazy loading roles for code-splitting (Phase 7 - Hardening)
@@ -108,6 +109,9 @@ function App() {
     return mockStore.subscribe(() => setTick(t => t + 1));
   }, []);
 
+  // B-01: بازیابی نشست Supabase Auth (در دموی محلی کاری انجام نمی‌دهد)
+  useEffect(() => initAuth(), []);
+
   const searchParams = new URLSearchParams(location.search);
   const previewRole = searchParams.get('preview_role');
 
@@ -135,8 +139,22 @@ function App() {
 
   const currentUser = previewUser || authUser;
 
-  // If not authenticated → login page
+  // If not authenticated → login page (پس از مشخص شدن وضعیت نشست، تا صفحهٔ ورود چشمک نزند)
   if (!currentUser) {
+    if (!isAuthReady()) {
+      return (
+        <div
+          className="min-h-screen flex flex-col items-center justify-center select-none"
+          style={{ background: 'var(--c-surface-0)', color: 'var(--c-text-muted)' }}
+        >
+          <div
+            style={{ borderColor: 'var(--c-ink)' }}
+            className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin mb-3"
+          />
+          <span className="text-[14px] font-bold">{t.actions.loading}</span>
+        </div>
+      );
+    }
     return <LoginScreen lang={lang} onLanguageChange={setLang} />;
   }
 
@@ -314,7 +332,7 @@ function App() {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  mockStore.logout();
+                  void logout();
                   // بازگشت به ریشه تا ورود بعدی با نقش جدید از مسیر درست آغاز شود
                   navigate('/');
                 }}

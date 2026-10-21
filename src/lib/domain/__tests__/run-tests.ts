@@ -3,6 +3,7 @@ import { runMemberAnalyticsTests } from './memberAnalytics.test';
 import { runStoreTests } from './store.test';
 import { runIntegrationTests } from './integration.test';
 import { runBugfixTests } from './bugfixes.test';
+import { runAuthTests } from './auth.test';
 import { runSessionDraftTests } from '../../../features/trainer/hooks/__tests__/useSessionDraft.test';
 
 async function main() {
@@ -15,6 +16,7 @@ async function main() {
     ['sessionDraft', runSessionDraftTests()],
     ['integration', await runIntegrationTests()],
     ['bugfixes', runBugfixTests()],
+    ['auth', runAuthTests()],
   ] as const;
 
   let passed = 0;

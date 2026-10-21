@@ -7,6 +7,7 @@ import { gymStore } from './_client';
 import { localizeResult, translateStoreMessage } from './_messages';
 import type { Member, DailySession } from '../lib/domain/gymManagement';
 import { toman } from '../lib/format';
+import { createLoginAccount } from './auth';
 
 type ActionResult = { success: boolean; message: string };
 
@@ -36,11 +37,25 @@ export async function getMemberSessions(memberId: string): Promise<DailySession[
   ];
 }
 
-/** Add a new member. */
+/**
+ * Add a new member. With a password, a sign-in account is created too
+ * (B-01: on Supabase Auth when configured; `account` reports that step).
+ */
 export async function addMember(
   data: Parameters<typeof gymStore.addMember>[0],
-): Promise<Member> {
-  return gymStore.addMember(data);
+  initialPassword?: string,
+): Promise<{ member: Member; account?: ActionResult }> {
+  const member = gymStore.addMember(data, initialPassword);
+  if (!initialPassword?.trim()) return { member };
+  const account = await createLoginAccount({
+    role: 'member',
+    entityId: member.id,
+    username: data.phone.replace(/\s+/g, ''),
+    password: initialPassword.trim(),
+    fullName: member.name,
+    phone: data.phone,
+  });
+  return { member, account };
 }
 
 /**
