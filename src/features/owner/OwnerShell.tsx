@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   CalendarClock,
@@ -17,9 +18,9 @@ import { useI18n } from '../../components/LanguageProvider';
 import { getGym } from '../../api/gym';
 import { getMembers } from '../../api/members';
 import { subscribeToStore } from '../../api/auth';
-import { resolveTab } from '../../lib/navigation';
 import { useIsMobile } from '../../lib/useMediaQuery';
-import { useTabParam } from '../../lib/useTabParam';
+import { useSection } from '../../lib/useSection';
+import type { Section } from '../../lib/routes';
 
 // صفحات اپ مدیر
 import { Dash } from './pages/Dash';
@@ -30,89 +31,90 @@ import { Finance } from './pages/Finance';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 
-export type OwnerTabKey = 'dash' | 'sched' | 'mem' | 'tr' | 'fin' | 'rep' | 'set';
-
+type OwnerSection = Section<'owner'>;
 type LabelKey = 'dashboard' | 'members' | 'trainers' | 'schedule' | 'finance' | 'reports' | 'settings';
 
-const NAV: { key: OwnerTabKey; icon: React.ElementType; labelKey: LabelKey }[] = [
-  { key: 'dash', icon: LayoutDashboard, labelKey: 'dashboard' },
-  { key: 'sched', icon: CalendarClock, labelKey: 'schedule' },
-  { key: 'mem', icon: Users, labelKey: 'members' },
-  { key: 'tr', icon: Dumbbell, labelKey: 'trainers' },
-  { key: 'fin', icon: Wallet, labelKey: 'finance' },
-  { key: 'rep', icon: FileBarChart, labelKey: 'reports' },
-  { key: 'set', icon: SettingsIcon, labelKey: 'settings' },
+const NAV: { key: OwnerSection; icon: React.ElementType; labelKey: LabelKey }[] = [
+  { key: 'dashboard', icon: LayoutDashboard, labelKey: 'dashboard' },
+  { key: 'schedule', icon: CalendarClock, labelKey: 'schedule' },
+  { key: 'memberships', icon: Users, labelKey: 'members' },
+  { key: 'trainers', icon: Dumbbell, labelKey: 'trainers' },
+  { key: 'finance', icon: Wallet, labelKey: 'finance' },
+  { key: 'analytics', icon: FileBarChart, labelKey: 'reports' },
+  { key: 'settings', icon: SettingsIcon, labelKey: 'settings' },
 ];
 
-const MOBILE_TABS: OwnerTabKey[] = ['dash', 'sched', 'mem', 'fin'];
+const MOBILE_TABS: OwnerSection[] = ['dashboard', 'schedule', 'memberships', 'finance'];
 
-const OWNER_TAB_KEYS = NAV.map(n => n.key);
-/** نام‌های کامل مقصد (مثلاً از اعلان‌ها) به کلید تب مالک */
-const OWNER_TAB_ALIASES: Partial<Record<string, OwnerTabKey>> = {
-  dashboard: 'dash',
-  schedule: 'sched',
-  members: 'mem',
-  trainers: 'tr',
-  finance: 'fin',
-  reports: 'rep',
-  settings: 'set',
-};
-const toOwnerTab = (raw: string | null | undefined) =>
-  resolveTab(raw, OWNER_TAB_KEYS, 'dash', OWNER_TAB_ALIASES);
-
+/**
+ * /owner/:section — داشبورد، برنامه، اعضا (/owner/memberships/:memberId)، مربیان، مالی، گزارش‌ها، تنظیمات.
+ */
 export function OwnerShell() {
-  const [activeTab, setTab] = useTabParam(toOwnerTab);
+  const { section, sub, go, linkTo, redirectTo } = useSection('owner');
   const isMobile = useIsMobile();
   const { t, isFa } = useI18n();
-  const [selectedMember, setSelectedMember] = useState<MemberData | null>(null);
   const [gymName, setGymName] = useState('');
   const [pendingCount, setPendingCount] = useState(0);
+  const [members, setMembers] = useState<MemberData[]>([]);
 
   React.useEffect(() => {
-    getGym().then(g => setGymName(g?.name ?? ''));
-    const refresh = () => getMembers().then(ms => setPendingCount(ms.filter(m => m.packagePending).length));
+    const refresh = () => {
+      getGym().then(g => setGymName(g?.name ?? ''));
+      getMembers().then(ms => {
+        setMembers(ms);
+        setPendingCount(ms.filter(m => m.packagePending).length);
+      });
+    };
     refresh();
     return subscribeToStore(refresh);
   }, []);
+
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
+
+  // جزئیات ورزشکار آدرس خودش را دارد: /owner/memberships/:memberId
+  const memberId = section === 'memberships' ? sub[0] : undefined;
+  const selectedMember = memberId ? members.find(m => m.id === memberId) ?? { id: memberId } : null;
+  const openMember = (m: MemberData) => go('memberships', m.id);
 
   const nav: ShellNavItem[] = NAV.map(n => ({
     key: n.key,
     icon: n.icon,
     label: t.nav.owner[n.labelKey],
     short: t.nav.ownerShort[n.labelKey],
-    badge: n.key === 'mem' ? pendingCount : undefined,
+    badge: n.key === 'memberships' ? pendingCount : undefined,
+    to: linkTo(n.key),
   }));
-  const current = NAV.find(n => n.key === activeTab)!;
-  const title = activeTab === 'dash' ? t.owner.shell.todayOps : t.nav.owner[current.labelKey];
+  const current = NAV.find(n => n.key === section)!;
+  const title = section === 'dashboard' ? t.owner.shell.todayOps : t.nav.owner[current.labelKey];
 
   return (
     <AppShell
       nav={nav}
       mobileKeys={MOBILE_TABS}
-      activeKey={activeTab}
-      onNavigate={setTab}
+      activeKey={section}
+      onNavigate={key => go(key)}
       title={title}
-      subtitle={activeTab === 'dash' ? formatJalaliHumanTodayLocalized(isFa) : gymName}
+      subtitle={section === 'dashboard' ? formatJalaliHumanTodayLocalized(isFa) : gymName}
       context={gymName}
       actions={
-        activeTab !== 'sched' && (
-          <Btn v="primary" onClick={() => setTab('sched')} className="h-10 !px-3 sm:!px-4" aria-label={t.owner.shell.newBooking}>
+        section !== 'schedule' && (
+          <Btn v="primary" onClick={() => go('schedule')} className="h-10 !px-3 sm:!px-4" aria-label={t.owner.shell.newBooking}>
             <Plus size={17} />
             <span className="hidden sm:inline">{t.owner.shell.newBooking}</span>
           </Btn>
         )
       }
     >
-      {activeTab === 'dash' && <Dash onNavigate={setTab} onOpenMember={setSelectedMember} isMobile={isMobile} />}
-      {activeTab === 'sched' && <Sched isMobile={isMobile} />}
-      {activeTab === 'mem' && <Members onOpenMember={setSelectedMember} isMobile={isMobile} />}
-      {activeTab === 'tr' && <Trainers isMobile={isMobile} />}
-      {activeTab === 'fin' && <Finance isMobile={isMobile} />}
-      {activeTab === 'rep' && <Reports isMobile={isMobile} />}
-      {activeTab === 'set' && <Settings isMobile={isMobile} />}
+      {section === 'dashboard' && <Dash onNavigate={key => go(key)} onOpenMember={openMember} isMobile={isMobile} />}
+      {section === 'schedule' && <Sched isMobile={isMobile} />}
+      {section === 'memberships' && <Members onOpenMember={openMember} isMobile={isMobile} />}
+      {section === 'trainers' && <Trainers isMobile={isMobile} />}
+      {section === 'finance' && <Finance isMobile={isMobile} />}
+      {section === 'analytics' && <Reports isMobile={isMobile} />}
+      {section === 'settings' && <Settings isMobile={isMobile} />}
 
-      {/* کشوی اطلاعات عضو (MemberSheet) */}
-      <MemberSheet member={selectedMember} onClose={() => setSelectedMember(null)} isMobile={isMobile} />
+      {/* کشوی اطلاعات عضو — بسته شدن، به فهرست اعضا برمی‌گردد */}
+      <MemberSheet member={selectedMember} onClose={() => go('memberships')} isMobile={isMobile} />
     </AppShell>
   );
 }

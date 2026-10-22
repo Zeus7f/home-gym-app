@@ -1,27 +1,50 @@
 /**
  * src/api/admin.ts
- * پنل مدیر کل سامانه: باشگاه‌ها و مدیرانشان — components import ONLY from here.
+ * پنل مدیر کل سامانه: باشگاه‌ها، مدیران و وضعیت سامانه — components import ONLY from here.
  */
 
-import { gymStore } from './_client';
-import { localizeResult, translateStoreMessage } from './_messages';
-import { isServerAuth } from './auth';
-import { can } from '../lib/auth/permissions';
-import { manageAccount } from '../lib/auth/supabaseAuth';
-import { listGyms as listCloudGyms, openGym, setGymActiveInCloud, type GymSummary } from '../lib/data/cloudSync';
-import { normalizePhone, isValidMobile } from '../lib/phone';
-import { MIN_PASSWORD_LENGTH } from '../lib/auth/accountMapping';
+import { apiRequest, gymStore, refreshSnapshot } from './_client';
+import { translateStoreMessage } from './_messages';
+import type { Gym, UserAccount } from '../lib/domain/gymManagement';
+import type { StoreMessageKey, StoreMessageParams } from '../lib/domain/storeMessages';
 
 type ActionResult = { success: boolean; message: string };
 
-const isAdmin = () => can(gymStore.currentUser?.role, 'gym.manage');
-const denied = (): ActionResult => ({ success: false, message: translateStoreMessage('account.failed') });
+export interface GymSummary {
+  gym: Gym;
+  trainers: number;
+  members: number;
+  owner?: UserAccount;
+}
 
-export type { GymSummary };
+export interface SystemStatus {
+  status: string;
+  uptimeSeconds: number;
+  dbLatencyMs: number;
+  node: string;
+  timezone: string;
+  counts: { gyms: number; users: number; sessions: number };
+}
+
+type Reply = { success: boolean; messageKey: StoreMessageKey; params?: StoreMessageParams };
+const toResult = (j: Reply): ActionResult => ({
+  success: !!j.success,
+  message: translateStoreMessage(j.messageKey ?? 'server.unavailable', j.params),
+});
 
 export async function listGyms(): Promise<GymSummary[]> {
-  if (!isAdmin()) return [];
-  return isServerAuth() ? listCloudGyms() : gymStore.gymSummaries();
+  const { json } = await apiRequest<{ gyms?: GymSummary[] }>('GET', '/api/admin/gyms');
+  return json.gyms ?? [];
+}
+
+export async function listOwnerAccounts(): Promise<UserAccount[]> {
+  const { json } = await apiRequest<{ accounts?: UserAccount[] }>('GET', '/api/admin/accounts');
+  return json.accounts ?? [];
+}
+
+export async function getSystemStatus(): Promise<SystemStatus | null> {
+  const { json } = await apiRequest<{ system?: SystemStatus }>('GET', '/api/admin/system');
+  return json.system ?? null;
 }
 
 export interface NewGymInput {
@@ -34,61 +57,32 @@ export interface NewGymInput {
 
 /** باشگاه تازه به‌همراه حساب مدیر آن */
 export async function createGym(input: NewGymInput): Promise<ActionResult> {
-  if (!isAdmin()) return denied();
-  if (!isServerAuth()) return localizeResult(gymStore.createGym(input));
-
-  // همان اعتبارسنجی دمو، پیش از تماس با سرور
-  const phone = normalizePhone(input.ownerPhone);
-  if (!input.name.trim()) return { success: false, message: translateStoreMessage('gym.invalidName') };
-  if (!input.ownerName.trim()) return { success: false, message: translateStoreMessage('account.invalidName') };
-  if (!isValidMobile(phone)) return { success: false, message: translateStoreMessage('account.invalidPhone') };
-  if (input.ownerPassword.trim().length < MIN_PASSWORD_LENGTH) {
-    return { success: false, message: translateStoreMessage('account.weakPassword') };
-  }
-  const res = await manageAccount({
-    action: 'create-gym',
-    gymName: input.name.trim(),
-    capacity: Math.round(input.capacity),
-    fullName: input.ownerName.trim(),
-    username: phone,
-    phone,
-    password: input.ownerPassword.trim(),
-  });
-  return 'messageKey' in res
-    ? { success: false, message: translateStoreMessage(res.messageKey) }
-    : { success: true, message: translateStoreMessage('gym.created', { gym: input.name.trim() }) };
+  const { json } = await apiRequest<Reply>('POST', '/api/admin/gyms', input);
+  return toResult(json);
 }
 
 export async function setGymActive(gymId: string, active: boolean): Promise<ActionResult> {
-  if (!isAdmin()) return denied();
-  if (isServerAuth() && !(await setGymActiveInCloud(gymId, active))) {
-    return { success: false, message: translateStoreMessage('account.failed') };
-  }
-  return localizeResult(gymStore.setGymActive(gymId, active));
+  const { json } = await apiRequest<Reply>('PATCH', `/api/admin/gyms/${encodeURIComponent(gymId)}`, { isActive: active });
+  return toResult(json);
 }
 
-/** مدیر کل: تغییر رمز مدیر یک باشگاه */
+/** مدیر کل: تعیین رمز تازه برای مدیر یک باشگاه (در ورود بعدی باید عوضش کند) */
 export async function resetOwnerPassword(userId: string, password: string): Promise<ActionResult> {
-  if (!isAdmin()) return denied();
-  if (!isServerAuth()) return localizeResult(gymStore.resetPassword(userId, password));
-  if (password.trim().length < MIN_PASSWORD_LENGTH) {
-    return { success: false, message: translateStoreMessage('account.weakPassword') };
-  }
-  const res = await manageAccount({ action: 'set-password', userId, password: password.trim() });
-  return 'messageKey' in res
-    ? { success: false, message: translateStoreMessage(res.messageKey) }
-    : { success: true, message: translateStoreMessage('account.passwordChanged') };
+  const { json } = await apiRequest<Reply>('POST', `/api/admin/accounts/${encodeURIComponent(userId)}/password`, { password });
+  return toResult(json);
 }
 
-/**
- * مدیر کل: ورود به پنل یک باشگاه (پیش‌نمایش با هویت مدیر همان باشگاه).
- * @returns شناسهٔ حساب مدیر برای پیش‌نمایش، یا null
- */
+/** مدیر کل: ورود به پنل یک باشگاه با اختیارات مدیر همان باشگاه */
 export async function enterGym(gymId: string): Promise<boolean> {
-  if (!isAdmin()) return false;
-  if (isServerAuth() && (await openGym(gymId)) !== null) return false;
-  if (!isServerAuth()) gymStore.activateGym(gymId);
   gymStore.adminGymId = gymId;
+  const ok = await refreshSnapshot();
+  if (!ok) gymStore.adminGymId = null;
   gymStore.notify();
-  return true;
+  return ok;
+}
+
+/** خروج مدیر کل از پنل باشگاه */
+export function leaveGym() {
+  gymStore.adminGymId = null;
+  gymStore.notify();
 }

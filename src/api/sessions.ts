@@ -4,8 +4,9 @@
  * G10 fix: no direct mockStore imports in components.
  */
 
-import { gymStore } from './_client';
-import { localizeResult } from './_messages';
+import { gymStore, runOp } from './_client';
+import { localizeOp } from './_messages';
+import * as ops from '../lib/domain/operations';
 import type { DailySession, SessionExercise } from '../lib/domain/gymManagement';
 import { getTodayJalaliString } from '../lib/date/jalali';
 
@@ -42,7 +43,9 @@ export async function scheduleSession(
   trainerId: string,
   exercises?: SessionExercise[],
 ): Promise<{ success: boolean; message: string; session?: DailySession }> {
-  return localizeResult(gymStore.scheduleSessionOnDate(date, time, memberId, trainerId, exercises));
+  const body = { date, time, memberId, trainerId, exercises };
+  const r = localizeOp(await runOp({ method: 'POST', path: '/api/sessions', body }, (s, a) => ops.scheduleSession(s, a, body)));
+  return { ...r, session: r.data as DailySession | undefined };
 }
 
 /**
@@ -58,7 +61,13 @@ export async function completeSession(
   remainingSessions: number;
   message: string;
 }> {
-  return localizeResult(gymStore.completeMemberSession(sessionId, exercises));
+  const r = localizeOp(
+    await runOp({ method: 'POST', path: `/api/sessions/${encodeURIComponent(sessionId)}/complete`, body: { exercises } }, (s, a) =>
+      ops.completeSession(s, a, { sessionId, exercises })
+    )
+  );
+  const d = (r.data ?? {}) as { idempotent?: boolean; remainingSessions?: number };
+  return { success: r.success, message: r.message, idempotent: !!d.idempotent, remainingSessions: d.remainingSessions ?? 0 };
 }
 
 /** Get a session by its ID. */
@@ -67,8 +76,12 @@ export async function getSessionById(sessionId: string): Promise<DailySession | 
 }
 
 /** Check in a session (scheduled → in_progress). */
-export async function checkInSession(sessionId: string): Promise<void> {
-  gymStore.checkInSession(sessionId);
+export async function checkInSession(sessionId: string): Promise<{ success: boolean; message: string }> {
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/sessions/${encodeURIComponent(sessionId)}/check-in` }, (s, a) =>
+      ops.checkInSession(s, a, { sessionId })
+    )
+  );
 }
 
 /**
@@ -79,7 +92,11 @@ export async function cancelSession(
   sessionId: string,
   reason?: string
 ): Promise<{ success: boolean; message: string }> {
-  return localizeResult(gymStore.cancelSession(sessionId, reason));
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/sessions/${encodeURIComponent(sessionId)}/cancel`, body: { reason } }, (s, a) =>
+      ops.cancelSession(s, a, { sessionId, reason })
+    )
+  );
 }
 
 /**
@@ -91,7 +108,11 @@ export async function rescheduleSession(
   newTime: string,
   reason?: string
 ): Promise<{ success: boolean; message: string }> {
-  return localizeResult(gymStore.rescheduleSession(sessionId, newTime, reason));
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/sessions/${encodeURIComponent(sessionId)}/reschedule`, body: { time: newTime, reason } }, (s, a) =>
+      ops.rescheduleSession(s, a, { sessionId, newTime, reason })
+    )
+  );
 }
 
 /** لغو نوبت توسط خود ورزشکار (با رعایت مهلت ۴ ساعته). */
@@ -99,7 +120,11 @@ export async function cancelSessionByMember(
   sessionId: string,
   reason?: string
 ): Promise<{ success: boolean; message: string }> {
-  return localizeResult(gymStore.cancelSessionByMember(sessionId, reason));
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/sessions/${encodeURIComponent(sessionId)}/member-cancel`, body: { reason } }, (s, a) =>
+      ops.cancelSessionByMember(s, a, { sessionId, reason })
+    )
+  );
 }
 
 /**
@@ -111,7 +136,9 @@ export async function addSessionToToday(
   trainerId: string,
   time?: string,
 ): Promise<{ success: boolean; message: string; session?: DailySession }> {
-  return localizeResult(gymStore.addSessionToToday(memberId, trainerId, time));
+  const body = { memberId, trainerId, time };
+  const r = localizeOp(await runOp({ method: 'POST', path: '/api/sessions/quick', body }, (s, a) => ops.addSessionToToday(s, a, body)));
+  return { ...r, session: r.data as DailySession | undefined };
 }
 
 /**
@@ -122,7 +149,11 @@ export async function reassignDailyTrainer(
   sessionId: string,
   newTrainerId: string,
 ): Promise<{ success: boolean; message: string }> {
-  return localizeResult(gymStore.reassignDailyTrainer(sessionId, newTrainerId));
+  return localizeOp(
+    await runOp({ method: 'PATCH', path: `/api/sessions/${encodeURIComponent(sessionId)}/trainer`, body: { trainerId: newTrainerId } }, (s, a) =>
+      ops.reassignDailyTrainer(s, a, { sessionId, newTrainerId })
+    )
+  );
 }
 
 /** Get configured gym capacity for a date. */
@@ -136,8 +167,10 @@ export function getTrainerDailyCapacity(date: string, trainerId: string): number
 }
 
 /** Override gym daily capacity. */
-export async function setGymDailyCapacity(date: string, capacity: number): Promise<void> {
-  gymStore.setGymDailyCapacity(date, capacity);
+export async function setGymDailyCapacity(date: string, capacity: number): Promise<{ success: boolean; message: string }> {
+  return localizeOp(
+    await runOp({ method: 'PUT', path: '/api/gym/capacity', body: { date, capacity } }, (s, a) => ops.setGymDailyCapacity(s, a, { date, capacity }))
+  );
 }
 
 /** Override trainer daily capacity. */
@@ -145,6 +178,10 @@ export async function setTrainerDailyCapacity(
   date: string,
   trainerId: string,
   capacity: number,
-): Promise<void> {
-  gymStore.setTrainerDailyCapacity(date, trainerId, capacity);
+): Promise<{ success: boolean; message: string }> {
+  return localizeOp(
+    await runOp({ method: 'PUT', path: '/api/gym/capacity', body: { date, trainerId, capacity } }, (s, a) =>
+      ops.setTrainerDailyCapacity(s, a, { date, trainerId, capacity })
+    )
+  );
 }

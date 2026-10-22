@@ -8,13 +8,6 @@ export const appDict = {
     appName: 'HomeGym Ops',
     appBadge: 'Gym Management',
     appSubtitle: 'Operational System for Gym Owners & Trainers',
-    cloudSync: {
-      partial: 'Cloud: partial read',
-      partialHint:
-        'Read from Supabase: {tables}. Bookings, attendance, payments, programs and accounts are stored only in this browser.',
-      error: 'Cloud: unavailable',
-      errorHint: 'Supabase could not be read. All data is stored only in this browser.',
-    },
     previewMode: 'Preview mode',
     signOut: 'Sign out',
     roles: {
@@ -154,13 +147,6 @@ export const appDict = {
     appName: 'مدیریت باشگاه هوم‌جیم',
     appBadge: 'سامانه عملیاتی باشگاه',
     appSubtitle: 'مدیریت سریع، ساده و کاربردی برای مدیر باشگاه و مربیان',
-    cloudSync: {
-      partial: 'ابر: خواندن جزئی',
-      partialHint:
-        'از Supabase خوانده شد: {tables}. رزرو، حضور، امور مالی، برنامه‌ها و حساب‌ها فقط در همین مرورگر ذخیره می‌شوند.',
-      error: 'ابر: در دسترس نیست',
-      errorHint: 'خواندن از Supabase ناموفق بود. همهٔ داده‌ها فقط در همین مرورگر ذخیره می‌شوند.',
-    },
     previewMode: 'حالت پیش‌نمایش',
     signOut: 'خروج از حساب کاربری',
     roles: {

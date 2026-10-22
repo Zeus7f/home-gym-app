@@ -9,14 +9,16 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { AppShell, type ShellNavItem } from '../../components/shell/AppShell';
-import { useTabParam } from '../../lib/useTabParam';
+import { useSection } from '../../lib/useSection';
+import type { Section } from '../../lib/routes';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { getSessionById } from '../../api/sessions';
 import { getGymName } from '../../api/gym';
 import { formatJalaliHumanTodayLocalized } from '../../lib/date/jalali';
 import { getMember } from '../../api/members';
 import { getTrainer } from '../../api/trainers';
 import { DailySession, SessionExercise, Member, Trainer } from '../../lib/domain/gymManagement';
 import { normalizeExerciseSets } from '../../lib/domain/sessionSets';
-import { resolveTab } from '../../lib/navigation';
 import { useI18n } from '../../components/LanguageProvider';
 import type { WorkoutExercise } from './hooks/useSessionDraft';
 
@@ -29,9 +31,9 @@ import { Programs } from './pages/Programs';
 import { Calendar } from './pages/Calendar';
 import { SessionFlow } from './components/SessionFlow';
 
-export type TrainerTabKey = 'today' | 'mem' | 'hist' | 'cat' | 'prog' | 'cal';
+type TrainerSection = Section<'trainer'>;
 interface TrainerTabItem {
-  key: TrainerTabKey;
+  key: TrainerSection;
   icon: React.ElementType;
   /** کلید برچسب و عنوان در فرهنگ لغت */
   labelKey: 'today' | 'members' | 'history' | 'exercises' | 'programs' | 'calendar';
@@ -39,24 +41,12 @@ interface TrainerTabItem {
 
 const TABS: TrainerTabItem[] = [
   { key: 'today', icon: CalendarCheck, labelKey: 'today' },
-  { key: 'mem', icon: Users, labelKey: 'members' },
-  { key: 'hist', icon: HistoryIcon, labelKey: 'history' },
-  { key: 'cat', icon: BookOpen, labelKey: 'exercises' },
-  { key: 'prog', icon: ClipboardList, labelKey: 'programs' },
-  { key: 'cal', icon: CalendarDays, labelKey: 'calendar' },
+  { key: 'athletes', icon: Users, labelKey: 'members' },
+  { key: 'history', icon: HistoryIcon, labelKey: 'history' },
+  { key: 'exercises', icon: BookOpen, labelKey: 'exercises' },
+  { key: 'programs', icon: ClipboardList, labelKey: 'programs' },
+  { key: 'calendar', icon: CalendarDays, labelKey: 'calendar' },
 ];
-
-const TRAINER_TAB_KEYS = TABS.map(tab => tab.key);
-const TRAINER_TAB_ALIASES: Partial<Record<string, TrainerTabKey>> = {
-  members: 'mem',
-  history: 'hist',
-  exercises: 'cat',
-  catalog: 'cat',
-  programs: 'prog',
-  calendar: 'cal',
-};
-const toTrainerTab = (raw: string | null | undefined) =>
-  resolveTab(raw, TRAINER_TAB_KEYS, 'today', TRAINER_TAB_ALIASES);
 
 /** نگاشت کلید تب به عنوان صفحه — برای پرهیز از ساخت کلید پویا */
 const TAB_TITLES = {
@@ -82,77 +72,91 @@ function toWorkoutExercises(exercises: SessionExercise[]): WorkoutExercise[] {
   }));
 }
 
-const MOBILE_TABS: TrainerTabKey[] = ['today', 'mem', 'cat', 'prog'];
+const MOBILE_TABS: TrainerSection[] = ['today', 'athletes', 'exercises', 'programs'];
 
+/**
+ * /trainer/:section — امروز، تقویم، ورزشکاران، برنامه‌ها، حرکات، سوابق.
+ * اجرای زندهٔ جلسه آدرس خودش را دارد: /trainer/sessions/:sessionId/live
+ */
 export function TrainerShell() {
-  const [activeTab, setTab] = useTabParam(toTrainerTab);
-  const [activeSession, setActiveSession] = useState<DailySession | null>(null);
+  const params = useParams();
+  const [first, liveId, liveTail] = (params['*'] ?? '').split('/').filter(Boolean);
+  const isLive = first === 'sessions' && !!liveId && liveTail === 'live';
+  const { section, go, linkTo, redirectTo } = useSection('trainer');
+  const navigate = useNavigate();
   const [activeMember, setActiveMember] = useState<Member | undefined>(undefined);
   const [activeTrainer, setActiveTrainer] = useState<Trainer | undefined>(undefined);
+  const [activeSession, setActiveSession] = useState<DailySession | undefined>(undefined);
 
   const { t, isFa } = useI18n();
   const todayShamsi = formatJalaliHumanTodayLocalized(isFa);
-  const currentTabInfo = TABS.find(t2 => t2.key === activeTab)!;
   const gymName = getGymName();
 
-  // بارگذاری اطلاعات عضو و مربی جلسه فعال (اعتبار باقیمانده و نرخ دستمزد)
+  // جلسهٔ زنده از آدرس؛ اطلاعات عضو و مربی (اعتبار باقیمانده و نرخ دستمزد)
   useEffect(() => {
-    if (!activeSession) {
+    if (!isLive) {
+      setActiveSession(undefined);
       setActiveMember(undefined);
       setActiveTrainer(undefined);
       return;
     }
-
     let cancelled = false;
-    getMember(activeSession.memberId).then(m => {
-      if (!cancelled) setActiveMember(m);
+    getSessionById(liveId).then(sess => {
+      if (cancelled) return;
+      setActiveSession(sess);
+      if (!sess) return;
+      getMember(sess.memberId).then(m => !cancelled && setActiveMember(m));
+      getTrainer(sess.trainerId).then(tr => !cancelled && setActiveTrainer(tr));
     });
-    getTrainer(activeSession.trainerId).then(t => {
-      if (!cancelled) setActiveTrainer(t);
-    });
-
     return () => {
       cancelled = true;
     };
-  }, [activeSession?.id, activeSession?.memberId, activeSession?.trainerId]);
+  }, [isLive, liveId]);
+
+  if (redirectTo && !isLive) return <Navigate to={redirectTo} replace />;
+
+  const shownSection: TrainerSection = isLive ? 'today' : (section as TrainerSection);
+  const currentTabInfo = TABS.find(t2 => t2.key === shownSection)!;
+  const closeLive = () => navigate(linkTo('today'));
 
   const nav: ShellNavItem[] = TABS.map(tab => ({
     key: tab.key,
     icon: tab.icon,
     label: t.nav.trainerShort[tab.labelKey],
+    to: linkTo(tab.key),
   }));
 
   return (
     <AppShell
       nav={nav}
       mobileKeys={MOBILE_TABS}
-      activeKey={activeTab}
-      onNavigate={setTab}
+      activeKey={shownSection}
+      onNavigate={key => go(key)}
       title={t.trainer.shell[TAB_TITLES[currentTabInfo.labelKey]]}
       subtitle={todayShamsi}
       context={gymName}
     >
-      {activeTab === 'today' && <Today onOpenSession={sess => setActiveSession(sess)} />}
-      {activeTab === 'mem' && <Athletes />}
-      {activeTab === 'hist' && <History />}
-      {activeTab === 'cat' && <Catalog />}
-      {activeTab === 'prog' && <Programs />}
-      {activeTab === 'cal' && <Calendar />}
+      {shownSection === 'today' && <Today onOpenSession={sess => navigate(linkTo('sessions', sess.id, 'live'))} />}
+      {shownSection === 'athletes' && <Athletes />}
+      {shownSection === 'history' && <History />}
+      {shownSection === 'exercises' && <Catalog />}
+      {shownSection === 'programs' && <Programs />}
+      {shownSection === 'calendar' && <Calendar />}
 
-      {/* مدال تمام‌صفحه ثبت جلسه تمرینی (Session Flow) */}
+      {/* اجرای تمام‌صفحهٔ جلسه (Session Flow) */}
       <AnimatePresence>
-        {activeSession && (
+        {isLive && activeSession && (
           <SessionFlow
             sessionId={activeSession.id}
             memberId={activeSession.memberId}
             memberName={activeSession.memberName}
-            remainingSessions={activeMember?.remainingSessions ?? 12}
-            totalSessions={activeMember?.totalSessions ?? 12}
+            remainingSessions={activeMember?.remainingSessions ?? 0}
+            totalSessions={activeMember?.totalSessions ?? 0}
             trainerId={activeSession.trainerId}
-            sessionRate={activeTrainer?.sessionRate ?? 150000}
+            sessionRate={activeTrainer?.sessionRate ?? 0}
             initialExercises={toWorkoutExercises(activeSession.exercises)}
-            onClose={() => setActiveSession(null)}
-            onCompleted={() => setActiveSession(null)}
+            onClose={closeLive}
+            onCompleted={closeLive}
           />
         )}
       </AnimatePresence>

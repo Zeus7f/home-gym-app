@@ -17,7 +17,7 @@ async function main() {
     ['sessionDraft', runSessionDraftTests()],
     ['integration', await runIntegrationTests()],
     ['bugfixes', runBugfixTests()],
-    ['auth', runAuthTests()],
+    ['auth', await runAuthTests()],
     ['roles', runRolesTests()],
   ] as const;
 

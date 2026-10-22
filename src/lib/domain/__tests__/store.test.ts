@@ -2,7 +2,7 @@
 // Covers atomic session completion, idempotency, reschedule/cancel policy,
 // and the role-aware notification builder.
 
-import { gymStore } from '../../supabase/mockStore';
+import { gymStore } from '../../store/gymStore';
 import { buildNotifications, daysUntilJalali, packageStatus } from '../notifications';
 import { translations } from '../../i18n';
 import { getTodayJalaliKey } from '../../date/jalali';

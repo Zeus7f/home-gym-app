@@ -3,10 +3,10 @@
  * Member-related API calls — components import ONLY from here.
  */
 
-import { gymStore } from './_client';
-import { localizeResult, translateStoreMessage } from './_messages';
+import { gymStore, runOp } from './_client';
+import { localizeOp } from './_messages';
+import * as ops from '../lib/domain/operations';
 import type { Member, DailySession } from '../lib/domain/gymManagement';
-import { toman } from '../lib/format';
 
 type ActionResult = { success: boolean; message: string };
 
@@ -42,26 +42,19 @@ export async function getMemberSessions(memberId: string): Promise<DailySession[
   ];
 }
 
-/**
- * Record a payment from a member (updates outstanding balance).
- * اعتبارسنجی پیش از mutation انجام می‌شود و نتیجه به زبان فعال برمی‌گردد.
- */
+/** Record a payment from a member (updates outstanding balance). */
 export async function recordMemberPayment(
   memberId: string,
   amount: number,
   method: 'card' | 'cash' | 'transfer',
   description: string,
 ): Promise<ActionResult> {
-  const member = gymStore.members.find(m => m.id === memberId);
-  if (!member) return { success: false, message: translateStoreMessage('member.notFound') };
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { success: false, message: translateStoreMessage('payment.invalidAmount') };
-  }
-  gymStore.recordMemberPayment(memberId, amount, method, description);
-  return {
-    success: true,
-    message: translateStoreMessage('member.paymentRecorded', { debt: toman(member.outstandingBalance) }),
-  };
+  const body = { amount, method, description };
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/members/${encodeURIComponent(memberId)}/payments`, body }, (s, a) =>
+      ops.recordMemberPayment(s, a, { memberId, ...body })
+    )
+  );
 }
 
 /** Adjust the session count of a member (+ or −). */
@@ -70,24 +63,20 @@ export async function adjustMemberSessions(
   delta: number,
   reason: string,
 ): Promise<ActionResult> {
-  const member = gymStore.members.find(m => m.id === memberId);
-  if (!member) return { success: false, message: translateStoreMessage('member.notFound') };
-  if (!Number.isInteger(delta) || delta === 0) {
-    return { success: false, message: translateStoreMessage('member.invalidDelta') };
-  }
-  if (member.totalSessions + delta < member.usedSessions) {
-    return { success: false, message: translateStoreMessage('session.adjustTooLow') };
-  }
-  gymStore.adjustMemberSessions(memberId, delta, reason);
-  return {
-    success: true,
-    message: translateStoreMessage('member.sessionsAdjusted', { remaining: member.remainingSessions }),
-  };
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/members/${encodeURIComponent(memberId)}/adjustments`, body: { delta, reason } }, (s, a) =>
+      ops.adjustMemberSessions(s, a, { memberId, delta, reason })
+    )
+  );
 }
 
 /** تغییر مربی دائم ورزشکار. */
 export async function changeMemberTrainer(memberId: string, trainerId: string): Promise<ActionResult> {
-  return localizeResult(gymStore.changeMemberDefaultTrainer(memberId, trainerId));
+  return localizeOp(
+    await runOp({ method: 'PATCH', path: `/api/members/${encodeURIComponent(memberId)}/trainer`, body: { trainerId } }, (s, a) =>
+      ops.changeMemberTrainer(s, a, { memberId, trainerId })
+    )
+  );
 }
 
 /** Get all member payment records. */

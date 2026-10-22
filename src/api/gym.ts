@@ -4,7 +4,9 @@
  */
 
 import { gymStore } from './_client';
-import { localizeResult } from './_messages';
+import { localizeOp } from './_messages';
+import { runOp } from './_client';
+import * as ops from '../lib/domain/operations';
 import type { Gym } from '../lib/domain/gymManagement';
 
 /** Get current gym settings. */
@@ -24,5 +26,7 @@ export function getGymName(): string {
 export async function updateGymSettings(
   patch: Partial<Pick<Gym, 'capacity' | 'hourlyCapacity' | 'noShowDeductsSession' | 'name'>>
 ): Promise<{ success: boolean; message: string }> {
-  return localizeResult(gymStore.updateGymSettings(patch));
+  return localizeOp(
+    await runOp({ method: 'PATCH', path: '/api/gym/settings', body: patch }, (s, a) => ops.updateGymSettings(s, a, patch))
+  );
 }

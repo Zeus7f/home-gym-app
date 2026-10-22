@@ -8,6 +8,10 @@
 
 import { translations, type Language } from '../lib/i18n';
 import { displayName } from '../lib/displayName';
+import { toman } from '../lib/format';
+
+/** پارامترهای مبلغ که سرور به‌صورت عدد می‌فرستد و با واحد پول نمایش داده می‌شوند */
+const MONEY_PARAMS = new Set(['debt', 'amount']);
 import type {
   StoreMessageKey,
   StoreMessageParams,
@@ -37,7 +41,9 @@ export function translateStoreMessage(
       // اعداد و نام افراد هم باید به زبان فعال نمایش داده شوند (ارقام لاتین در انگلیسی).
       const shown =
         typeof value === 'number'
-          ? new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-US').format(value)
+          ? MONEY_PARAMS.has(name)
+            ? toman(value)
+            : new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-US').format(value)
           : displayName(value, lang === 'fa');
       text = text.replace(new RegExp(`\\{${name}\\}`, 'g'), () => shown);
     }
@@ -53,4 +59,13 @@ export function localizeResult<T extends StoreResult>(result: T, lang: Language 
     ...result,
     message: translateStoreMessage(result.messageKey, result.params, lang),
   };
+}
+
+/** نتیجهٔ عملیات (کلید پیام) → نتیجه با متن ترجمه‌شده */
+export function localizeOp<T>(r: { success: boolean; messageKey: string; params?: StoreMessageParams; data?: T }): {
+  success: boolean;
+  message: string;
+  data?: T;
+} {
+  return { success: r.success, message: translateStoreMessage(r.messageKey as StoreMessageKey, r.params), data: r.data };
 }

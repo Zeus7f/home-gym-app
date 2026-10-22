@@ -3,7 +3,9 @@
  * Trainer-related API calls — components import ONLY from here.
  */
 
-import { gymStore } from './_client';
+import { gymStore, runOp } from './_client';
+import { localizeOp } from './_messages';
+import * as ops from '../lib/domain/operations';
 import type { Trainer } from '../lib/domain/gymManagement';
 
 /** Get all trainers. */
@@ -22,8 +24,13 @@ export async function recordTrainerPayout(
   amount: number,
   method: 'card' | 'transfer' | 'cash',
   description: string,
-): Promise<void> {
-  gymStore.recordTrainerPayout(trainerId, amount, method, description);
+): Promise<{ success: boolean; message: string }> {
+  const body = { amount, method, description };
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/trainers/${encodeURIComponent(trainerId)}/payouts`, body }, (s, a) =>
+      ops.recordTrainerPayout(s, a, { trainerId, ...body })
+    )
+  );
 }
 
 /** Get all trainer payout records. */

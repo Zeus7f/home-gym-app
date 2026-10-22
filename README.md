@@ -158,20 +158,25 @@ bun run dev
 مدیر بسته‌ی پروژه **Bun** است (`bun.lock` مرجع است؛ `package-lock.json` نسازید).
 
 * `bun install --frozen-lockfile`: نصب وابستگی‌ها دقیقاً مطابق lockfile.
-* `bun run dev`: اجرای سرور توسعه (Express + Vite middleware) روی `http://localhost:3000`.
-* `bun run build`: ساخت bundle کلاینت در `dist/` — همان خروجی‌ای که روی Cloudflare Workers (Static Assets) منتشر می‌شود.
+* `bun run db:up`: اجرای PostgreSQL محلی در Docker.
+* `bun run db:seed`: کاتالوگ حرکات، مدیر کل (`SEED_ADMIN_*`) و در صورت نیاز باشگاه نمونه (`SEED_DEMO=true`).
+* `bun run dev`: سرور توسعه (Express + PostgreSQL + Vite middleware) روی `http://localhost:3000`.
 * `bun run lint`: بررسی انواع TypeScript (`tsc --noEmit`).
-* `bun run test`: اجرای تست‌های دامنه.
-* `bun run deploy`: انتشار `dist/` روی Cloudflare Workers.
-* `bun start`: اجرای سرور Node/Express در حالت production. این دستور ابتدا `build:server` را اجرا می‌کند و bundle سرور را در `build/server.cjs` می‌سازد (خارج از `dist/` تا کد سرور هرگز به‌عنوان asset عمومی منتشر نشود)؛ پیش از آن `bun run build` را اجرا کنید تا `dist/` وجود داشته باشد. این مسیر برای استقرار Cloudflare لازم نیست.
+* `bun run test`: تست‌های دامنه (بدون دیتابیس).
+* `bun run test:api`: تست یکپارچهٔ API روی دیتابیس جدای `homegym_test`.
+* `bun run build` و `bun run build:server`: ساخت فرانت‌اند در `dist/` و bundle سرور و seed در `build/`.
+* `bun run start`: اجرای سرور در حالت production.
+* `bun run db:generate`: ساخت migration تازه پس از تغییر `src/db/schema.ts`.
 
 ---
 
-## 🗄️ معماری داده و اتصال پایگاه داده
+## 🗄️ معماری
 
-سامانه دارای لایه سرویس انتزاعی داده در مسیر `src/api/` است:
-1. **حالت آفلاین / MockStore (پیش‌فرض):** برنامه به صورت آماده و بدون نیاز به هیچ دیتابیس خارجی با داده‌های نمونه واقعی، قابلیت ایجاد جلسه، افزودن عضو و تغییر ظرفیت کار می‌کند.
-2. **اتصال دیتابیس ابری (Supabase / PostgreSQL):** با تنظیم مقادیر `VITE_SUPABASE_URL` و `VITE_SUPABASE_ANON_KEY` در فایل `.env`، برنامه به صورت خودکار به پایگاه داده ابری متصل می‌گردد. اسکریپت‌های کامل اسکیما و مایگریشن در پوشه `supabase/` قرار دارند.
+* **سرور مستقل:** Express + Drizzle ORM + PostgreSQL، بدون وابستگی به Supabase، Firebase یا Cloudflare. استقرار با Docker روی هر سرور: [DEPLOYMENT.md](DEPLOYMENT.md).
+* **احراز هویت:** ورود با شمارهٔ موبایل و رمز. رمز با scrypt در PostgreSQL hash می‌شود و نشست JWT در کوکی HttpOnly است. حساب‌هایی که مدیر می‌سازد، در اولین ورود باید رمز را عوض کنند.
+* **قواعد کسب‌وکار سمت سرور:** هر تغییر (`src/server/routes/*`) با `src/lib/domain/operations.ts` در یک تراکنش PostgreSQL اجرا می‌شود و این موارد را بررسی می‌کند: نقش، مالکیت، ظرفیت، تداخل، مهلت لغو و اعتبار بسته.
+* **مرورگر:** لایهٔ `src/api/*` از REST استفاده می‌کند و استور مرورگر فقط کش خواندنی دادهٔ باشگاه است. سرور این داده را بر اساس نقش فیلتر می‌کند: مربی امور مالی را نمی‌بیند و ورزشکار فقط دادهٔ خودش را می‌بیند.
+* **آدرس‌ها:** مسیرهای استاندارد مثل `/owner/memberships/:memberId` و `/trainer/sessions/:sessionId/live`. آدرس‌های قدیمی `?tab=` خودکار به مسیر جدید هدایت می‌شوند.
 
 ---
 

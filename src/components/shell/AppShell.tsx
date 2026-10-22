@@ -9,7 +9,8 @@
  */
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Dumbbell, LogOut, MoreHorizontal, Compass, Eye, ChevronLeft, ChevronRight, X, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Dumbbell, LogOut, MoreHorizontal, Compass, Eye, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useI18n } from '../LanguageProvider';
 import { Avatar } from '../ui/Avatar';
 import { ThemeToggle } from '../ui/ThemeToggle';
@@ -19,7 +20,6 @@ import { displayName } from '../../lib/displayName';
 import { cn } from '../../lib/utils';
 import type { AppRole } from '../../lib/auth/permissions';
 import type { UserAccount } from '../../lib/domain/gymManagement';
-import { getSyncStatus, subscribeSyncStatus, type SyncStatus } from '../../lib/data/cloudSync';
 
 // ── زمینهٔ پوسته: کاربر، پیش‌نمایش و کنش‌های سراسری (از App) ─────────────────
 
@@ -48,6 +48,29 @@ export interface ShellNavItem {
   short?: string;
   /** عدد یا نقطهٔ هشدار کنار مورد */
   badge?: number;
+  /** مسیر استاندارد بخش (مثلاً /owner/memberships) — مورد به‌صورت لینک واقعی رندر می‌شود */
+  to?: string;
+}
+
+/** لینک واقعی (باز شدن در زبانهٔ جدید، Back/Forward) وقتی مسیر داریم؛ وگرنه دکمه */
+function NavTarget({
+  to,
+  onClick,
+  children,
+  ...rest
+}: { to?: string; onClick: () => void; children: React.ReactNode } & Omit<React.HTMLAttributes<HTMLElement>, 'onClick'>) {
+  if (to) {
+    return (
+      <Link to={to} onClick={onClick} {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} {...(rest as React.ButtonHTMLAttributes<HTMLButtonElement>)}>
+      {children}
+    </button>
+  );
 }
 
 export interface AppShellProps {
@@ -95,6 +118,12 @@ export function AppShell({
     onNavigate(key);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
+  /** کلیک روی لینک: مسیر را خود Link عوض می‌کند */
+  const afterLink = () => {
+    setMoreOpen(false);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  };
+  const navProps = (item: ShellNavItem) => ({ to: item.to, onClick: () => (item.to ? afterLink() : go(item.key)) });
 
   const Chevron = isFa ? ChevronLeft : ChevronRight;
 
@@ -134,10 +163,9 @@ export function AppShell({
             const Icon = item.icon;
             const active = item.key === activeKey;
             return (
-              <button
+              <NavTarget
                 key={item.key}
-                type="button"
-                onClick={() => go(item.key)}
+                {...navProps(item)}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'w-full h-11 px-3.5 rounded-xl flex items-center gap-3 text-[14px] transition-colors cursor-pointer',
@@ -148,7 +176,7 @@ export function AppShell({
                 <Icon size={19} strokeWidth={active ? 2.2 : 1.8} style={{ color: active ? 'var(--c-brass)' : undefined }} />
                 <span className="truncate flex-1 text-start">{item.label}</span>
                 {!!item.badge && <NavBadge value={item.badge} />}
-              </button>
+              </NavTarget>
             );
           })}
         </nav>
@@ -202,7 +230,6 @@ export function AppShell({
               </h1>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <SyncIndicator />
               {actions}
               {notifications && <NotificationBell onNavigateTab={go} badgeOnlyWhenUrgent className="!h-10 !w-10" />}
               {chrome && <UserMenu chrome={chrome} />}
@@ -255,7 +282,7 @@ export function AppShell({
               label={item.short ?? item.label}
               active={item.key === activeKey}
               badge={item.badge}
-              onClick={() => go(item.key)}
+              {...navProps(item)}
             />
           ))}
           {moreItems.length > 0 && (
@@ -273,10 +300,9 @@ export function AppShell({
           {moreItems.map(item => {
             const Icon = item.icon;
             return (
-              <button
+              <NavTarget
                 key={item.key}
-                type="button"
-                onClick={() => go(item.key)}
+                {...navProps(item)}
                 className="w-full flex items-center gap-3.5 h-14 text-[15px] font-semibold cursor-pointer"
                 style={{ color: 'var(--c-text)' }}
               >
@@ -286,7 +312,7 @@ export function AppShell({
                 <span className="truncate">{item.label}</span>
                 {!!item.badge && <NavBadge value={item.badge} />}
                 <Chevron size={18} className="ms-auto shrink-0" style={{ color: 'var(--c-text-faint)' }} />
-              </button>
+              </NavTarget>
             );
           })}
         </div>
@@ -313,16 +339,18 @@ function BottomTab({
   active,
   badge,
   onClick,
+  to,
 }: {
   icon: React.ElementType;
   label: string;
   active: boolean;
   badge?: number;
   onClick: () => void;
+  to?: string;
 }) {
   return (
-    <button
-      type="button"
+    <NavTarget
+      to={to}
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className="min-w-0 flex flex-col items-center gap-1 py-1 cursor-pointer"
@@ -338,28 +366,7 @@ function BottomTab({
         )}
       </span>
       <span className={cn('text-[11.5px] leading-tight truncate max-w-full px-0.5', active && 'font-bold')}>{label}</span>
-    </button>
-  );
-}
-
-/** وضعیت ذخیرهٔ ابری — فقط وقتی دادهٔ باشگاه از Supabase بار شده باشد */
-function SyncIndicator() {
-  const { t } = useI18n();
-  const [status, setStatus] = useState<SyncStatus>(getSyncStatus());
-  useEffect(() => subscribeSyncStatus(() => setStatus(getSyncStatus())), []);
-  if (status === 'idle') return null;
-
-  const map = {
-    saving: { icon: Loader2, label: t.shell.syncSaving, color: 'var(--c-text-muted)', spin: true },
-    saved: { icon: Cloud, label: t.shell.syncSaved, color: 'var(--c-avail-fg)', spin: false },
-    error: { icon: CloudOff, label: t.shell.syncError, color: 'var(--c-rubber)', spin: false },
-  } as const;
-  const s = map[status];
-  const Icon = s.icon;
-  return (
-    <span className="h-10 w-10 grid place-items-center" title={s.label} role="status" aria-label={s.label}>
-      <Icon size={18} style={{ color: s.color }} className={s.spin ? 'animate-spin' : ''} />
-    </span>
+    </NavTarget>
   );
 }
 

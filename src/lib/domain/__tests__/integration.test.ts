@@ -1,7 +1,7 @@
 // Integration Test: trainer publishes a program → member sees it
 // Exercises the store, the API layer and the analytics together.
 
-import { gymStore } from '../../supabase/mockStore';
+import { gymStore } from '../../store/gymStore';
 import { saveProgram, publishProgram, getPublishedProgram } from '../../../api/programs';
 import { getMemberSessions } from '../../../api/members';
 import { getNotifications } from '../../../api/notifications';

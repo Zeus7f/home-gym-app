@@ -4,8 +4,9 @@
  * Backs the trainer program publisher and the member program view.
  */
 
-import { gymStore } from './_client';
-import { localizeResult } from './_messages';
+import { gymStore, runOp } from './_client';
+import { localizeOp, translateStoreMessage } from './_messages';
+import * as ops from '../lib/domain/operations';
 import type { WorkoutProgram, ProgramDay, ProgramExercise } from '../lib/domain/gymManagement';
 
 export type { WorkoutProgram, ProgramDay, ProgramExercise };
@@ -36,24 +37,31 @@ export async function saveProgram(
     id?: string;
   }
 ): Promise<WorkoutProgram> {
-  return gymStore.saveProgram(data);
+  const r = await runOp({ method: 'POST', path: '/api/programs', body: data }, (s, a) => ops.saveProgram(s, a, data));
+  if (!r.success || !r.data) throw new Error(translateStoreMessage(r.messageKey, r.params));
+  return r.data;
 }
 
 /** انتشار برنامه برای ورزشکار. */
 export async function publishProgram(
   programId: string
 ): Promise<{ success: boolean; message: string }> {
-  return localizeResult(gymStore.publishProgram(programId));
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/programs/${encodeURIComponent(programId)}/publish` }, (s, a) => ops.publishProgram(s, a, { programId }))
+  );
 }
 
 /** بازگرداندن برنامه به وضعیت پیش‌نویس. */
 export async function unpublishProgram(
   programId: string
 ): Promise<{ success: boolean; message: string }> {
-  return localizeResult(gymStore.unpublishProgram(programId));
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/programs/${encodeURIComponent(programId)}/unpublish` }, (s, a) => ops.unpublishProgram(s, a, { programId }))
+  );
 }
 
 /** حذف برنامه. */
 export async function deleteProgram(programId: string): Promise<boolean> {
-  return gymStore.deleteProgram(programId);
+  const r = await runOp({ method: 'DELETE', path: `/api/programs/${encodeURIComponent(programId)}` }, (s, a) => ops.deleteProgram(s, a, { programId }));
+  return r.success;
 }

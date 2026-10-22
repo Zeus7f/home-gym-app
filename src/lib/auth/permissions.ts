@@ -51,14 +51,6 @@ export function can(role: AppRole | null | undefined, action: Action): boolean {
   return !!role && MATRIX[role].has(action);
 }
 
-/** مسیر پیش‌فرض فضای کاری هر نقش */
-export const HOME_PATH: Record<AppRole, string> = {
-  super_admin: '/admin',
-  owner: '/owner',
-  trainer: '/trainer',
-  member: '/member',
-};
-
 /** نقش‌هایی که هر نقش می‌تواند حساب‌شان را بسازد */
 export function creatableRoles(role: AppRole | null | undefined): AppRole[] {
   switch (role) {

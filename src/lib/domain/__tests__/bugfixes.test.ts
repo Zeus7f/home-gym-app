@@ -3,7 +3,7 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { gymStore } from '../../supabase/mockStore';
+import { gymStore } from '../../store/gymStore';
 import { buildNotifications, NOTIFICATION_TABS } from '../notifications';
 import { translations } from '../../i18n';
 import {

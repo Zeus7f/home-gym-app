@@ -1,103 +1,59 @@
-import "dotenv/config";
-import express from "express";
-import path from "path";
-import { createServer as createViteServer } from "vite";
-import { requireAuth, requireRole, requireTenant, AuthRequest } from "./src/middleware/auth.ts";
-import { db } from "./src/db/index.ts";
-import { users, gyms, memberTrainerAssignments, workoutSessions, workoutSegments, workoutSegmentItems } from "./src/db/schema.ts";
-import { eq, and } from "drizzle-orm";
-import cookieParser from "cookie-parser";
+/**
+ * server.ts — سرور مستقل Home Gym: Express + PostgreSQL، بدون سرویس خارجی.
+ *
+ *   توسعه:  docker compose up -d db && bun run dev        (Vite به‌صورت middleware)
+ *   تولید:  bun run build && bun run start                 (فایل‌های dist/ با کش)
+ */
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+import 'dotenv/config';
+// تاریخ‌های جلالی و «امروز» بر اساس ساعت ایران محاسبه می‌شوند
+process.env.TZ ??= 'Asia/Tehran';
 
-  app.use(express.json());
-  app.use(cookieParser());
+import path from 'node:path';
+import express from 'express';
+import { getDb, runMigrations, closeDb } from './src/db/index.ts';
+import { createApp } from './src/server/app.ts';
+import { jwtSecret } from './src/server/auth/session.ts';
 
-  // --- API ROUTES ---
+async function start() {
+  const production = process.env.NODE_ENV === 'production';
+  const port = Number(process.env.PORT ?? 3000);
 
-  // Health check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
-  });
+  jwtSecret(); // بدون کلید امن بالا نمی‌آید
+  await runMigrations(path.join(process.cwd(), 'drizzle'));
 
-  // User Auth & Synchronization (Upsert User to DB)
-  app.post("/api/auth/sync", requireAuth, async (req: AuthRequest, res) => {
-    try {
-      const { uid, email } = req.user!;
-      const fullName = req.body.fullName || "New User";
-      
-      const dbUsers = await db.select().from(users).where(eq(users.uid, uid));
-      if (dbUsers.length === 0) {
-        // By default create as member if not specified, 
-        // Super admins must be created manually or via a special setup script.
-        const result = await db.insert(users).values({
-          uid,
-          email,
-          fullName,
-          role: "member", // Default to member
-        }).returning();
-        res.json({ user: result[0] });
-      } else {
-        res.json({ user: dbUsers[0] });
-      }
-    } catch (error: any) {
-      console.error("Auth sync error:", error);
-      res.status(500).json({ error: error.message || "Failed to sync auth" });
-    }
-  });
+  const app = createApp(getDb(), { production });
 
-  // Get current user profile
-  app.get("/api/users/me", requireAuth, async (req: AuthRequest, res) => {
-    if (!req.dbUser) return res.status(404).json({ error: "User not found" });
-    res.json(req.dbUser);
-  });
-
-  // Example: Get Gyms (Super Admin only)
-  app.get("/api/admin/gyms", requireAuth, requireRole(["super_admin"]), async (req, res) => {
-    try {
-      const allGyms = await db.select().from(gyms);
-      res.json(allGyms);
-    } catch (error: any) {
-      console.error("Error fetching gyms:", error);
-      res.status(500).json({ error: "Failed to fetch gyms" });
-    }
-  });
-
-  // Example: Get my gym members (Gym Owner)
-  app.get("/api/gym/members", requireAuth, requireRole(["gym_owner"]), requireTenant, async (req: AuthRequest, res) => {
-    try {
-      const myMembers = await db.select().from(users).where(
-        and(
-          eq(users.gymId, req.dbUser!.gymId!),
-          eq(users.role, 'member')
-        )
-      );
-      res.json(myMembers);
-    } catch (error: any) {
-      res.status(500).json({ error: "Failed to fetch members" });
-    }
-  });
-
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
+  if (!production) {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    const dist = path.join(process.cwd(), 'dist');
+    // فایل‌های دارای hash یک سال کش؛ index.html همیشه تازه
+    app.use('/assets', express.static(path.join(dist, 'assets'), { immutable: true, maxAge: '1y' }));
+    app.use(express.static(dist, { index: false, maxAge: '1h' }));
+    app.get(/^(?!\/api\/).*/, (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
+      res.sendFile(path.join(dist, 'index.html'));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`Home Gym server running on http://localhost:${port} (${production ? 'production' : 'development'})`);
   });
+
+  const shutdown = () => {
+    server.close(async () => {
+      await closeDb();
+      process.exit(0);
+    });
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
-startServer();
+start().catch(err => {
+  console.error('Server failed to start:', err);
+  process.exit(1);
+});

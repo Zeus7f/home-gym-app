@@ -5,6 +5,8 @@
 **مبنا:** `PROJECT_STATUS_2026-10-20.md` و `Bugs for fix.md`
 **جایگزین:** `PROJECT_STATUS_2026-10-20.md`
 
+> **به‌روزرسانی ۱۴۰۵/۰۷/۳۰ (2026-10-22):** معماری به سرور مستقل Express + PostgreSQL (Drizzle) منتقل شد. Supabase، Firebase و Cloudflare کنار گذاشته شدند. احراز هویت: scrypt + JWT در کوکی HttpOnly. همهٔ قواعد سمت سرور و در تراکنش اجرا می‌شوند و آدرس‌ها استاندارد شدند (`/owner/memberships`). بخش‌های مربوط به Supabase در این گزارش منسوخ‌اند. استقرار: `DEPLOYMENT.md`.
+
 ---
 
 ## ۱. خلاصه

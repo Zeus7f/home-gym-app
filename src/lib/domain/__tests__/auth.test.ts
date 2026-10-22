@@ -1,165 +1,106 @@
-// B-01: احراز هویت با Supabase Auth — منطق خالص و رفتار استور در هر دو حالت
+// احراز هویت مستقل (scrypt + JWT) و مجوز عملیات بر اساس نقش و مالکیت
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { gymStore } from '../../supabase/mockStore';
-import { translations } from '../../i18n';
-import {
-  profileToUserAccount,
-  resolveAuthMode,
-  toAuthEmail,
-  USERNAME_PATTERN,
-  type ProfileRow,
-} from '../../auth/accountMapping';
+import { gymStore } from '../../store/gymStore';
+import type { UserAccount } from '../../store/gymStore';
+import * as ops from '../operations';
+import { hashPassword, signJwt, verifyJwt, verifyPassword } from '../../../server/auth/crypto';
 
-function profile(over: Partial<ProfileRow> = {}): ProfileRow {
-  return {
-    id: '00000000-0000-0000-0000-000000000001',
-    full_name: 'Coach A',
-    phone: '09120000000',
-    role: 'trainer',
-    tenant_id: '00000000-0000-0000-0000-0000000000aa',
-    is_active: true,
-    username: 'coach.a',
-    app_entity_id: 't-a',
-    ...over,
-  };
-}
-
-export function runAuthTests() {
+export async function runAuthTests() {
   let passed = 0;
   let failed = 0;
   const errors: string[] = [];
-
-  function assert(cond: boolean, msg: string) {
+  const assert = (cond: boolean, msg: string) => {
     if (cond) passed++;
     else {
       failed++;
       errors.push(msg);
     }
-  }
-
-  const snapshot = {
-    authMode: gymStore.authMode,
-    authReady: gymStore.authReady,
-    currentUser: gymStore.currentUser,
-    previewUser: gymStore.previewUser,
-    users: gymStore.users,
-    trainers: gymStore.trainers,
-    members: gymStore.members,
-    memberPayments: gymStore.memberPayments,
   };
+
+  const snapshot: Record<string, unknown> = {};
+  for (const k of ['members', 'trainers', 'todaySessions', 'pastSessions', 'memberPayments', 'programs', 'users', 'auditLogs', 'exercises']) {
+    snapshot[k] = structuredClone((gymStore as any)[k]);
+  }
   const realNotify = gymStore.notify;
   gymStore.notify = () => {};
 
   try {
-    // ── حالت احراز هویت ────────────────────────────────────────
-    assert(resolveAuthMode({ hasSupabase: false }) === 'demo', 'no Supabase → local demo');
-    assert(resolveAuthMode({ hasSupabase: true }) === 'supabase', 'Supabase configured → Supabase Auth');
-    assert(
-      resolveAuthMode({ hasSupabase: true, requested: 'demo', isDev: false }) === 'supabase',
-      'production build ignores VITE_AUTH_MODE=demo'
-    );
-    assert(
-      resolveAuthMode({ hasSupabase: true, requested: 'demo', isDev: true }) === 'demo',
-      'dev build may opt into demo auth'
-    );
+    // ── hash رمز ────────────────────────────────────────────
+    const hash = await hashPassword('correct horse battery');
+    assert(hash.startsWith('scrypt$') && !hash.includes('correct'), 'password is stored as a salted scrypt hash');
+    assert(await verifyPassword('correct horse battery', hash), 'correct password verifies');
+    assert(!(await verifyPassword('wrong password', hash)), 'wrong password is rejected');
+    assert((await hashPassword('same')) !== (await hashPassword('same')), 'every hash has its own salt');
+    assert(!(await verifyPassword('x', 'plain-text')), 'malformed stored hash never verifies');
 
-    // ── ایمیل Auth ─────────────────────────────────────────────
-    assert(toAuthEmail(' Ali ', 'x.test') === 'ali@x.test', 'username maps to lowercase synthetic email');
-    assert(toAuthEmail('Owner@Gym.com', 'x.test') === 'owner@gym.com', 'an email is used as is');
-    assert(USERNAME_PATTERN.test('09121112233'), 'phone numbers are valid usernames');
-    assert(!USERNAME_PATTERN.test('ab') && !USERNAME_PATTERN.test('a b c'), 'short or spaced usernames are rejected');
+    // ── JWT ─────────────────────────────────────────────────
+    const secret = 'a'.repeat(48);
+    const token = signJwt({ sub: 'u1', ver: 3 }, secret, 60);
+    const claims = verifyJwt(token, secret);
+    assert(claims?.sub === 'u1' && claims.ver === 3, 'signed token verifies with its claims');
+    assert(verifyJwt(token, 'b'.repeat(48)) === null, 'token signed with another secret is rejected');
+    const [h, p, s] = token.split('.');
+    const forged = Buffer.from(JSON.stringify({ sub: 'admin', ver: 3, iat: 0, exp: 9_999_999_999 })).toString('base64url');
+    assert(verifyJwt(`${h}.${forged}.${s}`, secret) === null, 'tampered payload is rejected');
+    assert(verifyJwt(signJwt({ sub: 'u1', ver: 1 }, secret, -10), secret) === null, 'expired token is rejected');
+    const none = `${Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url')}.${p}.`;
+    assert(verifyJwt(none, secret) === null, 'unsigned (alg none) token is rejected');
 
-    // ── پروفایل → حساب ────────────────────────────────────────
-    const tr = profileToUserAccount(profile(), 'gym-1');
-    assert(tr.ok && tr.user.role === 'trainer' && tr.user.entityId === 't-a', 'trainer maps to local trainer record');
-    assert(tr.ok && tr.user.password === '', 'no password is kept in the browser');
+    // ── مجوز عملیات ────────────────────────────────────────
+    const ali = gymStore.trainers.find(t => t.id === 't-ali')!;
+    const sara = gymStore.trainers.find(t => t.id === 't-sara')!;
+    const owner: UserAccount = { id: 'u-owner', username: 'admin', password: '', role: 'owner', entityId: 'gym-1', displayName: 'Owner' };
+    const trainerAli: UserAccount = { id: 'u-ali', username: 'ali', password: '', role: 'trainer', entityId: ali.id, displayName: 'Ali' };
+    const memberOf = (id: string): UserAccount => ({ id: `u-${id}`, username: id, password: '', role: 'member', entityId: id, displayName: id });
 
-    const owner = profileToUserAccount(profile({ role: 'gym_owner', app_entity_id: null }), 'gym-1');
-    assert(owner.ok && owner.user.role === 'owner' && owner.user.entityId === 'gym-1', 'gym_owner maps to owner of the gym');
+    const member = gymStore.members[0];
+    const pay = ops.recordMemberPayment(gymStore, trainerAli, { memberId: member.id, amount: 1000, method: 'cash', description: '' });
+    assert(!pay.success && pay.messageKey === 'auth.forbidden', 'trainers cannot record payments');
+    assert(ops.recordMemberPayment(gymStore, owner, { memberId: member.id, amount: 1000, method: 'cash', description: '' }).success, 'owners record payments');
+    assert(ops.recordMemberPayment(gymStore, owner, { memberId: member.id, amount: -5, method: 'cash', description: '' }).messageKey === 'payment.invalidAmount', 'negative payments are rejected');
 
-    const noProfile = profileToUserAccount(null, 'gym-1');
-    assert(!noProfile.ok && 'messageKey' in noProfile && noProfile.messageKey === 'login.noProfile', 'missing profile is refused');
-
-    const inactive = profileToUserAccount(profile({ is_active: false }), 'gym-1');
-    assert(!inactive.ok && 'messageKey' in inactive && inactive.messageKey === 'login.inactive', 'inactive profile is refused');
-
-    const unlinked = profileToUserAccount(profile({ role: 'member', app_entity_id: null }), 'gym-1');
-    assert(!unlinked.ok, 'member without a linked record is refused');
-
-    const superAdmin = profileToUserAccount(profile({ role: 'super_admin', tenant_id: null, app_entity_id: null }), '');
-    assert(superAdmin.ok && superAdmin.user.role === 'super_admin' && !superAdmin.user.gymId, 'super_admin maps to the platform admin without a gym');
-
-    const noGym = profileToUserAccount(profile(), '');
-    assert(!noGym.ok, 'gym staff without a gym are refused');
-
-    // ── استور در حالت Supabase ───────────────────────────────
-    gymStore.authMode = 'supabase';
-    gymStore.currentUser = null;
-    // کپی آرایه‌ها تا addTrainer دادهٔ اصلی استور را تغییر ندهد
-    gymStore.users = [...snapshot.users];
-    gymStore.trainers = [...snapshot.trainers];
-    const demoLogin = gymStore.login('admin', '123');
-    assert(!demoLogin.success && demoLogin.messageKey === 'login.authUnavailable', 'demo passwords are refused under Supabase Auth');
-    assert(gymStore.currentUser === null, 'refused demo login leaves no user signed in');
-
-    gymStore.setCurrentUser('u-owner');
-    assert(gymStore.currentUser === null, 'setCurrentUser cannot impersonate under Supabase Auth');
-
-    const added = gymStore.addTrainer(
-      {
-        name: 'Coach Z',
-        phone: '09125550000',
-        specialty: 'x',
-        workingHours: '09:00 - 15:00',
-        dailyCapacity: 6,
-        sessionRate: 1,
-        status: 'active',
-      } as any,
-      'secret-password'
-    );
-    const acct = gymStore.users.find(u => u.entityId === added.trainer?.id);
-    assert(!!acct && acct.password === '', 'trainer password is not stored locally under Supabase Auth');
-
-    gymStore.setAuthenticatedUser(tr.ok ? tr.user : null);
-    assert(gymStore.authReady && gymStore.currentUser?.entityId === 't-a', 'verified user becomes the signed-in user');
-
-    // ── استور در دموی محلی ───────────────────────────────────
-    gymStore.authMode = 'demo';
-    gymStore.users = snapshot.users;
-    gymStore.currentUser = null;
-    assert(gymStore.login('admin', '123').success, 'demo login still works without Supabase');
-
-    // ── متن‌ها و صفحهٔ ورود ─────────────────────────────────
-    const keys = [
-      'login.badCredentials',
-      'login.noProfile',
-      'login.inactive',
-      'login.authUnavailable',
-      'account.created',
-      'account.usernameTaken',
-      'account.invalidUsername',
-      'account.weakPassword',
-      'account.failed',
-    ];
-    for (const lang of ['fa', 'en'] as const) {
-      const catalog = translations[lang].storeMessages as Record<string, string>;
-      const missing = keys.filter(k => !catalog[k]);
-      assert(missing.length === 0, `${lang}: auth messages exist (${missing.join(', ')})`);
+    const saraSession = gymStore.todaySessions.find(s => s.trainerId === sara.id && s.status === 'scheduled');
+    if (saraSession) {
+      const r = ops.completeSession(gymStore, trainerAli, { sessionId: saraSession.id });
+      assert(!r.success && r.messageKey === 'auth.forbidden', "a trainer cannot complete another trainer's session");
+      const c = ops.cancelSession(gymStore, trainerAli, { sessionId: saraSession.id });
+      assert(c.messageKey === 'auth.forbidden', "a trainer cannot cancel another trainer's session");
+    } else {
+      assert(false, 'fixture: Sara has a scheduled session');
     }
 
-    const login = readFileSync(join(process.cwd(), 'src/features/auth/LoginScreen.tsx'), 'utf8');
-    assert(/\{demo && \(/.test(login) && login.includes("const demo = !isServerAuth()"), 'demo quick sign-in is hidden under Supabase Auth');
+    const anySession = gymStore.todaySessions[0];
+    const other = gymStore.members.find(m => m.id !== anySession.memberId)!;
+    assert(ops.cancelSessionByMember(gymStore, memberOf(other.id), { sessionId: anySession.id }).messageKey === 'auth.forbidden', "members cannot cancel someone else's session");
+    assert(ops.rescheduleSession(gymStore, memberOf(other.id), { sessionId: anySession.id, newTime: '22:00' }).messageKey === 'auth.forbidden', "members cannot move someone else's session");
+    assert(ops.cancelSessionByMember(gymStore, memberOf(anySession.memberId), { sessionId: anySession.id }).messageKey !== 'auth.forbidden', 'members may act on their own session');
 
-    const fn = readFileSync(join(process.cwd(), 'supabase/functions/manage-account/index.ts'), 'utf8');
-    assert(fn.includes("caller.role === 'trainer' && role !== 'member'"), 'trainers can only create athletes');
-    assert(fn.includes("record.trainer_id !== caller.app_entity_id || !pending"), 'trainer-created athletes must be their own and pending');
-    assert(fn.includes("target.tenant_id === caller.tenant_id"), 'owners only manage accounts of their own gym');
-    assert(fn.includes("caller.role !== 'super_admin'"), 'only the platform admin creates gyms');
+    assert(ops.scheduleSession(gymStore, trainerAli, { date: '1499/01/01', time: '10:00', memberId: member.id, trainerId: sara.id }).messageKey === 'auth.forbidden', 'trainers cannot book for other trainers');
+    assert(ops.createTrainer(gymStore, trainerAli, { data: { name: 'x', phone: '09390000000', specialty: '', status: 'active', workingDays: [], workingHours: '', dailyCapacity: 4, sessionRate: 0 }, password: 'password-1' }).messageKey === 'auth.forbidden', 'trainers cannot create trainers');
+    assert(ops.setGymDailyCapacity(gymStore, trainerAli, { date: '1499/01/01', capacity: 10 }).messageKey === 'auth.forbidden', 'trainers cannot change capacity');
+    assert(ops.setGymDailyCapacity(gymStore, owner, { date: '1499/01/01', capacity: -1 }).messageKey === 'gym.invalidCapacity', 'invalid capacity is rejected');
+
+    const saved = ops.saveProgram(gymStore, trainerAli, {
+      memberId: member.id, memberName: member.name, trainerId: sara.id, trainerName: sara.name, title: 'P', days: [],
+    });
+    assert(saved.success && (saved.data as any)?.trainerId === ali.id, 'a trainer always saves programs under their own name');
+    const saraProgram = ops.saveProgram(gymStore, owner, { memberId: member.id, memberName: member.name, trainerId: sara.id, trainerName: sara.name, title: 'S', days: [] });
+    const pid = (saraProgram.data as any).id;
+    assert(ops.deleteProgram(gymStore, trainerAli, { programId: pid }).messageKey === 'auth.forbidden', "a trainer cannot delete another trainer's program");
+
+    const ex = gymStore.exercises[0];
+    const upd = ops.updateExercise(gymStore, owner, { id: ex.id, updates: { id: 'hijack', isCustom: true, defaultSets: 5 } as any });
+    assert(upd.success && gymStore.exercises.some(e => e.id === ex.id && e.defaultSets === 5) && !gymStore.exercises.some(e => e.id === 'hijack'), 'exercise edits cannot change id or custom flag');
+
+    const pendingByTrainer = ops.createMemberAsTrainer(gymStore, trainerAli, { name: 'P A', phone: '09391110000', password: 'password-1' });
+    assert(pendingByTrainer.success && (pendingByTrainer.data as any)?.packagePending === true, 'trainer-created athletes start pending');
+    assert(ops.createMemberAsTrainer(gymStore, owner, { name: 'X', phone: '09391110001', password: 'password-1' }).messageKey === 'auth.forbidden', 'the trainer-only path rejects owners');
+    const acct = gymStore.users.find(u => u.entityId === (pendingByTrainer.data as any)?.id)!;
+    assert(ops.resetAccountPassword(gymStore, trainerAli, { userId: acct.id, password: 'password-2' }).messageKey === 'auth.forbidden', 'trainers cannot reset passwords');
+    assert(ops.resetAccountPassword(gymStore, owner, { userId: 'u-owner', password: 'password-2' }).messageKey === 'member.notFound', "owners cannot reset another owner's password through staff tools");
   } catch (e: any) {
     failed++;
-    errors.push(`Unexpected error: ${e?.message ?? e}`);
+    errors.push(`Unexpected error: ${e?.stack ?? e}`);
   } finally {
     Object.assign(gymStore, snapshot);
     gymStore.notify = realNotify;

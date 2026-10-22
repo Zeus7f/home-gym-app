@@ -50,6 +50,16 @@ export const commonDict = {
     /** پیام‌هایی که از لایهٔ استور برمی‌گردند و در رابط کاربری نمایش داده می‌شوند */
     storeMessages: {
       'login.success': 'Signed in successfully.',
+      'auth.forbidden': 'You do not have permission for this action.',
+      'auth.unauthenticated': 'Your session has ended. Please sign in again.',
+      'auth.passwordChangeRequired': 'Choose a new password before continuing.',
+      'auth.wrongCurrentPassword': 'The current password is incorrect.',
+      'auth.samePassword': 'The new password must be different from the current one.',
+      'login.tooManyAttempts': 'Too many sign-in attempts. Try again in a few minutes.',
+      'server.unavailable': 'The server is unreachable. Check your connection and try again.',
+      'common.saved': 'Saved.',
+      'common.invalidInput': 'Some fields are invalid.',
+      'common.notFound': 'Not found.',
       'login.userNotFound': 'That username was not found.',
       'login.badPassword': 'Incorrect password.',
       'login.badCredentials': 'Incorrect username or password.',
@@ -247,6 +257,16 @@ export const commonDict = {
     /** پیام‌هایی که از لایهٔ استور برمی‌گردند و در رابط کاربری نمایش داده می‌شوند */
     storeMessages: {
       'login.success': 'ورود با موفقیت انجام شد.',
+      'auth.forbidden': 'اجازهٔ انجام این کار را ندارید.',
+      'auth.unauthenticated': 'نشست شما به پایان رسیده است. دوباره وارد شوید.',
+      'auth.passwordChangeRequired': 'پیش از ادامه، کلمه عبور تازه‌ای انتخاب کنید.',
+      'auth.wrongCurrentPassword': 'کلمه عبور فعلی نادرست است.',
+      'auth.samePassword': 'کلمه عبور تازه باید با کلمه عبور فعلی فرق داشته باشد.',
+      'login.tooManyAttempts': 'تلاش‌های ورود زیاد بود. چند دقیقه بعد دوباره تلاش کنید.',
+      'server.unavailable': 'سرور در دسترس نیست. اتصال را بررسی و دوباره تلاش کنید.',
+      'common.saved': 'ذخیره شد.',
+      'common.invalidInput': 'برخی از فیلدها نامعتبرند.',
+      'common.notFound': 'یافت نشد.',
       'login.userNotFound': 'نام کاربری وارد شده یافت نشد.',
       'login.badPassword': 'کلمه عبور وارد شده نادرست است.',
       'login.badCredentials': 'نام کاربری یا کلمه عبور نادرست است.',

@@ -1,29 +1,23 @@
 import { defineConfig } from 'drizzle-kit';
-import * as dotenv from 'dotenv';
+import 'dotenv/config';
+import { poolConfig } from './index.ts';
 
-dotenv.config();
-
-const sqlHost = process.env.SQL_HOST;
-const sqlDbName = process.env.SQL_DB_NAME;
-const user = process.env.SQL_ADMIN_USER;
-const password = process.env.SQL_ADMIN_PASSWORD;
-
-if (!sqlHost) throw new Error("SQL_HOST must be set");
-if (!sqlDbName) throw new Error("SQL_DB_NAME must be set");
-if (!user) throw new Error("SQL_ADMIN_USER must be set");
-if (!password) throw new Error("SQL_ADMIN_PASSWORD must be set");
+const cfg = poolConfig();
 
 export default defineConfig({
   schema: './src/db/schema.ts',
   out: './drizzle',
   dialect: 'postgresql',
   schemaFilter: ['public'],
-  dbCredentials: {
-    host: sqlHost,
-    user: user,
-    password: password,
-    database: sqlDbName,
-    ssl: false,
-  },
+  dbCredentials: cfg.connectionString
+    ? { url: cfg.connectionString }
+    : {
+        host: cfg.host ?? 'localhost',
+        port: cfg.port ?? 5432,
+        user: cfg.user,
+        password: cfg.password as string | undefined,
+        database: cfg.database ?? 'homegym',
+        ssl: false,
+      },
   verbose: true,
 });

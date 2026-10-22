@@ -21,13 +21,13 @@ export function formatNotificationNumber(n: number, lang: NotificationLang = 'fa
 }
 
 /**
- * مقصدهای مجاز ناوبری اعلان‌ها — باید دقیقاً با کلید تب‌های هر shell یکی باشد.
- * B-08: مقصدهای قبلی (`members`, `finance`, ...) با تب‌های مالک (`mem`, `fin`, ...) هم‌خوان نبودند.
+ * مقصد اعلان‌ها — بخش استاندارد مسیر هر نقش (src/lib/routes.ts)، مثلاً /owner/memberships.
+ * B-08: مقصد باید دقیقاً یکی از بخش‌های واقعی همان نقش باشد.
  */
 export const NOTIFICATION_TABS = {
-  member: { sessions: 'ses', exercises: 'ex' },
-  trainer: { today: 'today', members: 'mem', programs: 'prog', history: 'hist' },
-  owner: { members: 'mem', finance: 'fin', trainers: 'tr', reports: 'rep' },
+  member: { sessions: 'sessions', exercises: 'workouts' },
+  trainer: { today: 'today', members: 'athletes', programs: 'programs', history: 'history' },
+  owner: { members: 'memberships', finance: 'finance', trainers: 'trainers', reports: 'analytics' },
 } as const;
 
 export type NotificationSeverity = 'info' | 'warning' | 'critical' | 'success';
@@ -169,7 +169,7 @@ export function buildNotifications({
           severity: 'critical',
           title: labels.packageExhausted.title,
           body: labels.packageExhausted.body,
-          targetTab: 'ses',
+          targetTab: NOTIFICATION_TABS.member.sessions,
         });
       } else if (status === 'low') {
         add({
@@ -179,7 +179,7 @@ export function buildNotifications({
           body: labels.lowBalance.body
             .replace('{remaining}', fa(member.remainingSessions))
             .replace('{total}', fa(member.totalSessions)),
-          targetTab: 'ses',
+          targetTab: NOTIFICATION_TABS.member.sessions,
         });
       }
 
@@ -194,7 +194,7 @@ export function buildNotifications({
             daysLeft === 0
               ? labels.expiringPackage.bodyToday
               : labels.expiringPackage.bodyDays.replace('{days}', fa(daysLeft)),
-          targetTab: 'ses',
+          targetTab: NOTIFICATION_TABS.member.sessions,
         });
       }
 
@@ -218,7 +218,7 @@ export function buildNotifications({
               : labels.upcomingSession.body
                   .replace('{trainer}', nameOf(upcoming.trainerName))
                   .replace('{time}', upcoming.time),
-          targetTab: 'ses',
+          targetTab: NOTIFICATION_TABS.member.sessions,
         });
       }
 
@@ -234,7 +234,7 @@ export function buildNotifications({
           body: labels.sessionCancelled.body
             .replace('{time}', cancelled.time)
             .replace('{trainer}', nameOf(cancelled.trainerName)),
-          targetTab: 'ses',
+          targetTab: NOTIFICATION_TABS.member.sessions,
         });
       }
 
@@ -252,7 +252,7 @@ export function buildNotifications({
             .replace('{trainer}', nameOf(program.trainerName))
             .replace('{title}', program.title)
             .replace('{count}', fa(exerciseCount)),
-          targetTab: 'ex',
+          targetTab: NOTIFICATION_TABS.member.exercises,
         });
       }
     }
@@ -277,7 +277,7 @@ export function buildNotifications({
           '{members}',
           live.map(s => `${nameOf(s.memberName)} — ${s.time}`).join(sep)
         ),
-        targetTab: 'today',
+        targetTab: NOTIFICATION_TABS.trainer.today,
       });
     }
     if (waiting.length > 0) {
@@ -289,7 +289,7 @@ export function buildNotifications({
           '{members}',
           waiting.map(s => `${nameOf(s.memberName)} — ${s.time}`).join(sep)
         ),
-        targetTab: 'today',
+        targetTab: NOTIFICATION_TABS.trainer.today,
       });
     }
 
@@ -305,7 +305,7 @@ export function buildNotifications({
           '{members}',
           lowMembers.map(m => `${nameOf(m.name)} (${fa(m.remainingSessions)})`).join(sep)
         ),
-        targetTab: 'mem',
+        targetTab: NOTIFICATION_TABS.trainer.members,
       });
     }
 
@@ -339,7 +339,7 @@ export function buildNotifications({
           '{titles}',
           draftPrograms.map(p => p.title).join(sep)
         ),
-        targetTab: 'prog',
+        targetTab: NOTIFICATION_TABS.trainer.programs,
       });
     }
   }

@@ -1,26 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { mockStore } from './lib/supabase/mockStore';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { gymStore } from './lib/store/gymStore';
 import { LoginScreen } from './features/auth/LoginScreen';
-import { initAuth, isAuthReady, logout } from './api/auth';
-import { can, HOME_PATH, type AppRole } from './lib/auth/permissions';
+import { ChangePasswordScreen } from './features/auth/ChangePasswordScreen';
+import { initAuth, isAuthReady, logout, mustChangePassword } from './api/auth';
+import { leaveGym } from './api/admin';
+import { can, type AppRole } from './lib/auth/permissions';
+import { AUTH_PATHS, BASE_PATH, homePath } from './lib/routes';
 import { UserJourneyGuide } from './components/UserJourneyGuide';
 import { ShellChromeProvider, type ShellChrome } from './components/shell/AppShell';
 import { LanguageProvider, useI18n } from './components/LanguageProvider';
 
-// Lazy loading roles for code-splitting (Phase 7 - Hardening)
-const AdminShell = React.lazy(() =>
-  import('./features/admin/AdminShell').then(m => ({ default: m.AdminShell }))
-);
-const OwnerShell = React.lazy(() =>
-  import('./features/owner/OwnerShell').then(m => ({ default: m.OwnerShell }))
-);
-const TrainerShell = React.lazy(() =>
-  import('./features/trainer/TrainerShell').then(m => ({ default: m.TrainerShell }))
-);
-const MemberShell = React.lazy(() =>
-  import('./features/member/MemberShell').then(m => ({ default: m.MemberShell }))
-);
+// هر فضای کاری جدا بارگذاری می‌شود (code splitting)
+const AdminShell = React.lazy(() => import('./features/admin/AdminShell').then(m => ({ default: m.AdminShell })));
+const OwnerShell = React.lazy(() => import('./features/owner/OwnerShell').then(m => ({ default: m.OwnerShell })));
+const TrainerShell = React.lazy(() => import('./features/trainer/TrainerShell').then(m => ({ default: m.TrainerShell })));
+const MemberShell = React.lazy(() => import('./features/member/MemberShell').then(m => ({ default: m.MemberShell })));
 const UIShowcase = React.lazy(() => import('./pages/dev/UIShowcase'));
 
 // ── Root: wraps everything in BrowserRouter + LanguageProvider ──
@@ -34,43 +29,7 @@ export default function Root() {
   );
 }
 
-// ── Role-based redirect guard ─────────────────────────────────
-function RoleRedirect({ role }: { role: AppRole }) {
-  return <Navigate to={HOME_PATH[role]} replace />;
-}
-
-/**
- * محافظ نقش — اگر نقش کاربر واردشده با نقش مسیر جاری یکی نباشد،
- * کاربر به فضای کاری خودش هدایت می‌شود.
- *
- * استثنا: نقش‌هایی که `role.preview` دارند (مدیر باشگاه و مدیر کل) می‌توانند
- * فضای کاری نقش‌های پایین‌تر را با یک هویت پیش‌نمایش ببینند.
- */
-function RoleGuard({
-  role,
-  authUser,
-  previewRole,
-  children,
-}: {
-  role: AppRole;
-  authUser: { role: AppRole } | null;
-  /** نقش کاربر پیش‌نمایش فعال */
-  previewRole?: AppRole | null;
-  children: React.ReactNode;
-}) {
-  if (!authUser) return <Navigate to="/" replace />;
-  if (authUser.role === role) return <>{children}</>;
-  if (!can(authUser.role, 'role.preview') || role === 'super_admin') {
-    return <RoleRedirect role={authUser.role} />;
-  }
-  // B-07: پیش‌نمایش فقط با هویتِ همان نقش؛ وگرنه صفحه با شناسهٔ مدیر داده می‌خواند.
-  if (previewRole !== role) {
-    return <Navigate to={`${HOME_PATH[role]}?preview_role=${role}`} replace />;
-  }
-  return <>{children}</>;
-}
-
-/** نقش‌هایی که هر نقش می‌تواند به‌عنوان آن‌ها مشاهده کند */
+/** نقش‌هایی که هر نقش می‌تواند به‌عنوان آن‌ها مشاهده کند (پیش‌نمایش کنترل‌شده) */
 function viewAsRolesFor(role: AppRole | undefined, hasGym: boolean): AppRole[] {
   if (role === 'owner') return ['trainer', 'member'];
   if (role === 'super_admin' && hasGym) return ['owner', 'trainer', 'member'];
@@ -85,13 +44,47 @@ function PageLoader() {
       style={{ background: 'var(--c-surface-0)', color: 'var(--c-text-muted)' }}
       role="status"
     >
-      <div
-        style={{ borderColor: 'var(--c-ink)' }}
-        className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin mb-3"
-      />
+      <div style={{ borderColor: 'var(--c-ink)' }} className="w-10 h-10 border-3 border-t-transparent rounded-full animate-spin mb-3" />
       <span className="text-[14px] font-bold">{t.actions.loading}</span>
     </div>
   );
+}
+
+/**
+ * لایهٔ ۱ محافظ: کاربر واردشده با نقش مجاز.
+ * نقش‌هایی که `role.preview` دارند، فضای نقش‌های پایین‌تر را فقط با یک هویت
+ * پیش‌نمایش واقعی از همان باشگاه می‌بینند؛ نقش نامجاز به فضای خودش هدایت می‌شود.
+ * (لایهٔ ۲، یعنی بررسی نقش و مالکیت در سرور، مستقل از این محافظ اجرا می‌شود.)
+ */
+function RoleProtectedRoute({
+  allowedRoles,
+  previewRole,
+  children,
+}: {
+  allowedRoles: AppRole[];
+  previewRole?: AppRole | null;
+  children: React.ReactNode;
+}) {
+  const location = useLocation();
+  const authUser = gymStore.currentUser;
+  if (!authUser) return <Navigate to={AUTH_PATHS.login} replace state={{ from: location.pathname + location.search }} />;
+  if (allowedRoles.includes(authUser.role)) return <>{children}</>;
+
+  const target = allowedRoles[0];
+  if (!can(authUser.role, 'role.preview') || target === 'super_admin') return <Navigate to={homePath(authUser.role)} replace />;
+  // B-07: پیش‌نمایش فقط با هویتِ همان نقش؛ وگرنه صفحه با شناسهٔ مدیر داده می‌خواند.
+  if (previewRole !== target) return <Navigate to={`${homePath(target)}?preview_role=${target}`} replace />;
+  return <>{children}</>;
+}
+
+/** فقط کاربر واردشده؛ با «تغییر رمز اجباری» فقط صفحهٔ تغییر رمز */
+function SessionGate() {
+  const location = useLocation();
+  if (!gymStore.currentUser) {
+    return <Navigate to={AUTH_PATHS.login} replace state={{ from: location.pathname + location.search }} />;
+  }
+  if (mustChangePassword()) return <Navigate to={AUTH_PATHS.changePassword} replace />;
+  return <Outlet />;
 }
 
 // ── App (needs router context) ───────────────────────────────
@@ -102,21 +95,16 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    return mockStore.subscribe(() => setTick(t => t + 1));
-  }, []);
+  useEffect(() => gymStore.subscribe(() => setTick(t => t + 1)), []);
 
-  // B-01: بازیابی نشست Supabase Auth (در دموی محلی کاری انجام نمی‌دهد)
+  // بازیابی نشست از کوکی سرور
   useEffect(() => initAuth(), []);
 
-  const previewRole = new URLSearchParams(location.search).get('preview_role') as AppRole | null;
+  if (!isAuthReady()) return <PageLoader />;
 
-  /**
-   * کاربر واردشده واقعی (احراز هویت‌شده).
-   * جدا از کاربر پیش‌نمایش نگه داشته می‌شود تا محاسبهٔ نقش‌ها حلقهٔ وابستگی نداشته باشد.
-   */
-  const authUser = mockStore.currentUser;
-  const viewAsRoles = viewAsRolesFor(authUser?.role, !!mockStore.adminGymId);
+  const previewRole = new URLSearchParams(location.search).get('preview_role') as AppRole | null;
+  const authUser = gymStore.currentUser;
+  const viewAsRoles = viewAsRolesFor(authUser?.role, !!gymStore.adminGymId);
 
   /**
    * پیش‌نمایش نقش — فقط برای نقش‌هایی که `role.preview` دارند، و فقط با یک حساب
@@ -124,89 +112,116 @@ function App() {
    */
   const previewUser =
     authUser && previewRole && viewAsRoles.includes(previewRole)
-      ? mockStore.gymUsers.find(u => u.role === previewRole && u.isActive !== false) ?? null
+      ? previewRole === 'owner' && authUser.role === 'super_admin'
+        ? { ...authUser, role: 'owner' as const, entityId: gymStore.gym.id, gymId: gymStore.gym.id }
+        : gymStore.gymUsers.find(u => u.role === previewRole && u.isActive !== false) ?? null
       : null;
 
   // B-07: هویت داده‌ای پیش‌نمایش پیش از رندر فرزندان در استور تنظیم می‌شود
-  // (بی‌صدا و idempotent) تا صفحات همان کاربری را بخوانند که پوسته نمایش می‌دهد.
-  mockStore.setPreviewUser(previewUser?.id ?? null);
-
-  const currentUser = previewUser || authUser;
-
-  if (!currentUser) {
-    // پس از مشخص شدن وضعیت نشست، تا صفحهٔ ورود چشمک نزند
-    if (!isAuthReady()) return <PageLoader />;
-    return <LoginScreen lang={lang} onLanguageChange={setLang} />;
+  if (previewUser && !gymStore.users.some(u => u.id === previewUser.id && u.role === previewUser.role)) {
+    gymStore.previewUser = previewUser;
+  } else {
+    gymStore.setPreviewUser(previewUser?.id ?? null);
   }
+  const currentUser = gymStore.actingUser;
 
-  const chrome: ShellChrome = {
-    user: authUser!,
-    acting: currentUser,
-    previewing: !!previewUser,
-    viewAsRoles,
-    onViewAs: role => navigate(`${HOME_PATH[role]}?preview_role=${role}`),
-    onExitPreview: () => navigate(HOME_PATH[authUser!.role]),
-    onShowGuide: () => setShowJourney(true),
-    onLogout: () => {
-      void logout();
-      // بازگشت به ریشه تا ورود بعدی با نقش جدید از مسیر درست آغاز شود
-      navigate('/');
-    },
-  };
+  const chrome: ShellChrome | null =
+    authUser && currentUser
+      ? {
+          user: authUser,
+          acting: currentUser,
+          previewing: !!previewUser,
+          viewAsRoles,
+          onViewAs: role => navigate(`${homePath(role)}?preview_role=${role}`),
+          onExitPreview: () => {
+            if (authUser.role === 'super_admin') leaveGym();
+            navigate(homePath(authUser.role));
+          },
+          onShowGuide: () => setShowJourney(true),
+          onLogout: () => {
+            void logout();
+            navigate(AUTH_PATHS.login);
+          },
+        }
+      : null;
+
+  const loginTarget = (location.state as { from?: string } | null)?.from;
 
   return (
     <ShellChromeProvider value={chrome}>
       <React.Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Default → redirect based on logged-in role */}
-          <Route path="/" element={<RoleRedirect role={currentUser.role} />} />
+          {/* عمومی: فقط مهمان */}
+          <Route
+            path={AUTH_PATHS.login}
+            element={
+              authUser ? (
+                <Navigate to={mustChangePassword() ? AUTH_PATHS.changePassword : loginTarget ?? homePath(authUser.role)} replace />
+              ) : (
+                <LoginScreen lang={lang} onLanguageChange={setLang} />
+              )
+            }
+          />
+          <Route
+            path={AUTH_PATHS.changePassword}
+            element={
+              authUser ? (
+                <ChangePasswordScreen onDone={() => navigate(homePath(authUser.role), { replace: true })} />
+              ) : (
+                <Navigate to={AUTH_PATHS.login} replace />
+              )
+            }
+          />
+          {/* آدرس‌های قدیمی */}
+          <Route path="/login" element={<Navigate to={AUTH_PATHS.login} replace />} />
 
-          <Route
-            path="/admin/*"
-            element={
-              <RoleGuard role="super_admin" authUser={authUser}>
-                <AdminShell />
-              </RoleGuard>
-            }
-          />
-          <Route
-            path="/owner/*"
-            element={
-              <RoleGuard role="owner" authUser={authUser} previewRole={previewUser?.role}>
-                <OwnerShell />
-              </RoleGuard>
-            }
-          />
-          <Route
-            path="/trainer/*"
-            element={
-              <RoleGuard role="trainer" authUser={authUser} previewRole={previewUser?.role}>
-                <TrainerShell />
-              </RoleGuard>
-            }
-          />
-          <Route
-            path="/member/*"
-            element={
-              <RoleGuard role="member" authUser={authUser} previewRole={previewUser?.role}>
-                <MemberShell />
-              </RoleGuard>
-            }
-          />
-
-          {/* Dev UI Showcase */}
-          <Route path="/dev/ui" element={<UIShowcase />} />
-
-          {/* Catch-all */}
-          <Route path="*" element={<RoleRedirect role={currentUser.role} />} />
+          <Route element={<SessionGate />}>
+            <Route path="/" element={authUser ? <Navigate to={homePath(authUser.role)} replace /> : null} />
+            <Route
+              path={`${BASE_PATH.super_admin}/*`}
+              element={
+                <RoleProtectedRoute allowedRoles={['super_admin']}>
+                  <AdminShell />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path={`${BASE_PATH.owner}/*`}
+              element={
+                <RoleProtectedRoute allowedRoles={['owner']} previewRole={previewUser?.role}>
+                  <OwnerShell />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path={`${BASE_PATH.trainer}/*`}
+              element={
+                <RoleProtectedRoute allowedRoles={['trainer']} previewRole={previewUser?.role}>
+                  <TrainerShell />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path={`${BASE_PATH.member}/*`}
+              element={
+                <RoleProtectedRoute allowedRoles={['member']} previewRole={previewUser?.role}>
+                  <MemberShell />
+                </RoleProtectedRoute>
+              }
+            />
+            {import.meta.env.DEV && <Route path="/dev/ui" element={<UIShowcase />} />}
+            <Route path="*" element={authUser ? <Navigate to={homePath(authUser.role)} replace /> : null} />
+          </Route>
         </Routes>
       </React.Suspense>
 
-      {showJourney && (
+      {showJourney && authUser && (
         <UserJourneyGuide
           lang={lang}
           onClose={() => setShowJourney(false)}
-          onSelectRole={role => navigate(can(authUser?.role, 'role.preview') && authUser?.role !== role ? `/${role}?preview_role=${role}` : `/${role}`)}
+          onSelectRole={role =>
+            navigate(can(authUser.role, 'role.preview') && authUser.role !== role ? `${homePath(role)}?preview_role=${role}` : homePath(role))
+          }
         />
       )}
     </ShellChromeProvider>

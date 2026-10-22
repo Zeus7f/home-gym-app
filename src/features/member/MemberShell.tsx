@@ -5,10 +5,11 @@ import { useI18n } from '../../components/LanguageProvider';
 import { displayName } from '../../lib/displayName';
 import { formatJalaliHumanTodayLocalized } from '../../lib/date/jalali';
 import { AppShell, type ShellNavItem } from '../../components/shell/AppShell';
-import { useTabParam } from '../../lib/useTabParam';
+import { useSection } from '../../lib/useSection';
+import type { Section } from '../../lib/routes';
+import { Navigate } from 'react-router-dom';
 import { getGymName } from '../../api/gym';
 import { getCurrentMember } from '../../api/members';
-import { resolveTab } from '../../lib/navigation';
 
 // صفحات اپ ورزشکار
 import { Home } from './pages/Home';
@@ -16,30 +17,21 @@ import { Sessions } from './pages/Sessions';
 import { Exercises } from './pages/Exercises';
 import { History } from './pages/History';
 
-export type MemberTabKey = 'home' | 'ses' | 'ex' | 'hist';
+type MemberSection = Section<'member'>;
 
 interface MemberTabItem {
-  key: MemberTabKey;
+  key: MemberSection;
   icon: React.ElementType;
   /** کلید برچسب در فرهنگ لغت */
   labelKey: 'home' | 'sessions' | 'exercises' | 'history';
 }
 
 const TABS: MemberTabItem[] = [
-  { key: 'home', icon: HomeIcon, labelKey: 'home' },
-  { key: 'ses', icon: CalendarDays, labelKey: 'sessions' },
-  { key: 'ex', icon: Dumbbell, labelKey: 'exercises' },
-  { key: 'hist', icon: HistoryIcon, labelKey: 'history' },
+  { key: 'overview', icon: HomeIcon, labelKey: 'home' },
+  { key: 'sessions', icon: CalendarDays, labelKey: 'sessions' },
+  { key: 'workouts', icon: Dumbbell, labelKey: 'exercises' },
+  { key: 'progress', icon: HistoryIcon, labelKey: 'history' },
 ];
-
-const MEMBER_TAB_KEYS = TABS.map(tab => tab.key);
-const MEMBER_TAB_ALIASES: Partial<Record<string, MemberTabKey>> = {
-  sessions: 'ses',
-  exercises: 'ex',
-  history: 'hist',
-};
-const toMemberTab = (raw: string | null | undefined) =>
-  resolveTab(raw, MEMBER_TAB_KEYS, 'home', MEMBER_TAB_ALIASES);
 
 /** نگاشت کلید تب به عنوان صفحه */
 const TAB_TITLES = {
@@ -49,10 +41,13 @@ const TAB_TITLES = {
   history: 'titleHistory',
 } as const;
 
+/** /member/:section — نمای کلی، جلسات، تمرین‌ها، پیشرفت */
 export function MemberShell() {
-  const [activeTab, setTab] = useTabParam(toMemberTab);
+  const { section, go, linkTo, redirectTo } = useSection('member');
   const { t, isFa } = useI18n();
   const todayShamsi = formatJalaliHumanTodayLocalized(isFa);
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
+  const activeTab = section as MemberSection;
   const currentTabInfo = TABS.find(tab => tab.key === activeTab)!;
   const user = getCurrentUser();
   const memberName = displayName(user?.displayName || '', isFa);
@@ -61,22 +56,23 @@ export function MemberShell() {
     key: tab.key,
     icon: tab.icon,
     label: t.nav.memberShort[tab.labelKey],
+    to: linkTo(tab.key),
   }));
 
   return (
     <AppShell
       nav={nav}
       activeKey={activeTab}
-      onNavigate={setTab}
+      onNavigate={key => go(key)}
       title={t.member.shell[TAB_TITLES[currentTabInfo.labelKey]]}
-      subtitle={activeTab === 'home' ? `${memberName} · ${todayShamsi}` : todayShamsi}
+      subtitle={activeTab === 'overview' ? `${memberName} · ${todayShamsi}` : todayShamsi}
       context={getGymName()}
     >
       <PendingPackageBanner />
-      {activeTab === 'home' && <Home onNavigateTab={setTab} />}
-      {activeTab === 'ses' && <Sessions />}
-      {activeTab === 'ex' && <Exercises />}
-      {activeTab === 'hist' && <History />}
+      {activeTab === 'overview' && <Home onNavigateTab={key => go(key)} />}
+      {activeTab === 'sessions' && <Sessions />}
+      {activeTab === 'workouts' && <Exercises />}
+      {activeTab === 'progress' && <History />}
     </AppShell>
   );
 }

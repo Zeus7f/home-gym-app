@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "home-gym",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,17 +7,19 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
-    "build:server": "esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=build/server.cjs",
-    "start": "bun run build:server && NODE_ENV=production node build/server.cjs",
+    "build:server": "esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=build/server.cjs && esbuild src/db/seed.ts --bundle --platform=node --format=cjs --packages=external --outfile=build/seed.cjs",
+    "start": "NODE_ENV=production node build/server.cjs",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "clean": "rm -rf dist build",
     "lint": "tsc --noEmit",
     "test": "bun run src/lib/domain/__tests__/run-tests.ts",
-    "deploy": "wrangler deploy"
+    "test:api": "tsx src/server/__tests__/api.test.ts",
+    "db:generate": "drizzle-kit generate --config src/db/drizzle.config.ts",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:up": "docker compose up -d db"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
-    "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/canvas-confetti": "^1.9.0",
     "@vitejs/plugin-react": "^5.0.4",
@@ -28,8 +30,6 @@
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.2",
-    "firebase": "^12.17.1",
-    "firebase-admin": "^14.2.0",
     "lucide-react": "^1.31.0",
     "motion": "^12.23.24",
     "pg": "^8.23.0",
@@ -51,7 +51,6 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
-    "wrangler": "^4.151.1"
+    "vite": "^6.2.3"
   }
 }

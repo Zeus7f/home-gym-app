@@ -1,0 +1,45 @@
+# Home Gym — PostgreSQL + برنامه (Express + فرانت‌اند ساخته‌شده)
+#
+# توسعهٔ محلی (فقط دیتابیس):    docker compose up -d db
+# اجرای کامل روی سرور:          docker compose --profile app up -d --build
+#
+# متغیرها از فایل .env کنار همین فایل خوانده می‌شوند (نمونه: .env.example).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-homegym}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-homegym_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-homegym}
+    ports:
+      # فقط روی localhost؛ روی سرور دیتابیس از بیرون در دسترس نیست
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-homegym} -d ${POSTGRES_DB:-homegym}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-homegym}:${POSTGRES_PASSWORD:-homegym_dev_password}@db:5432/${POSTGRES_DB:-homegym}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    profiles: ["app"]
+
+volumes:
+  pgdata:

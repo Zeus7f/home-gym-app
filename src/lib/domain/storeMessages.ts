@@ -7,6 +7,16 @@
 export type StoreMessageKey =
   // ورود
   | 'login.success'
+  | 'auth.forbidden'
+  | 'auth.unauthenticated'
+  | 'auth.passwordChangeRequired'
+  | 'auth.wrongCurrentPassword'
+  | 'auth.samePassword'
+  | 'login.tooManyAttempts'
+  | 'server.unavailable'
+  | 'common.saved'
+  | 'common.invalidInput'
+  | 'common.notFound'
   | 'login.userNotFound'
   | 'login.badPassword'
   | 'login.badCredentials'

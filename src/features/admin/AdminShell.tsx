@@ -5,8 +5,8 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Building2, Plus, Users, Dumbbell, KeyRound, Power, LogIn, Phone } from 'lucide-react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Building2, Plus, Users, Dumbbell, KeyRound, Power, LogIn, Phone, UserCog, Activity, RefreshCw } from 'lucide-react';
 import { AppShell } from '../../components/shell/AppShell';
 import { Btn } from '../../components/ui/Btn';
 import { PageHeader, Panel, StatTile, StatusPill } from '../../components/ui/Page';
@@ -16,24 +16,121 @@ import { Toast } from '../../components/ui/Toast';
 import { Avatar } from '../../components/ui/Avatar';
 import { useI18n } from '../../components/LanguageProvider';
 import { subscribeToStore } from '../../api/auth';
-import { createGym, enterGym, listGyms, resetOwnerPassword, setGymActive, type GymSummary } from '../../api/admin';
+import { createGym, enterGym, getSystemStatus, listGyms, resetOwnerPassword, setGymActive, type GymSummary, type SystemStatus } from '../../api/admin';
 import { num } from '../../lib/format';
 import { displayName } from '../../lib/displayName';
-import { HOME_PATH } from '../../lib/auth/permissions';
+import { homePath } from '../../lib/routes';
+import { useSection } from '../../lib/useSection';
 
+/** /admin/:section — باشگاه‌ها، حساب مدیران، وضعیت سامانه */
 export function AdminShell() {
   const { t } = useI18n();
+  const { section, go, linkTo, redirectTo } = useSection('super_admin');
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
+
+  const nav = [
+    { key: 'gyms', icon: Building2, label: t.admin.title, to: linkTo('gyms') },
+    { key: 'accounts', icon: UserCog, label: t.admin.accountsTitle, to: linkTo('accounts') },
+    { key: 'system', icon: Activity, label: t.admin.systemTitle, to: linkTo('system') },
+  ];
+  const title = nav.find(n => n.key === section)?.label ?? t.admin.title;
+
   return (
-    <AppShell
-      nav={[{ key: 'gyms', icon: Building2, label: t.admin.title }]}
-      activeKey="gyms"
-      onNavigate={() => {}}
-      title={t.admin.title}
-      subtitle={t.auth.roleSuper}
-      notifications={false}
-    >
-      <GymsPage />
+    <AppShell nav={nav} activeKey={section} onNavigate={key => go(key)} title={title} subtitle={t.auth.roleSuper} notifications={false}>
+      {section === 'gyms' && <GymsPage />}
+      {section === 'accounts' && <AccountsPage />}
+      {section === 'system' && <SystemPage />}
     </AppShell>
+  );
+}
+
+/** حساب مدیران همهٔ باشگاه‌ها */
+function AccountsPage() {
+  const { t, isFa } = useI18n();
+  const [gyms, setGyms] = useState<GymSummary[] | null>(null);
+  const [resetFor, setResetFor] = useState<GymSummary | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    listGyms().then(setGyms);
+  }, []);
+
+  return (
+    <>
+      <PageHeader title={t.admin.accountsTitle} description={t.admin.accountsSubtitle} />
+      {gyms === null ? (
+        <Panel className="text-center text-[14px]" style={{ color: 'var(--c-text-muted)' }}>{t.actions.loading}</Panel>
+      ) : (
+        <Panel padded={false} className="divide-y" style={{ borderColor: 'var(--c-border)' }}>
+          {gyms.filter(g => g.owner).map(g => (
+            <div key={g.owner!.id} className="flex flex-wrap items-center gap-3 p-4 min-w-0">
+              <Avatar name={displayName(g.owner!.displayName, isFa)} size={40} />
+              <div className="min-w-0 flex-1 basis-48">
+                <div className="font-bold text-[14.5px] truncate" style={{ color: 'var(--c-heading)' }}>{displayName(g.owner!.displayName, isFa)}</div>
+                <div className="text-[12.5px] truncate" style={{ color: 'var(--c-text-muted)' }}>
+                  {displayName(g.gym.name, isFa)} · <span dir="ltr">{g.owner!.phone ?? g.owner!.username}</span>
+                </div>
+              </div>
+              <StatusPill tone={g.owner!.isActive !== false && g.gym.isActive !== false ? 'ok' : 'off'}>
+                {g.owner!.isActive !== false && g.gym.isActive !== false ? t.admin.active : t.admin.inactive}
+              </StatusPill>
+              <Btn v="soft" className="h-10" onClick={() => setResetFor(g)}>
+                <KeyRound size={16} /> {t.admin.resetPassword}
+              </Btn>
+            </div>
+          ))}
+        </Panel>
+      )}
+      <ResetPasswordSheet target={resetFor} onClose={() => setResetFor(null)} onDone={msg => { setResetFor(null); setToast(msg); }} />
+      <Toast message={toast} onClose={() => setToast(null)} />
+    </>
+  );
+}
+
+/** سلامت سرور و دیتابیس */
+function SystemPage() {
+  const { t } = useI18n();
+  const [status, setStatus] = useState<SystemStatus | null | undefined>(undefined);
+  const load = useCallback(() => {
+    setStatus(undefined);
+    getSystemStatus().then(setStatus);
+  }, []);
+  useEffect(load, [load]);
+
+  const rows: [string, React.ReactNode][] = status
+    ? [
+        [t.admin.systemStatus, <StatusPill key="s" tone="ok">{status.status}</StatusPill>],
+        [t.admin.systemDb, `${num(status.dbLatencyMs)} ms`],
+        [t.admin.systemUptime, `${num(Math.round(status.uptimeSeconds / 60))} min`],
+        [t.admin.systemTimezone, status.timezone],
+        [t.admin.systemNode, status.node],
+        [t.admin.totalGyms, num(status.counts.gyms)],
+        [t.admin.systemUsers, num(status.counts.users)],
+        [t.admin.systemSessions, num(status.counts.sessions)],
+      ]
+    : [];
+
+  return (
+    <>
+      <PageHeader
+        title={t.admin.systemTitle}
+        description={t.admin.systemSubtitle}
+        actions={<Btn v="ghost" className="h-10" onClick={load}><RefreshCw size={16} /> {t.actions.retry}</Btn>}
+      />
+      {status === undefined ? (
+        <Panel className="text-center text-[14px]" style={{ color: 'var(--c-text-muted)' }}>{t.actions.loading}</Panel>
+      ) : status === null ? (
+        <Panel className="text-center text-[14px]" style={{ color: 'var(--c-rubber)' }}>{t.storeMessages['server.unavailable']}</Panel>
+      ) : (
+        <Panel padded={false} className="divide-y" style={{ borderColor: 'var(--c-border)' }}>
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex items-center justify-between gap-3 px-4 py-3 min-w-0">
+              <span className="text-[13.5px]" style={{ color: 'var(--c-text-muted)' }}>{label}</span>
+              <span className="text-[14px] font-bold truncate" style={{ color: 'var(--c-heading)' }} dir="ltr">{value}</span>
+            </div>
+          ))}
+        </Panel>
+      )}
+    </>
   );
 }
 
@@ -60,7 +157,7 @@ function GymsPage() {
   );
 
   const open = async (g: GymSummary) => {
-    if (await enterGym(g.gym.id)) navigate(`${HOME_PATH.owner}?preview_role=owner`);
+    if (await enterGym(g.gym.id)) navigate(`${homePath('owner')}?preview_role=owner`);
   };
 
   const toggle = async (g: GymSummary, active: boolean) => {
