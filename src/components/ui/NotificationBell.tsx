@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Bell,
@@ -43,7 +44,9 @@ export function NotificationBell({
   badgeOnlyWhenUrgent = false,
   className = '',
 }: NotificationBellProps) {
-  const { t, lang } = useI18n();
+  const { t, lang, isFa } = useI18n();
+  /** کشو از لبهٔ «انتهای» صفحه وارد می‌شود: در RTL از چپ، در LTR از راست */
+  const offscreen = isFa ? '-100%' : '100%';
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   useDialogA11y(drawerRef, open, () => setOpen(false));
@@ -86,11 +89,16 @@ export function NotificationBell({
         {hasBadge && (
           <span
             style={{ backgroundColor: 'var(--c-rubber)' }}
-            className="absolute top-2.5 left-2.5 h-2 w-2 rounded-full"
+            className="absolute top-2 end-2 h-2.5 w-2.5 rounded-full ring-2 ring-[var(--c-surface-1)]"
           />
         )}
       </button>
 
+      {/*
+        کشو در body رندر می‌شود: هدر backdrop-filter دارد و هر فرزند position:fixed را
+        در خودش (۶۴ پیکسل) زندانی می‌کند؛ قبلاً اعلان‌ها در همان نوار باریک بریده می‌شدند.
+      */}
+      {typeof document !== 'undefined' && createPortal(
       <AnimatePresence>
         {open && (
           <motion.div
@@ -98,13 +106,14 @@ export function NotificationBell({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs"
+            className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-xs"
+            dir={isFa ? 'rtl' : 'ltr'}
           >
             <motion.div
               ref={drawerRef}
-              initial={{ x: '100%' }}
+              initial={{ x: offscreen }}
               animate={{ x: 0 }}
-              exit={{ x: '100%' }}
+              exit={{ x: offscreen }}
               transition={{ type: 'spring', stiffness: 340, damping: 36 }}
               onClick={e => e.stopPropagation()}
               style={{
@@ -210,8 +219,9 @@ export function NotificationBell({
 
                         {clickable && (
                           <ChevronLeft
+                            aria-hidden
                             size={16}
-                            className="shrink-0 mt-1"
+                            className={`shrink-0 mt-1 ${isFa ? '' : 'rotate-180'}`}
                             style={{ color: 'var(--c-text-faint)' }}
                           />
                         )}
@@ -223,7 +233,9 @@ export function NotificationBell({
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+      )}
     </>
   );
 }

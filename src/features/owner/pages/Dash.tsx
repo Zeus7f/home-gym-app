@@ -431,12 +431,12 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
           {MoneySection}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
+          <div className="space-y-6 min-w-0">
             <Capacity {...capacityProps} />
             {FloorSection}
           </div>
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             {LoadSection}
             {LowSection}
             {MoneySection}
