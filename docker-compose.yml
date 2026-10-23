@@ -2,6 +2,7 @@
 #
 # توسعهٔ محلی (فقط دیتابیس):    docker compose up -d db
 # اجرای کامل روی سرور:          docker compose --profile app up -d --build
+#   (سرویس‌ها: db، app، و backup برای پشتیبان روزانه در ./backups)
 #
 # متغیرها از فایل .env کنار همین فایل خوانده می‌شوند (نمونه: .env.example).
 
@@ -26,6 +27,7 @@ services:
 
   app:
     build: .
+    image: homegym-app:latest
     restart: unless-stopped
     depends_on:
       db:
@@ -38,8 +40,39 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       TRUST_PROXY: ${TRUST_PROXY:-1}
     ports:
-      - "${APP_PORT:-3000}:3000"
+      # فقط روی localhost؛ از بیرون فقط از راه nginx (HTTPS)
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
     profiles: ["app"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  # پشتیبان روزانهٔ دیتابیس (scripts/backup/backup.sh)
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/scripts/backup.sh"]
+    environment:
+      TZ: Asia/Tehran
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-homegym}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-homegym_dev_password}
+      PGDATABASE: ${POSTGRES_DB:-homegym}
+      BACKUP_TIME: ${BACKUP_TIME:-03:00}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./scripts/backup:/scripts:ro
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+    healthcheck:
+      # سالم یعنی در ۲۶ ساعت گذشته یک پشتیبان موفق وجود دارد
+      test: ["CMD-SHELL", "grep -q '^ok' /backups/last-status && test -n \"$$(find /backups -maxdepth 1 -name 'homegym-*.dump' -mmin -1560)\""]
+      interval: 10m
+      timeout: 10s
+      start_period: 2m
+    profiles: ["app", "backup"]
 
 volumes:
   pgdata:

@@ -3,14 +3,21 @@
 برنامه یک سرور مستقل است: **Express + PostgreSQL**، داخل Docker. به Supabase، Firebase یا Cloudflare نیازی ندارد و روی هر سرور لینوکسی داخل ایران اجرا می‌شود.
 
 ```
-مرورگر ──HTTPS──▶ nginx (TLS) ──▶ app:3000 (Express: /api + فرانت‌اند) ──▶ db:5432 (PostgreSQL 16)
+مرورگر ──HTTPS──▶ nginx (TLS) ──▶ app:3000 (فقط 127.0.0.1) ──▶ db:5432 (فقط 127.0.0.1)
+                                                    backup ──▶ ./backups (روزانه، ۱۴ روز)
 ```
+
+| سرویس | نقش |
+| :--- | :--- |
+| `db` | PostgreSQL 16، دادهٔ ماندگار در volume `pgdata` |
+| `app` | Express + فرانت‌اند ساخته‌شده. migrationها هنگام بالا آمدن خودکار اجرا می‌شوند |
+| `backup` | پشتیبان روزانه با `pg_dump`، بررسی سالم بودن هر فایل، حذف فایل‌های قدیمی‌تر از ۱۴ روز |
 
 ## ۱. پیش‌نیاز سرور
 
-- Docker و Docker Compose
+- لینوکس با Docker، Docker Compose، `git` و `curl`
 - دامنه‌ای که به IP سرور اشاره کند (مثلاً `gymvero.el-sabor.ir`)
-- nginx و گواهی TLS (مثلاً certbot)
+- nginx و certbot روی خود سرور
 
 ## ۲. تنظیمات
 
@@ -21,73 +28,115 @@ openssl rand -hex 32        # مقدار JWT_SECRET
 openssl rand -hex 24        # مقدار POSTGRES_PASSWORD
 ```
 
-در `.env` این‌ها را پر کنید:
-
 | متغیر | توضیح |
 | :--- | :--- |
-| `POSTGRES_PASSWORD` | رمز تصادفی و بلند |
+| `POSTGRES_PASSWORD` | رمز تصادفی، حداقل ۱۶ نویسه |
 | `JWT_SECRET` | حداقل ۳۲ نویسهٔ تصادفی؛ با تغییرش همهٔ کاربران خارج می‌شوند |
-| `SEED_ADMIN_PHONE` / `SEED_ADMIN_PASSWORD` | حساب مدیر کل اولیه |
+| `COOKIE_SECURE=true` و `TRUST_PROXY=1` | برای اجرا پشت nginx با HTTPS |
+| `SEED_ADMIN_PHONE` / `SEED_ADMIN_PASSWORD` | حساب مدیر کل اولیه (فقط اگر وجود نداشته باشد ساخته می‌شود) |
+| `BACKUP_TIME` (پیش‌فرض `03:00`) و `BACKUP_RETENTION_DAYS` (پیش‌فرض `14`) | زمان پشتیبان روزانه به وقت تهران و مدت نگهداری |
+| `BACKUP_HOST_DIR` (پیش‌فرض `./backups`) | پوشهٔ پشتیبان‌ها روی سرور |
 
 `DATABASE_URL` برای سرویس app در `docker-compose.yml` خودکار ساخته می‌شود.
 
-## ۳. اجرا
+**بررسی پیش از استقرار:** ابزارها، طول کلیدها، رمزهای پیش‌فرض و فضای دیسک را چک می‌کند.
 
 ```bash
-docker compose --profile app up -d --build
+sh scripts/preflight.sh
 ```
 
-- migrationها هنگام بالا آمدن سرور خودکار اجرا می‌شوند.
-- دیتابیس فقط روی `127.0.0.1` باز است و از بیرون در دسترس نیست.
-
-**ساخت مدیر کل و کاتالوگ حرکات (یک بار؛ اجرای دوباره بی‌خطر است):**
+## ۳. استقرار و به‌روزرسانی
 
 ```bash
-docker compose exec app node build/seed.cjs
+sh scripts/deploy.sh
 ```
 
-seed، متغیرهای `SEED_ADMIN_*` را از محیط سرویس app می‌خواند. یا آن‌ها را به بخش `environment` سرویس app اضافه کنید، یا یک بار مستقیم بدهید:
+این اسکریپت به ترتیب کارهای زیر را انجام می‌دهد:
+
+1. اجرای preflight؛ اگر خطا باشد متوقف می‌شود.
+2. اگر دیتابیس در حال اجراست، یک **پشتیبان فوری** می‌گیرد.
+3. `git pull --ff-only` و ساخت تصویر تازه. تصویر فعلی به‌عنوان `homegym-app:previous` نگه داشته می‌شود.
+4. صبر تا سالم شدن `/api/health` (شامل پاسخ دیتابیس)، حداکثر ۶۰ ثانیه.
+5. اجرای seed (کاتالوگ حرکات و مدیر کل در صورت نبود).
+6. **اگر نسخهٔ تازه سالم نشد، خودکار به تصویر قبلی برمی‌گردد** و لاگ خطا را نشان می‌دهد.
+
+برنامه و دیتابیس فقط روی `127.0.0.1` باز هستند و از بیرون فقط از راه nginx دیده می‌شوند.
+
+## ۴. nginx و HTTPS
+
+فایل آماده [deploy/nginx/homegym.conf](deploy/nginx/homegym.conf) را کپی و دامنه را در آن جایگزین کنید:
 
 ```bash
-docker compose exec -e SEED_ADMIN_PHONE=0912xxxxxxx -e SEED_ADMIN_PASSWORD='...' app node build/seed.cjs
+sudo cp deploy/nginx/homegym.conf /etc/nginx/conf.d/homegym.conf
+sudo certbot --nginx -d gymvero.el-sabor.ir
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## ۴. nginx
+این فایل شامل این موارد است:
 
-```nginx
-server {
-  listen 443 ssl http2;
-  server_name gymvero.el-sabor.ir;
-  ssl_certificate     /etc/letsencrypt/live/gymvero.el-sabor.ir/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/gymvero.el-sabor.ir/privkey.pem;
+- ریدایرکت HTTP به HTTPS، و TLS 1.2 و 1.3
+- gzip
+- محدودیت ۱۰ درخواست در دقیقه به `/api/auth/login`، در کنار محدودیت خود سرور
+- هدرهای `X-Forwarded-*`؛ با `TRUST_PROXY=1` سرور IP واقعی کاربر را می‌بیند
 
-  client_max_body_size 2m;
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-}
-server { listen 80; server_name gymvero.el-sabor.ir; return 301 https://$host$request_uri; }
-```
+## ۵. پشتیبان‌گیری و بازگردانی
 
-`TRUST_PROXY=1` در `.env` باعث می‌شود محدودیت تلاش ورود IP واقعی کاربر را ببیند.
+**خودکار:** سرویس `backup` هر روز در `BACKUP_TIME` فایل `backups/homegym-YYYY-MM-DD_HHMM.dump` می‌سازد.
 
-## ۵. پشتیبان‌گیری
+- هر فایل پس از ساخت با `pg_restore --list` بررسی می‌شود.
+- فایل‌های قدیمی‌تر از ۱۴ روز حذف می‌شوند.
+- اگر در ۲۶ ساعت گذشته پشتیبان موفقی نباشد، `docker compose ps` این سرویس را `unhealthy` نشان می‌دهد.
+
+**پشتیبان فوری:**
 
 ```bash
-# پشتیبان روزانه (crontab: 0 3 * * *)
-docker compose exec -T db pg_dump -U homegym -Fc homegym > /backups/homegym-$(date +%F).dump
-# بازگردانی
-docker compose exec -T db pg_restore -U homegym -d homegym --clean < /backups/homegym-YYYY-MM-DD.dump
+docker compose --profile app run --rm backup once
 ```
 
-## ۶. به‌روزرسانی
+**آزمون بازگردانی** (پیشنهاد: ماهی یک بار در cron): آخرین پشتیبان در دیتابیس آزمایشی بازگردانی و تعداد ردیف‌ها با دیتابیس اصلی مقایسه می‌شود. خروجی ناصفر یعنی پشتیبان قابل اعتماد نیست.
 
 ```bash
-git pull && docker compose --profile app up -d --build
+sh scripts/backup/verify.sh
 ```
+
+**بازگردانی در دیتابیس آزمایشی `homegym_restore`** (دادهٔ اصلی دست نمی‌خورد):
+
+```bash
+sh scripts/backup/restore.sh backups/homegym-2026-10-23_0300.dump
+```
+
+**بازگردانی روی دیتابیس اصلی:** اول تأیید نام دیتابیس را می‌خواهد، بعد از وضعیت فعلی پشتیبان می‌گیرد، برنامه را متوقف و پشتیبان را جایگزین می‌کند و برنامه را دوباره روشن می‌کند.
+
+```bash
+sh scripts/backup/restore.sh backups/homegym-2026-10-23_0300.dump --live
+```
+
+**نسخهٔ خارج از سرور (توصیه‌شده):** پوشهٔ `backups/` را روزانه به یک سرور یا فضای ذخیره‌سازی دیگر کپی کنید. پشتیبانی که فقط روی همان دیسک است، با خرابی دیسک از بین می‌رود.
+
+```bash
+# crontab -e
+30 3 * * * rsync -a --delete /path/to/home-gym-app/backups/ backup@other-server:/srv/homegym-backups/
+0 4 1 * * cd /path/to/home-gym-app && sh scripts/backup/verify.sh >> /var/log/homegym-verify.log 2>&1
+```
+
+## ۶. پایش
+
+- `docker compose --profile app ps`: هر سه سرویس باید `healthy` باشند.
+- `docker compose --profile app logs -f app`: هر درخواست API یک خط JSON است، شامل زمان، مسیر، وضعیت، مدت و کاربر. خطاهای ۵xx در stderr می‌آیند.
+- `curl -s https://gymvero.el-sabor.ir/api/health` باید `{"status":"ok","db":"ok"}` برگرداند. این آدرس را به یک سرویس uptime بدهید.
+- حجم لاگ کانتینر محدود است: ۵ فایل ۱۰ مگابایتی.
+
+## ۷. CI
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) روی هر push و pull request به `main` اجرا می‌شود:
+
+| کار | محتوا |
+| :--- | :--- |
+| `checks` | TypeScript، تست‌های دامنه، build فرانت‌اند، bundle سرور و seed، بررسی اسکریپت‌های شل و فایل compose |
+| `api` | تست یکپارچهٔ API روی PostgreSQL 16 واقعی |
+| `docker` | ساخت تصویر تولیدی، اجرای آن کنار PostgreSQL، و بررسی `/api/health`، seed و ورود مدیر کل |
+
+پیش از اجرای `deploy.sh` روی سرور، سبز بودن CI را در تب **Actions** گیت‌هاب ببینید.
 
 ## توسعهٔ محلی
 
@@ -107,6 +156,9 @@ bun run test:api                                 # تست یکپارچهٔ API �
 - رمزها با scrypt و salt جداگانه hash می‌شوند. توکن نشست در کوکی HttpOnly با `SameSite=Lax` و `Secure` نگه داشته می‌شود.
 - با تغییر رمز یا غیرفعال‌سازی حساب، همهٔ نشست‌های قبلی آن حساب باطل می‌شوند.
 - حساب‌هایی که مدیر یا مدیر کل می‌سازد، در اولین ورود باید رمز را عوض کنند.
-- ورود در برابر حدس رمز محدود است: ۸ تلاش ناموفق در ۱۵ دقیقه برای هر حساب و IP. محدودیت در حافظه است؛ برای چند نمونهٔ سرور باید Redis جایگزینش شود.
+- ورود در برابر حدس رمز محدود است:
+  - در nginx: ۱۰ درخواست در دقیقه برای هر IP.
+  - در خود سرور: ۸ تلاش ناموفق در ۱۵ دقیقه برای هر حساب و IP. این محدودیت در حافظه است؛ برای چند نمونهٔ سرور باید Redis جایگزینش شود.
 - هر درخواست تغییر داده در سرور اعتبارسنجی می‌شود (نقش، مالکیت، ظرفیت، مهلت لغو) و در یک تراکنش با قفل باشگاه اجرا می‌شود.
 - هدرهای امنیتی (CSP، HSTS، X-Frame-Options) در حالت تولید فعال‌اند.
+- سرور در حالت تولید بدون `JWT_SECRET` امن بالا نمی‌آید و برای تنظیمات ناامن (رمز پیش‌فرض دیتابیس، کوکی غیر Secure، نبود `TRUST_PROXY`) هشدار می‌دهد.

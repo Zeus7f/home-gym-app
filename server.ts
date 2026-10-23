@@ -15,11 +15,28 @@ import { getDb, runMigrations, closeDb } from './src/db/index.ts';
 import { createApp } from './src/server/app.ts';
 import { jwtSecret } from './src/server/auth/session.ts';
 
+/** تنظیمات ناامن در تولید: هشدار واضح در لاگ (یا توقف برای موارد حیاتی) */
+function checkProductionEnv() {
+  if (!process.env.DATABASE_URL && !process.env.SQL_HOST) {
+    throw new Error('DATABASE_URL (or SQL_HOST/…) must be set in production');
+  }
+  if (process.env.COOKIE_SECURE === 'false') {
+    console.warn('[config] COOKIE_SECURE=false — session cookies are sent over plain HTTP. Use only behind HTTPS-less local tests.');
+  }
+  if (!process.env.TRUST_PROXY) {
+    console.warn('[config] TRUST_PROXY is not set — behind nginx the login rate limit will see the proxy IP instead of the user.');
+  }
+  if (/homegym_dev_password/.test(process.env.DATABASE_URL ?? '')) {
+    console.warn('[config] the database still uses the development password — set POSTGRES_PASSWORD in .env');
+  }
+}
+
 async function start() {
   const production = process.env.NODE_ENV === 'production';
   const port = Number(process.env.PORT ?? 3000);
 
   jwtSecret(); // بدون کلید امن بالا نمی‌آید
+  if (production) checkProductionEnv();
   await runMigrations(path.join(process.cwd(), 'drizzle'));
 
   const app = createApp(getDb(), { production });

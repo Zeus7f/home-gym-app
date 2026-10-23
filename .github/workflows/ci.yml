@@ -1,0 +1,117 @@
+# CI: هر push و pull request به main
+#   checks  — TypeScript، تست‌های دامنه، build فرانت‌اند و سرور، بررسی اسکریپت‌های شل
+#   api     — تست یکپارچهٔ API روی PostgreSQL 16 واقعی
+#   docker  — ساخت تصویر تولیدی و اجرای آزمایشی آن کنار PostgreSQL
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TZ: Asia/Tehran
+
+jobs:
+  checks:
+    name: Lint, unit tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+      - run: bun install --frozen-lockfile
+      - name: Type check
+        run: bun run lint
+      - name: Domain tests
+        run: bun run test
+      - name: Build frontend
+        run: bun run build
+      - name: Bundle server and seed
+        run: bun run build:server
+      - name: Shell scripts syntax
+        run: for f in scripts/*.sh scripts/backup/*.sh; do sh -n "$f"; done
+      - name: Compose file
+        run: JWT_SECRET=ci docker compose --profile app config --quiet
+
+  api:
+    name: API integration tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: homegym
+          POSTGRES_PASSWORD: homegym_ci_password
+          POSTGRES_DB: homegym
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U homegym -d homegym"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://homegym:homegym_ci_password@localhost:5432/homegym
+      JWT_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - name: API tests
+        run: bun run test:api
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [checks]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: homegym-app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test (image + PostgreSQL, health and login)
+        env:
+          POSTGRES_PASSWORD: ci_smoke_password_0123456789
+          JWT_SECRET: ci-smoke-secret-0123456789abcdef0123456789abcdef
+          COOKIE_SECURE: "false"
+          SEED_ADMIN_PHONE: "09120000099"
+          SEED_ADMIN_PASSWORD: ci-smoke-admin-1
+        run: |
+          docker compose --profile app up -d --no-build db app
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3000/api/health && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3000/api/health
+          docker compose --profile app run --rm --no-deps -e SEED_ADMIN_PHONE -e SEED_ADMIN_PASSWORD --entrypoint node app build/seed.cjs
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d '{"identifier":"09120000099","password":"ci-smoke-admin-1"}' http://127.0.0.1:3000/api/auth/login)
+          test "$code" = "200"
+          curl -fsS -o /dev/null http://127.0.0.1:3000/auth/login
+      - name: Logs on failure
+        if: failure()
+        run: docker compose --profile app logs --tail 100
