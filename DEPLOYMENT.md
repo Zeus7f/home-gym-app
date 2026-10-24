@@ -79,6 +79,17 @@ sudo nginx -t && sudo systemctl reload nginx
 - محدودیت ۱۰ درخواست در دقیقه به `/api/auth/login`، در کنار محدودیت خود سرور
 - هدرهای `X-Forwarded-*`؛ با `TRUST_PROXY=1` سرور IP واقعی کاربر را می‌بیند
 
+### انتقال دامنه از Cloudflare Worker به سرور (یک بار)
+
+تا آماده شدن سرور، `gymvero.el-sabor.ir` همچنان نسخهٔ قدیمی را از Worker `home-gym-app` در Cloudflare نشان می‌دهد. اتصال GitHub آن Worker قطع شده و دیگر به‌روز نمی‌شود. وقتی سرور آماده شد، به این ترتیب پیش بروید:
+
+1. روی سرور `sh scripts/deploy.sh` را اجرا کنید و با `curl http://127.0.0.1:3000/api/health` از سالم بودن برنامه مطمئن شوید.
+2. در Cloudflare به **Workers & Pages → home-gym-app → Domains** بروید و دامنهٔ `gymvero.el-sabor.ir` را از Worker حذف کنید (Remove).
+3. در **Domains → el-sabor.ir → DNS**، رکورد `A` با نام `gymvero` و مقدار IP سرور اضافه کنید. حالت Proxy را **DNS only** (ابر خاکستری) بگذارید تا certbot مستقیم به سرور برسد و ترافیک کاربران ایرانی از سرور ایران سرو شود.
+4. پس از انتشار DNS (معمولاً چند دقیقه)، روی سرور `sudo certbot --nginx -d gymvero.el-sabor.ir` را اجرا کنید.
+5. آدرس `https://gymvero.el-sabor.ir/api/health` را بررسی کنید. پاسخ باید `{"status":"ok","db":"ok"}` باشد.
+6. پس از اطمینان از کار کردن سایت جدید، می‌توانید Worker `home-gym-app` را در Cloudflare حذف کنید (Settings → Danger zone).
+
 ## ۵. پشتیبان‌گیری و بازگردانی
 
 **خودکار:** سرویس `backup` هر روز در `BACKUP_TIME` فایل `backups/homegym-YYYY-MM-DD_HHMM.dump` می‌سازد.
