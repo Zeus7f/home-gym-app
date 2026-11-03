@@ -4,7 +4,7 @@
  *
  *   NewTrainerSheet   مدیر → مربی با حساب ورود
  *   NewMemberSheet    مدیر → ورزشکار با بسته؛ مربی → ورزشکار با پروفایل حداقلی
- *   PackageSheet      مدیر → تعیین بستهٔ ورزشکارِ منتظر بسته
+ *   PackageSheet      مدیر → تعیین بستهٔ ورزشکارِ منتظر بسته، یا تمدید بستهٔ فعلی
  *   AccountPanel      مدیر → وضعیت حساب، تغییر رمز، فعال/غیرفعال
  */
 
@@ -32,6 +32,7 @@ import {
 import { CUSTOM_PACKAGE_ID, PACKAGE_PRESETS, TRAINER_SPECIALTIES } from './presets';
 import {
   assignMemberPackage,
+  renewMemberPackage,
   createMember,
   createMemberAsTrainer,
   createTrainer,
@@ -43,7 +44,7 @@ import { getTrainers } from '../../api/trainers';
 import { addRoleToPerson, findPersonByPhone } from '../../api/accounts';
 import { subscribeToStore } from '../../api/auth';
 import { displayName, localizedLabel } from '../../lib/displayName';
-import { parseAmount } from '../../lib/format';
+import { num, parseAmount } from '../../lib/format';
 import { getTodayJalaliString, gregorianToJalali, formatJalali, toLatinDigitsDate } from './dates';
 import type { Member, Trainer, UserAccount } from '../../lib/domain/gymManagement';
 
@@ -406,7 +407,18 @@ function PackageFields<T extends PackageForm>({
 
 // ── تعیین بسته ───────────────────────────────────────────────────────────────
 
-export function PackageSheet({ member, onClose, onDone }: { member: Member | null; onClose: () => void; onDone: Done }) {
+export function PackageSheet({
+  member,
+  mode = 'assign',
+  onClose,
+  onDone,
+}: {
+  member: Member | null;
+  /** assign: تعیین بستهٔ اولیه · renew: افزودن بستهٔ تازه روی بستهٔ فعلی */
+  mode?: 'assign' | 'renew';
+  onClose: () => void;
+  onDone: Done;
+}) {
   const { t, isFa } = useI18n();
   const a = t.accounts;
   const [form, setForm] = useResetOnOpen(!!member, initialPackageForm);
@@ -414,17 +426,28 @@ export function PackageSheet({ member, onClose, onDone }: { member: Member | nul
   const [busy, setBusy] = useState(false);
   useEffect(() => setError(null), [member]);
 
+  const renewing = mode === 'renew';
+  const carried = renewing ? (member?.remainingSessions ?? 0) : 0;
+
   const submit = async () => {
     if (!member) return;
     setBusy(true);
-    const res = await assignMemberPackage(member.id, {
-      packageName: form.packageName.trim(),
-      totalSessions: Math.round(parseAmount(form.totalSessions)),
-      packagePrice: parseAmount(form.packagePrice),
-      paidAmount: parseAmount(form.paidAmount),
-      startDate: getTodayJalaliString(),
-      expirationDate: toLatinDigitsDate(form.expirationDate),
-    });
+    const res = renewing
+      ? await renewMemberPackage(member.id, {
+          packageName: form.packageName.trim(),
+          totalSessions: Math.round(parseAmount(form.totalSessions)),
+          packagePrice: parseAmount(form.packagePrice),
+          paidAmount: parseAmount(form.paidAmount),
+          expirationDate: toLatinDigitsDate(form.expirationDate),
+        })
+      : await assignMemberPackage(member.id, {
+          packageName: form.packageName.trim(),
+          totalSessions: Math.round(parseAmount(form.totalSessions)),
+          packagePrice: parseAmount(form.packagePrice),
+          paidAmount: parseAmount(form.paidAmount),
+          startDate: getTodayJalaliString(),
+          expirationDate: toLatinDigitsDate(form.expirationDate),
+        });
     setBusy(false);
     if (res.success) onDone(res.message);
     else setError(res.message);
@@ -434,13 +457,22 @@ export function PackageSheet({ member, onClose, onDone }: { member: Member | nul
     <FormSheet
       open={!!member}
       onClose={onClose}
-      title={a.setPackage}
+      title={renewing ? a.renewPackage : a.setPackage}
       description={member ? displayName(member.name, isFa) : undefined}
       submitLabel={a.save}
       busy={busy}
       onSubmit={submit}
     >
       <FormError message={error} />
+      {renewing && (
+        <p
+          role="status"
+          className="rounded-xl border px-3.5 py-3 text-[13px] leading-relaxed"
+          style={{ backgroundColor: 'var(--c-surface-2)', borderColor: 'var(--c-steel)', color: 'var(--c-text)' }}
+        >
+          {a.renewHint.replace('{count}', num(carried))}
+        </p>
+      )}
       <FieldGrid>
         <PackageFields form={form} setForm={setForm} />
       </FieldGrid>

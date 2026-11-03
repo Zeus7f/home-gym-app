@@ -217,6 +217,17 @@ export function setMemberPreferredHour(store: GymStore, actor: Actor, a: { membe
   return ok('common.saved');
 }
 
+/** تمدید بستهٔ ورزشکار — جلسه‌های نرفته منتقل می‌شوند. */
+export function renewMemberPackage(
+  store: GymStore,
+  actor: Actor,
+  a: { memberId: string } & Parameters<GymStore['renewMemberPackage']>[1]
+) {
+  if (!allowed(actor, 'member.package')) return FORBIDDEN;
+  const { memberId, ...pkg } = a;
+  return fromStore(store.renewMemberPackage(memberId, pkg));
+}
+
 export function assignMemberPackage(
   store: GymStore,
   actor: Actor,

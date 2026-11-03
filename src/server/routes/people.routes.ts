@@ -149,6 +149,22 @@ export function memberRoutes(db: Database) {
     gymOp(db, (store, actor, req) => ops.changeMemberTrainer(store, actor, { memberId: req.params.id, trainerId: str(req.body?.trainerId, 80) }))
   );
 
+  /** تمدید بسته: جلسه و مبلغ تازه روی بستهٔ فعلی اضافه می‌شود */
+  r.post(
+    '/:id/package/renew',
+    gymOp(db, (store, actor, req) => {
+      const b = obj(req.body);
+      return ops.renewMemberPackage(store, actor, {
+        memberId: req.params.id,
+        packageName: str(b.packageName, 255),
+        totalSessions: Math.round(num(b.totalSessions)),
+        packagePrice: Math.max(0, num(b.packagePrice) || 0),
+        paidAmount: Math.max(0, num(b.paidAmount) || 0),
+        expirationDate: str(b.expirationDate, 10),
+      });
+    })
+  );
+
   r.put(
     '/:id/package',
     gymOp(db, (store, actor, req) => {

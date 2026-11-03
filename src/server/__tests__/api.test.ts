@@ -254,6 +254,29 @@ async function main() {
     assert((await athlete.req('POST', `/api/sessions/${sessionId}/member-cancel`, {})).status === 403, "athletes cannot cancel someone else's session");
     assert((await athlete.req('POST', '/api/trainers', { data: {}, password: 'x' })).status === 403, 'athletes cannot create trainers');
 
+    // ── تمدید بسته ──
+    // «Athlete One»: ۱۰ جلسه، یکی رفته، ۵٬۰۰۰٬۰۰۰ تومان که ۲٬۰۰۰٬۰۰۰ پرداخت شده
+    const renewed = await ownerA.req('POST', `/api/members/${athleteId}/package/renew`, {
+      packageName: 'Gold renewed', totalSessions: 8, packagePrice: 4000000, paidAmount: 1000000, expirationDate: '1499/12/30',
+    });
+    assert(renewed.json.success, `owner renews the package (${renewed.json.messageKey})`);
+    const [afterRenew] = await db.select().from(t.members).where(eq(t.members.id, athleteId));
+    assert(afterRenew.totalSessions === 18, 'the new sessions are added to the package total');
+    assert(afterRenew.remainingSessions === 17, 'the unused session is carried over, not lost');
+    assert(afterRenew.usedSessions === 1, 'past attendance is untouched');
+    assert(afterRenew.packagePrice === 9000000 && afterRenew.paidAmount === 3000000, 'price and payment accumulate');
+    assert(afterRenew.outstandingBalance === 6000000, 'the debt is the new total minus what was paid');
+    assert(afterRenew.expirationDate === '1499/12/30', 'the expiry date moves to the new one');
+    const renewPayments = await db.select().from(t.payments).where(eq(t.payments.memberId, athleteId));
+    assert(renewPayments.some(p => p.amount === 1000000), 'the payment made at renewal is recorded');
+
+    assert((await ownerA.req('POST', `/api/members/${athleteId}/package/renew`, { packageName: 'Bad', totalSessions: 0, packagePrice: 0, paidAmount: 0, expirationDate: '1499/12/30' })).status === 422, 'a renewal with no sessions is rejected');
+    // ورزشکاری که مربی ساخته و هنوز بسته ندارد، تمدید نمی‌شود
+    const stillPending = await coach.req('POST', '/api/members', { name: 'Waiting Three', phone: '09123000003', password: 'member-temp-3' });
+    assert(stillPending.json.success && stillPending.json.data.packagePending, 'a trainer-created athlete starts without a package');
+    assert((await ownerA.req('POST', `/api/members/${stillPending.json.data.id}/package/renew`, { packageName: 'X', totalSessions: 4, packagePrice: 0, paidAmount: 0, expirationDate: '1499/12/30' })).status === 422, 'an athlete still waiting for a package cannot be renewed');
+    assert((await coach.req('POST', `/api/members/${athleteId}/package/renew`, { packageName: 'X', totalSessions: 4, packagePrice: 0, paidAmount: 0, expirationDate: '1499/12/30' })).status === 403, 'trainers cannot renew packages');
+
     // ── نقش‌های چندگانه: مربی‌ای که به‌عنوان ورزشکار هم تمرین می‌کند ──
     const [coachRole] = await db.select().from(t.userRoles).where(eq(t.userRoles.userId, coachUser.id));
     assert(coachRole?.role === 'trainer' && coachRole.entityId === coachId, 'every account gets a matching membership');
@@ -330,8 +353,8 @@ async function main() {
     // ── مدیر کل وارد باشگاه می‌شود ──
     sa.gymHeader = gymAId;
     const saSnap = await sa.req('GET', '/api/gym/snapshot');
-    // سه ورزشکار: «Athlete One»، «Pending Two» و مربی‌ای که نقش ورزشکار هم گرفت
-    assert(saSnap.status === 200 && saSnap.json.snapshot.members.length === 3, 'super admin can open a gym panel');
+    // چهار ورزشکار: «Athlete One»، «Pending Two»، «Waiting Three» و مربی‌ای که نقش ورزشکار هم گرفت
+    assert(saSnap.status === 200 && saSnap.json.snapshot.members.length === 4, 'super admin can open a gym panel');
 
     // ── نگاشت پایدار: آنچه بار می‌شود همان است که در دیتابیس هست ──
     const loaded = await loadGym(db, gymAId);

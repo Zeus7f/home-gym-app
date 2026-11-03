@@ -92,6 +92,18 @@ export async function assignMemberPackage(
   );
 }
 
+/** مدیر: تمدید بستهٔ فعلی — جلسه‌های استفاده‌نشده منتقل می‌شوند */
+export async function renewMemberPackage(
+  memberId: string,
+  pkg: Parameters<typeof gymStore.renewMemberPackage>[1]
+): Promise<ActionResult> {
+  return localizeOp(
+    await runOp({ method: 'POST', path: `/api/members/${encodeURIComponent(memberId)}/package/renew`, body: pkg }, (s, a) =>
+      ops.renewMemberPackage(s, a, { memberId, ...pkg })
+    )
+  );
+}
+
 /** حساب ورود یک مربی یا ورزشکار (فقط مدیر فهرست حساب‌ها را دارد) */
 export function getAccountFor(role: 'trainer' | 'member', entityId: string): UserAccount | undefined {
   return gymStore.accountFor(role, entityId);

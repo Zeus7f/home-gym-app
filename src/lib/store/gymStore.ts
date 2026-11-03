@@ -2173,6 +2173,59 @@ export class GymStore {
   }
 
   /**
+   * تمدید بسته: جلسه‌های تازه روی ماندهٔ فعلی اضافه می‌شوند و تاریخ انقضا جلو می‌رود.
+   *
+   * برخلاف `assignMemberPackage` که بسته را جایگزین می‌کند، اینجا جلسه‌های
+   * استفاده‌نشده از بین نمی‌روند و مبلغ تازه به حساب قبلی اضافه می‌شود.
+   */
+  renewMemberPackage(
+    memberId: string,
+    pkg: { packageName: string; totalSessions: number; packagePrice: number; paidAmount: number; expirationDate: string }
+  ): StoreResult {
+    const member = this.members.find(m => m.id === memberId);
+    if (!member) return storeResult(false, 'member.notFound');
+    if (member.packagePending) return storeResult(false, 'member.invalidPackage');
+    if (!pkg.packageName.trim() || !Number.isFinite(pkg.totalSessions) || pkg.totalSessions < 1) {
+      return storeResult(false, 'member.invalidPackage');
+    }
+    if (pkg.packagePrice < 0 || pkg.paidAmount < 0) return storeResult(false, 'payment.invalidAmount');
+
+    const added = Math.round(pkg.totalSessions);
+    const carried = member.remainingSessions;
+
+    member.packageName = pkg.packageName.trim();
+    member.totalSessions += added;
+    // ماندهٔ جلسه‌ها از همین رابطه می‌آید، پس جلسه‌های نرفته خودبه‌خود منتقل می‌شوند
+    member.remainingSessions = member.totalSessions - member.usedSessions;
+    member.packagePrice += pkg.packagePrice;
+    member.paidAmount += pkg.paidAmount;
+    member.outstandingBalance = Math.max(0, member.packagePrice - member.paidAmount);
+    if (pkg.expirationDate) member.expirationDate = pkg.expirationDate;
+    member.status = 'active';
+
+    if (pkg.paidAmount > 0) {
+      this.memberPayments.unshift({
+        id: nextId('pay'),
+        memberId: member.id,
+        memberName: member.name,
+        amount: pkg.paidAmount,
+        date: getTodayJalaliString(),
+        method: 'card',
+        description: `تمدید بستهٔ ${member.packageName}`,
+        recordedBy: this.currentUser?.displayName || 'مدیر باشگاه',
+      });
+    }
+    this.audit(
+      'PACKAGE_RENEWED',
+      'Member',
+      member.id,
+      `بستهٔ ${member.name} با ${added} جلسه تمدید شد (${carried} جلسه منتقل شد).`
+    );
+    this.notify();
+    return storeResult(true, 'member.packageRenewed', { member: member.name });
+  }
+
+  /**
    * تغییر مربی دائم یک ورزشکار (B-13).
    * نوبت‌های قبلی دست نمی‌خورند؛ فقط مربی پیش‌فرض نوبت‌های بعدی عوض می‌شود.
    */

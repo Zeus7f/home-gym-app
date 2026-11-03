@@ -47,6 +47,7 @@ export type StoreMessageKey =
   | 'member.created'
   | 'member.createdPending'
   | 'member.packageAssigned'
+  | 'member.packageRenewed'
   | 'member.invalidPackage'
   | 'trainer.created'
   // جلسات

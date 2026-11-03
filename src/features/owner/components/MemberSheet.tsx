@@ -80,6 +80,7 @@ export function MemberSheet({
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ message: string; ok: boolean } | null>(null);
   const [packageFor, setPackageFor] = useState<Member | null>(null);
+  const [renewFor, setRenewFor] = useState<Member | null>(null);
 
   const memberId = member?.id;
 
@@ -281,8 +282,7 @@ export function MemberSheet({
           <Btn v="primary" onClick={() => openAction('payment')} aria-expanded={action === 'payment'}>
             {ms.recordPayment}
           </Btn>
-          {/* تمدید بسته هنوز workflow ندارد؛ به‌جای دکمهٔ بی‌اثر، غیرفعال و با توضیح نمایش داده می‌شود */}
-          <Btn v="brass" disabled title={ms.comingSoon} aria-label={`${ms.extendPackage} — ${ms.comingSoon}`}>
+          <Btn v="brass" disabled={!live || live.packagePending} onClick={() => setRenewFor(live ?? null)}>
             {ms.extendPackage}
           </Btn>
           <Btn v="ghost" onClick={() => openAction('trainer')} aria-expanded={action === 'trainer'}>
@@ -503,6 +503,15 @@ export function MemberSheet({
         onClose={() => setPackageFor(null)}
         onDone={msg => {
           setPackageFor(null);
+          setToast({ message: msg, ok: true });
+        }}
+      />
+      <PackageSheet
+        member={renewFor}
+        mode="renew"
+        onClose={() => setRenewFor(null)}
+        onDone={msg => {
+          setRenewFor(null);
           setToast({ message: msg, ok: true });
         }}
       />
