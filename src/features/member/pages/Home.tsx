@@ -15,6 +15,7 @@ import {
   getJalaliDayOfWeek,
   getCurrentWeekShamsi,
   formatJalaliHumanTodayLocalized,
+  formatJalaliNumeric,
   PERSIAN_WEEK_DAYS,
   PERSIAN_WEEK_DAYS_EN,
   PERSIAN_WEEK_DAYS_SHORT_EN,
@@ -63,7 +64,8 @@ export function Home({ onNavigateTab }: HomeProps) {
   const used = memberData?.usedSessions ?? 0;
   const remaining = memberData?.remainingSessions ?? Math.max(0, total - used);
   const debt = memberData?.outstandingBalance || 0;
-  const expDate = memberData?.expirationDate || '';
+  // تاریخ انقضا با ارقام همان زبان رابط نمایش داده می‌شود، نه رشتهٔ خام دیتابیس
+  const expDate = memberData?.expirationDate ? formatJalaliNumeric(memberData.expirationDate, isFa) : '';
 
   // روزهای حضور در هفته جاری (شنبه تا جمعه)
   // روزهای هفته از تقویم واقعی گرفته می‌شوند

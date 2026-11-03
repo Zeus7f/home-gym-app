@@ -1,6 +1,7 @@
 // Reporting Unit Tests: بازه‌های روز/هفته/ماه و جمع‌بندی گزارش کلی
 
 import { rangeFor, shiftAnchor, summarize } from '../reporting';
+import { formatJalaliNumeric } from '../../date/jalali';
 import type { DailySession, Member, Trainer } from '../gymManagement';
 
 export function runReportingTests(): { passed: number; failed: number; errors: string[] } {
@@ -33,6 +34,13 @@ export function runReportingTests(): { passed: number; failed: number; errors: s
 
   const esfand = rangeFor('month', '1404/12/05');
   assert(esfand.days.length === esfand.days.length && esfand.from === '1404/12/01', 'Esfand starts on the first');
+
+  // ── تاریخ عددی با ارقام زبان فعال ─────────────────────────────────────────
+  assert(formatJalaliNumeric('1405/10/12', true) === '۱۴۰۵/۱۰/۱۲', 'a Persian UI gets Persian digits');
+  assert(formatJalaliNumeric('1405/10/12', false) === '1405/10/12', 'an English UI keeps Latin digits');
+  assert(formatJalaliNumeric('1405/9/5', true) === '۱۴۰۵/۰۹/۰۵', 'month and day are zero padded');
+  assert(formatJalaliNumeric('', true) === '', 'an empty date stays empty');
+  assert(formatJalaliNumeric('nonsense', true) === 'nonsense', 'an unparsable date is returned untouched');
 
   // ── جابه‌جایی دوره ────────────────────────────────────────────────────────
   assert(shiftAnchor('day', '1405/08/12', 1) === '1405/08/13', 'next day');

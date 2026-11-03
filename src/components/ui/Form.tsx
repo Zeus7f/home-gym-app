@@ -7,12 +7,13 @@
 import React, { useId, useState } from 'react';
 import { CalendarDays, Eye, EyeOff } from 'lucide-react';
 import { PersianCalendar } from '../calendar/PersianCalendar';
+import { formatJalaliNumeric } from '../../lib/date/jalali';
 import { Sheet } from '../../features/owner/components/Sheet';
 import { useI18n } from '../LanguageProvider';
 import { useIsMobile } from '../../lib/useMediaQuery';
 import { Btn } from './Btn';
 import { cn } from '../../lib/utils';
-import { groupAmount, num, toLatinDigits } from '../../lib/format';
+import { groupAmount, toLatinDigits } from '../../lib/format';
 
 const control =
   'w-full h-11 rounded-xl border px-3.5 text-[15px] outline-none transition-shadow bg-[var(--c-surface-1)] text-[var(--c-text)] border-[var(--c-border-strong)] placeholder:text-[var(--c-text-faint)] focus:ring-2 focus:ring-[var(--c-steel)]/40 focus:border-[var(--c-steel)] disabled:opacity-60';
@@ -236,7 +237,7 @@ export function JalaliDateInput({
   onChange: (date: string) => void;
   describedBy?: string;
 }) {
-  const { t } = useI18n();
+  const { t, isFa } = useI18n();
   const [open, setOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
@@ -260,7 +261,7 @@ export function JalaliDateInput({
         className={cn(control, 'flex items-center justify-between gap-2 text-start cursor-pointer')}
       >
         <span className="tnum" dir="ltr">
-          {localizedDate(canonical)}
+          {formatJalaliNumeric(canonical, isFa)}
         </span>
         <CalendarDays size={17} style={{ color: 'var(--c-text-muted)' }} />
       </button>
@@ -290,12 +291,6 @@ export function JalaliDateInput({
   );
 }
 
-/** «۱۴۰۵/۰۹/۱۲» — ارقام زبان فعال، با صفر ابتدای ماه و روز. */
-function localizedDate(canonical: string): string {
-  const [year = '', month = '', day = ''] = canonical.split('/');
-  const digits = (part: string, width: number) => num(Number(part)).replace(/[,٬]/g, '').padStart(width, num(0));
-  return `${digits(year, 4)}/${digits(month, 2)}/${digits(day, 2)}`;
-}
 
 /** شبکهٔ فیلدها: یک ستون در موبایل، دو ستون از sm */
 export function FieldGrid({ children }: { children: React.ReactNode }) {

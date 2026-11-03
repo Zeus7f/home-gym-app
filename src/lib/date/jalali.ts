@@ -304,6 +304,24 @@ export function formatJalaliLocalized(dateStr: string, isFa: boolean): string {
 }
 
 /**
+ * تاریخ عددی کامل با ارقام زبان فعال — «۱۴۰۵/۱۰/۱۲» یا «1405/10/12».
+ *
+ * جایی به کار می‌آید که سال اهمیت دارد (مثل تاریخ انقضای بسته) و
+ * قالب خوانای `formatJalaliLocalized` که سال را نمی‌آورد کافی نیست.
+ *
+ * @example
+ * formatJalaliNumeric('1405/9/5', true)   // "۱۴۰۵/۰۹/۰۵"
+ * formatJalaliNumeric('1405/9/5', false)  // "1405/09/05"
+ */
+export function formatJalaliNumeric(dateStr: string, isFa: boolean): string {
+  const parsed = parseJalali(toCanonicalJalali(dateStr));
+  if (!parsed) return dateStr;
+  const pad = (value: number, width: number) => String(value).padStart(width, '0');
+  const numeric = `${pad(parsed.jy, 4)}/${pad(parsed.jm, 2)}/${pad(parsed.jd, 2)}`;
+  return isFa ? toPersianDigits(numeric) : numeric;
+}
+
+/**
  * تاریخ امروز به فرم خوانا — «سه‌شنبه ۲۸ مهر ۱۴۰۵» یا «Tuesday 28 Mehr 1405»
  */
 export function formatJalaliHumanTodayLocalized(isFa: boolean): string {
