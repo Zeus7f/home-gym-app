@@ -107,7 +107,7 @@ export const EXERCISE_POSITIONS: { id: ExercisePosition; labelEn: string; labelF
 
 import { RAW_EXERCISE_CATALOG } from './catalogData';
 
-export const FMS_INITIAL_EXERCISES: ExerciseItem[] = [
+const FMS_INITIAL_EXERCISES: ExerciseItem[] = [
   // ==========================================
   // FUNCTIONAL MOVEMENT SYSTEMS (FMS) SPECIALIZED
   // ==========================================

@@ -21,7 +21,7 @@ function isPreference(v: unknown): v is ThemePreference {
   return v === 'light' || v === 'dark' || v === 'system';
 }
 
-export function getThemePreference(): ThemePreference {
+function getThemePreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     return isPreference(stored) ? stored : 'system';
@@ -37,13 +37,13 @@ function systemPrefersDark(): boolean {
 }
 
 /** theme مؤثر پس از اعمال تنظیم سیستم */
-export function resolveTheme(pref: ThemePreference): 'light' | 'dark' {
+function resolveTheme(pref: ThemePreference): 'light' | 'dark' {
   if (pref === 'system') return systemPrefersDark() ? 'dark' : 'light';
   return pref;
 }
 
 /** اعمال theme روی ریشهٔ سند (بدون ذخیره). */
-export function applyTheme(pref: ThemePreference = getThemePreference()) {
+function applyTheme(pref: ThemePreference = getThemePreference()) {
   if (typeof document === 'undefined') return;
   const effective = resolveTheme(pref);
   const root = document.documentElement;

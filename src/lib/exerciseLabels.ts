@@ -25,32 +25,6 @@ export function exerciseName(
   return (isFa ? item.nameFa : item.name) || fallback;
 }
 
-/** نام عضلهٔ هدف حرکت بر پایهٔ زبان فعال. */
-export function exerciseMuscleName(
-  exerciseId: string,
-  fallback: string,
-  isFa: boolean
-): string {
-  const item = byId.get(exerciseId);
-  if (!item) return fallback;
-  return (
-    (isFa ? item.primaryMuscleFa : item.primaryMuscle) ||
-    item.bodyPartFa ||
-    fallback
-  );
-}
-
-/** نام تجهیزات حرکت بر پایهٔ زبان فعال. */
-export function exerciseEquipmentName(
-  exerciseId: string,
-  fallback: string,
-  isFa: boolean
-): string {
-  const item = byId.get(exerciseId);
-  if (!item) return fallback;
-  return (isFa ? item.equipmentFa : item.equipmentName) || item.equipmentFa || fallback;
-}
-
 /**
  * نام لاتین یک عضله بر پایهٔ شناسهٔ آن.
  * شناسه‌های عضله در کاتالوگ لاتین‌اند (مثلاً 'Biceps')، پس نام فارسی متناظر

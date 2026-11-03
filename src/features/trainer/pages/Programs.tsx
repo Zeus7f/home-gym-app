@@ -22,8 +22,8 @@ import {
 } from 'lucide-react';
 import { H } from '../../../components/ui/H';
 import { Btn } from '../../../components/ui/Btn';
-import { Input } from '../../../components/ui/Input';
 import { Modal } from '../../../components/ui/Modal';
+import { Field, TextInput } from '../../../components/ui/Form';
 import { num } from '../../../lib/format';
 import { displayName } from '../../../lib/displayName';
 import { useI18n } from '../../../components/LanguageProvider';
@@ -436,18 +436,26 @@ export function Programs() {
 
           {/* ویرایشگر برنامه */}
           <section style={surface} className="p-4 rounded-2xl border shadow-xs space-y-3.5">
-            <Input
-              label={p.programTitle}
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder={p.programTitlePlaceholder}
-            />
-            <Input
-              label={p.description}
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder={p.descriptionPlaceholder}
-            />
+            <Field label={p.programTitle}>
+              {id => (
+                <TextInput
+                  id={id}
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder={p.programTitlePlaceholder}
+                />
+              )}
+            </Field>
+            <Field label={p.description}>
+              {id => (
+                <TextInput
+                  id={id}
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder={p.descriptionPlaceholder}
+                />
+              )}
+            </Field>
 
             {days.length === 0 ? (
               <p className="text-[13px] py-3 text-center" style={{ color: 'var(--c-text-muted)' }}>

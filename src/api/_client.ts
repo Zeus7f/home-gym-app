@@ -92,5 +92,3 @@ export async function refreshSnapshot(): Promise<boolean> {
   return true;
 }
 
-/** True when data is loaded from and saved to the server. */
-export const isLiveBackend = (): boolean => isRemote();

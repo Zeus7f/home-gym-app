@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal } from './Modal';
-import { Button } from './Button';
+import { Btn } from './Btn';
 import { AlertCircle, HelpCircle } from 'lucide-react';
 import { useI18n } from '../LanguageProvider';
 
@@ -65,17 +65,17 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         )}
 
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
-          <Button variant="outline" size="md" onClick={onClose} disabled={isLoading}>
+          <Btn v="ghost" className="h-11" onClick={onClose} disabled={isLoading}>
             {cancelLabel}
-          </Button>
-          <Button
-            variant={variant === 'danger' ? 'danger' : 'primary'}
-            size="md"
+          </Btn>
+          <Btn
+            v={variant === 'danger' ? 'danger' : 'primary'}
+            className="h-11"
             onClick={onConfirm}
-            isLoading={isLoading}
+            disabled={isLoading}
           >
-            {confirmLabel}
-          </Button>
+            {isLoading ? t.actions.loading : confirmLabel}
+          </Btn>
         </div>
       </div>
     </Modal>

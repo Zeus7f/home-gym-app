@@ -6,7 +6,7 @@ import { Meter } from '../../components/ui/Meter';
 import { Seg } from '../../components/ui/Seg';
 import { Chips } from '../../components/ui/Chips';
 import { Capacity, DEMO_CAPACITY_SESSIONS } from '../../components/ui/Capacity';
-import { Button } from '../../components/ui/Button';
+import { Btn } from '../../components/ui/Btn';
 
 export default function UIShowcase() {
   const [segVal, setSegVal] = useState<'all' | 'active' | 'debt'>('all');
@@ -54,7 +54,7 @@ export default function UIShowcase() {
         >
           <H
             sub="مدیریت سانس‌ها و ورزشکاران حاضر"
-            action={<Button size="sm">افزودن عضو جدید</Button>}
+            action={<Btn className="h-9 text-[13px]">افزودن عضو جدید</Btn>}
           >
             برنامه تمرینی امروز
           </H>

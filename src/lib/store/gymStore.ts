@@ -53,7 +53,6 @@ import { MIN_PASSWORD_LENGTH } from '../auth/accountRules';
 import type { GymSnapshot } from '../data/snapshot';
 import { isValidMobile, normalizeLoginId, normalizePhone } from '../phone';
 
-
 /**
  * تولید شناسهٔ یکتا.
  *
@@ -83,9 +82,7 @@ function storeResult(
 let idCounter = 0;
 /** B-03: در حالت ابری شناسهٔ رکوردها UUID است (کلید ردیف در app_records و app_entity_id پروفایل) */
 let uuidIds = false;
-export function useUuidIds(flag: boolean) {
-  uuidIds = flag;
-}
+
 function nextId(prefix: string): string {
   if (uuidIds && typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   idCounter += 1;
@@ -1252,7 +1249,7 @@ export const INITIAL_USERS: UserAccount[] = [
 ];
 
 /** حساب نمونهٔ مدیر کل در دموی محلی */
-export const SUPER_ADMIN_DEMO: UserAccount = {
+const SUPER_ADMIN_DEMO: UserAccount = {
   id: 'u-super',
   username: 'superadmin',
   password: '123',
@@ -2408,7 +2405,6 @@ export class GymStore {
     });
     this.notify();
 
-
     return true;
   }
 
@@ -2429,7 +2425,6 @@ export class GymStore {
     });
 
     this.notify();
-
 
     return exercise;
   }
@@ -2630,7 +2625,6 @@ export class GymStore {
 
 /** نمونهٔ مرورگر: کش خواندنی داده‌ای که از سرور (src/server) می‌آید؛ در تست‌ها موتور محلی */
 export const gymStore = new GymStore();
-
 
 // Backwards compatibility alias for components
 export const mockStore = gymStore;

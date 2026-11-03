@@ -26,11 +26,6 @@ export async function getMember(id: string): Promise<Member | undefined> {
   return gymStore.members.find(m => m.id === id);
 }
 
-/** Get members assigned to a specific trainer. */
-export async function getMembersByTrainer(trainerId: string): Promise<Member[]> {
-  return gymStore.members.filter(m => m.defaultTrainerId === trainerId);
-}
-
 /**
  * همه جلسات یک عضو — جلسات امروز و گذشته با هم.
  * منبع واحد برای صفحات سوابق، جلسات و داشبورد ورزشکار.

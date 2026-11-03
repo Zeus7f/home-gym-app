@@ -37,11 +37,6 @@ export async function listGyms(): Promise<GymSummary[]> {
   return json.gyms ?? [];
 }
 
-export async function listOwnerAccounts(): Promise<UserAccount[]> {
-  const { json } = await apiRequest<{ accounts?: UserAccount[] }>('GET', '/api/admin/accounts');
-  return json.accounts ?? [];
-}
-
 export async function getSystemStatus(): Promise<SystemStatus | null> {
   const { json } = await apiRequest<{ system?: SystemStatus }>('GET', '/api/admin/system');
   return json.system ?? null;

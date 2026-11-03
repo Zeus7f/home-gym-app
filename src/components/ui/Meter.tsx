@@ -1,6 +1,6 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
-import { fa } from '../../lib/format';
+import { num } from '../../lib/format';
 
 export interface MeterProps extends React.HTMLAttributes<HTMLDivElement> {
   /** تعداد کل جلسات پکیج */
@@ -41,7 +41,7 @@ export function Meter({
       aria-valuenow={remaining}
       aria-valuemin={0}
       aria-valuemax={safeTotal}
-      aria-label={`${fa(remaining)} جلسه باقیمانده از مجموع ${fa(safeTotal)} جلسه`}
+      aria-label={`${num(remaining)} جلسه باقیمانده از مجموع ${num(safeTotal)} جلسه`}
       className={cn('flex gap-[2px] items-center w-full', className)}
       {...props}
     >

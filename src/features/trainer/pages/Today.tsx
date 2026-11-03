@@ -3,7 +3,7 @@ import { Check, Plus } from 'lucide-react';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Btn } from '../../../components/ui/Btn';
 import { Modal } from '../../../components/ui/Modal';
-import { fa } from '../../../lib/format';
+import { num } from '../../../lib/format';
 import { displayName } from '../../../lib/displayName';
 import { getTodaySessions, checkInSession, getTrainerDailyCapacity, addSessionToToday, cancelSession } from '../../../api/sessions';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
@@ -13,7 +13,6 @@ import { getCurrentUser, subscribeToStore } from '../../../api/auth';
 import { DailySession, Member } from '../../../lib/domain/gymManagement';
 import { getTodayJalaliString } from '../../../lib/date/jalali';
 import { useI18n } from '../../../components/LanguageProvider';
-import { num } from '../../../lib/format';
 
 export interface TodayProps {
   onOpenSession: (session: DailySession) => void;

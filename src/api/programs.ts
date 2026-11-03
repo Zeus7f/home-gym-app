@@ -23,14 +23,6 @@ export async function getTrainerPrograms(trainerId: string): Promise<WorkoutProg
   return gymStore.getProgramsByTrainer(trainerId);
 }
 
-/** برنامه‌های یک مربی برای یک ورزشکار مشخص. */
-export async function getProgramsForMember(
-  memberId: string,
-  trainerId: string
-): Promise<WorkoutProgram[]> {
-  return gymStore.getProgramsForMemberByTrainer(memberId, trainerId);
-}
-
 /** ایجاد یا به‌روزرسانی برنامه (پیش‌نویس). */
 export async function saveProgram(
   data: Omit<WorkoutProgram, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'publishedAt'> & {

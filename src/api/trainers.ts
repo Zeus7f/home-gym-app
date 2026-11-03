@@ -33,7 +33,3 @@ export async function recordTrainerPayout(
   );
 }
 
-/** Get all trainer payout records. */
-export async function getTrainerPayoutRecords() {
-  return gymStore.trainerPayouts;
-}
