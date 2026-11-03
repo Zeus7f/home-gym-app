@@ -19,11 +19,17 @@ import {
   FormError,
   FormSection,
   FormSheet,
+  JalaliDateInput,
+  MoneyInput,
   PasswordInput,
   PhoneInput,
   SelectInput,
   TextInput,
+  SLOT_HOURS,
+  TimeRangeInput,
+  parseTimeRange,
 } from '../../components/ui/Form';
+import { CUSTOM_PACKAGE_ID, PACKAGE_PRESETS, TRAINER_SPECIALTIES } from './presets';
 import {
   assignMemberPackage,
   createMember,
@@ -35,18 +41,12 @@ import {
 } from '../../api/accounts';
 import { getTrainers } from '../../api/trainers';
 import { subscribeToStore } from '../../api/auth';
-import { displayName } from '../../lib/displayName';
+import { displayName, localizedLabel } from '../../lib/displayName';
+import { parseAmount } from '../../lib/format';
 import { getTodayJalaliString, gregorianToJalali, formatJalali, toLatinDigitsDate } from './dates';
 import type { Member, Trainer, UserAccount } from '../../lib/domain/gymManagement';
 
 type Done = (message: string) => void;
-
-/** «۱۲٬۵۰۰٬۰۰۰» یا «12,500,000» → 12500000 */
-function parseAmount(raw: string): number {
-  const latin = raw.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
-  const n = Number(latin.replace(/[^\d.]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-}
 
 /** تاریخ جلالی چند روز بعد از امروز */
 function jalaliInDays(days: number): string {
@@ -67,25 +67,31 @@ function useResetOnOpen<T>(open: boolean, initial: () => T): [T, React.Dispatch<
 // ── مربی جدید ────────────────────────────────────────────────────────────────
 
 export function NewTrainerSheet({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: Done }) {
-  const { t } = useI18n();
+  const { t, isFa } = useI18n();
   const a = t.accounts;
   const [form, setForm] = useResetOnOpen(open, () => ({
     name: '',
     phone: '',
-    specialty: '',
+    specialty: TRAINER_SPECIALTIES[0],
     workingHours: '09:00 - 15:00',
     dailyCapacity: '6',
-    sessionRate: '150000',
+    sessionRate: '150,000',
     password: '',
   }));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => setError(null), [open]);
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
+  const setValue = (k: keyof typeof form) => (value: string) => setForm(f => ({ ...f, [k]: value }));
 
   const submit = async () => {
+    const [from, to] = parseTimeRange(form.workingHours);
+    if (from >= to) {
+      setError(a.workingHoursInvalid);
+      return;
+    }
     setBusy(true);
     setError(null);
     const res = await createTrainer(
@@ -116,17 +122,25 @@ export function NewTrainerSheet({ open, onClose, onDone }: { open: boolean; onCl
         <Field label={a.phone}>
           {id => <PhoneInput id={id} value={form.phone} onChange={set('phone')} placeholder={t.auth.phonePlaceholder} />}
         </Field>
-        <Field label={a.specialty} optional>
-          {id => <TextInput id={id} value={form.specialty} onChange={set('specialty')} />}
+        <Field label={a.specialty}>
+          {id => (
+            <SelectInput id={id} value={form.specialty} onChange={set('specialty')}>
+              {TRAINER_SPECIALTIES.map(s => (
+                <option key={s} value={s}>
+                  {localizedLabel(s, isFa)}
+                </option>
+              ))}
+            </SelectInput>
+          )}
         </Field>
-        <Field label={a.workingHours}>
-          {id => <TextInput id={id} value={form.workingHours} onChange={set('workingHours')} dir="ltr" />}
+        <Field label={a.workingHours} className="sm:col-span-2">
+          {(id, d) => <TimeRangeInput id={id} describedBy={d} value={form.workingHours} onChange={setValue('workingHours')} />}
         </Field>
         <Field label={a.dailyCapacity}>
           {id => <TextInput id={id} value={form.dailyCapacity} onChange={set('dailyCapacity')} inputMode="numeric" dir="ltr" />}
         </Field>
-        <Field label={a.sessionRate} className="sm:col-span-2">
-          {id => <TextInput id={id} value={form.sessionRate} onChange={set('sessionRate')} inputMode="numeric" dir="ltr" />}
+        <Field label={a.sessionRate}>
+          {id => <MoneyInput id={id} value={form.sessionRate} onChange={setValue('sessionRate')} />}
         </Field>
         <Field label={a.password} hint={a.passwordHint} className="sm:col-span-2">
           {(id, d) => <PasswordInput id={id} aria-describedby={d} value={form.password} onChange={set('password')} autoComplete="new-password" />}
@@ -158,11 +172,8 @@ export function NewMemberSheet({
     phone: '',
     password: '',
     trainerId: '',
-    packageName: '',
-    totalSessions: '12',
-    packagePrice: '',
-    paidAmount: '',
-    expirationDate: jalaliInDays(60),
+    preferredHour: '18:00',
+    ...initialPackageForm(),
   }));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -207,6 +218,7 @@ export function NewMemberSheet({
           paidAmount: parseAmount(form.paidAmount),
           startDate: getTodayJalaliString(),
           expirationDate: toLatinDigitsDate(form.expirationDate),
+          preferredHour: form.preferredHour || undefined,
           status: 'active',
         },
         form.password
@@ -256,7 +268,19 @@ export function NewMemberSheet({
                 </SelectInput>
               )}
             </Field>
-            <PackageFields form={form} set={set} />
+            <Field label={a.preferredHour} hint={a.preferredHourHint} className="sm:col-span-2">
+              {(id, d) => (
+                <SelectInput id={id} aria-describedby={d} value={form.preferredHour} onChange={set('preferredHour')} dir="ltr" className="text-center tnum">
+                  <option value="">{a.noPreferredHour}</option>
+                  {SLOT_HOURS.map(h => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </SelectInput>
+              )}
+            </Field>
+            <PackageFields form={form} setForm={setForm} />
           </FieldGrid>
         </FormSection>
       )}
@@ -264,31 +288,99 @@ export function NewMemberSheet({
   );
 }
 
-function PackageFields({
+/** حالت فیلدهای بسته — در فرم ورزشکار جدید و در «تعیین بسته» مشترک است. */
+export interface PackageForm {
+  /** گزینهٔ انتخاب‌شده از فهرست بسته‌ها، یا CUSTOM_PACKAGE_ID */
+  presetId: string;
+  packageName: string;
+  totalSessions: string;
+  packagePrice: string;
+  paidAmount: string;
+  expirationDate: string;
+}
+
+/** بستهٔ پیش‌فرض: ۱۲ جلسه در یک ماه */
+function initialPackageForm(): PackageForm {
+  const preset = PACKAGE_PRESETS[1];
+  return {
+    presetId: preset.id,
+    packageName: preset.label,
+    totalSessions: String(preset.sessions),
+    packagePrice: '',
+    paidAmount: '',
+    expirationDate: jalaliInDays(preset.days),
+  };
+}
+
+function PackageFields<T extends PackageForm>({
   form,
-  set,
+  setForm,
 }: {
-  form: { packageName: string; totalSessions: string; packagePrice: string; paidAmount: string; expirationDate: string };
-  set: (k: any) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  form: T;
+  setForm: React.Dispatch<React.SetStateAction<T>>;
 }) {
-  const { t } = useI18n();
+  const { t, isFa } = useI18n();
   const a = t.accounts;
+  const custom = form.presetId === CUSTOM_PACKAGE_ID;
+
+  /** انتخاب بسته، تعداد جلسه و تاریخ انقضا را با هم تنظیم می‌کند */
+  const pickPreset = (id: string) => {
+    const preset = PACKAGE_PRESETS.find(p => p.id === id);
+    setForm(f =>
+      preset
+        ? { ...f, presetId: id, packageName: preset.label, totalSessions: String(preset.sessions), expirationDate: jalaliInDays(preset.days) }
+        : { ...f, presetId: CUSTOM_PACKAGE_ID, packageName: '' }
+    );
+  };
+  const setValue = (k: keyof PackageForm) => (value: string) => setForm(f => ({ ...f, [k]: value }));
+
   return (
     <>
-      <Field label={a.packageName}>
-        {id => <TextInput id={id} value={form.packageName} onChange={set('packageName')} />}
+      <Field label={a.packagePreset} hint={a.packageHint} className="sm:col-span-2">
+        {(id, d) => (
+          <SelectInput id={id} aria-describedby={d} value={form.presetId} onChange={e => pickPreset(e.target.value)}>
+            {PACKAGE_PRESETS.map(p => (
+              <option key={p.id} value={p.id}>
+                {localizedLabel(p.label, isFa)}
+              </option>
+            ))}
+            <option value={CUSTOM_PACKAGE_ID}>{a.packageCustom}</option>
+          </SelectInput>
+        )}
       </Field>
+      {custom && (
+        <Field label={a.packageCustomName} className="sm:col-span-2">
+          {id => (
+            <TextInput
+              id={id}
+              value={form.packageName}
+              onChange={e => setForm(f => ({ ...f, packageName: e.target.value }))}
+              autoFocus
+            />
+          )}
+        </Field>
+      )}
       <Field label={a.totalSessions}>
-        {id => <TextInput id={id} value={form.totalSessions} onChange={set('totalSessions')} inputMode="numeric" dir="ltr" />}
+        {id => (
+          <TextInput
+            id={id}
+            value={form.totalSessions}
+            onChange={e => setForm(f => ({ ...f, totalSessions: e.target.value }))}
+            inputMode="numeric"
+            dir="ltr"
+            readOnly={!custom}
+            aria-readonly={!custom}
+          />
+        )}
       </Field>
       <Field label={a.packagePrice}>
-        {id => <TextInput id={id} value={form.packagePrice} onChange={set('packagePrice')} inputMode="numeric" dir="ltr" />}
+        {id => <MoneyInput id={id} value={form.packagePrice} onChange={setValue('packagePrice')} />}
       </Field>
       <Field label={a.paidAmount} optional>
-        {id => <TextInput id={id} value={form.paidAmount} onChange={set('paidAmount')} inputMode="numeric" dir="ltr" />}
+        {id => <MoneyInput id={id} value={form.paidAmount} onChange={setValue('paidAmount')} />}
       </Field>
-      <Field label={a.expirationDate} hint="YYYY/MM/DD" className="sm:col-span-2">
-        {(id, d) => <TextInput id={id} aria-describedby={d} value={form.expirationDate} onChange={set('expirationDate')} dir="ltr" />}
+      <Field label={a.expirationDate}>
+        {(id, d) => <JalaliDateInput id={id} describedBy={d} value={form.expirationDate} onChange={setValue('expirationDate')} />}
       </Field>
     </>
   );
@@ -299,25 +391,16 @@ function PackageFields({
 export function PackageSheet({ member, onClose, onDone }: { member: Member | null; onClose: () => void; onDone: Done }) {
   const { t, isFa } = useI18n();
   const a = t.accounts;
-  const [form, setForm] = useResetOnOpen(!!member, () => ({
-    packageName: '',
-    totalSessions: '12',
-    packagePrice: '',
-    paidAmount: '',
-    expirationDate: jalaliInDays(60),
-  }));
+  const [form, setForm] = useResetOnOpen(!!member, initialPackageForm);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => setError(null), [member]);
-
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
 
   const submit = async () => {
     if (!member) return;
     setBusy(true);
     const res = await assignMemberPackage(member.id, {
-      packageName: form.packageName,
+      packageName: form.packageName.trim(),
       totalSessions: Math.round(parseAmount(form.totalSessions)),
       packagePrice: parseAmount(form.packagePrice),
       paidAmount: parseAmount(form.paidAmount),
@@ -341,7 +424,7 @@ export function PackageSheet({ member, onClose, onDone }: { member: Member | nul
     >
       <FormError message={error} />
       <FieldGrid>
-        <PackageFields form={form} set={set} />
+        <PackageFields form={form} setForm={setForm} />
       </FieldGrid>
     </FormSheet>
   );

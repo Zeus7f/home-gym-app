@@ -88,6 +88,7 @@ export function programRoutes(db: Database) {
         .map(d => ({
           id: str(d?.id, 80),
           title: str(d?.title, 255),
+          date: str(d?.date, 40) || undefined,
           items: arr<WorkoutProgram['days'][number]['items'][number]>(d?.items).slice(0, 40),
         }));
       return ops.saveProgram(store, actor, {

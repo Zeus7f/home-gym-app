@@ -5,6 +5,7 @@ import { runIntegrationTests } from './integration.test';
 import { runBugfixTests } from './bugfixes.test';
 import { runAuthTests } from './auth.test';
 import { runRolesTests } from './roles.test';
+import { runReportingTests } from './reporting.test';
 import { runSessionDraftTests } from '../../../features/trainer/hooks/__tests__/useSessionDraft.test';
 
 async function main() {
@@ -19,6 +20,7 @@ async function main() {
     ['bugfixes', runBugfixTests()],
     ['auth', await runAuthTests()],
     ['roles', runRolesTests()],
+    ['reporting', runReportingTests()],
   ] as const;
 
   let passed = 0;

@@ -38,6 +38,11 @@ export interface Member {
   packagePending?: boolean;
   /** شناسهٔ مربی‌ای که ورزشکار را ساخته (اگر مدیر نساخته باشد) */
   createdByTrainerId?: string;
+  /**
+   * ساعت ثابت حضور در باشگاه («HH:MM»)، هنگام ثبت‌نام تعیین می‌شود.
+   * نوبت‌دهی همین ساعت را پیشنهاد می‌دهد تا ظرفیت همان سانس مصرف شود.
+   */
+  preferredHour?: string;
 }
 
 export interface Trainer {
@@ -176,8 +181,13 @@ export interface ProgramExercise {
 
 export interface ProgramDay {
   id: string;
-  /** عنوان روز، مثلاً «روز ۱ — بالاتنه» */
+  /** عنوان روز، مثلاً «شنبه ۱۲ آذر» یا «روز ۱ — بالاتنه» */
   title: string;
+  /**
+   * روز تقویمی این بخش از برنامه (جلالی، «YYYY/MM/DD»).
+   * برنامه‌های ساخته‌شده پیش از تقویم هفتگی این مقدار را ندارند.
+   */
+  date?: string;
   /** حرکات این روز */
   items: ProgramExercise[];
 }

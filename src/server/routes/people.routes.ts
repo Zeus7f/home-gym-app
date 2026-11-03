@@ -50,6 +50,7 @@ export function memberRoutes(db: Database) {
           paidAmount: Math.max(0, num(d.paidAmount) || 0),
           startDate: str(d.startDate, 10),
           expirationDate: str(d.expirationDate, 10),
+          preferredHour: str(d.preferredHour, 10) || undefined,
           status: 'active',
         },
       });
@@ -73,6 +74,11 @@ export function memberRoutes(db: Database) {
     gymOp(db, (store, actor, req) =>
       ops.adjustMemberSessions(store, actor, { memberId: req.params.id, delta: num(req.body?.delta), reason: str(req.body?.reason, 500) })
     )
+  );
+
+  r.patch(
+    '/:id/hour',
+    gymOp(db, (store, actor, req) => ops.setMemberPreferredHour(store, actor, { memberId: req.params.id, hour: str(req.body?.hour, 10) }))
   );
 
   r.patch(

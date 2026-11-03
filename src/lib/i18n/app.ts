@@ -162,7 +162,7 @@ export const appDict = {
         trainers: 'مربیان و تسویه',
         schedule: 'برنامه و حضور غیاب',
         finance: 'مالی و پرداخت‌ها',
-        reports: 'گزارش‌های روزانه',
+        reports: 'گزارش‌ها',
         settings: 'تنظیمات باشگاه',
       },
       trainer: {

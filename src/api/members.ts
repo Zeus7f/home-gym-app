@@ -79,6 +79,15 @@ export async function changeMemberTrainer(memberId: string, trainerId: string): 
   );
 }
 
+/** تغییر ساعت ثابت حضور ورزشکار؛ رشتهٔ خالی ساعت ثابت را برمی‌دارد. */
+export async function setMemberPreferredHour(memberId: string, hour: string): Promise<ActionResult> {
+  return localizeOp(
+    await runOp({ method: 'PATCH', path: `/api/members/${encodeURIComponent(memberId)}/hour`, body: { hour } }, (s, a) =>
+      ops.setMemberPreferredHour(s, a, { memberId, hour })
+    )
+  );
+}
+
 /** Get all member payment records. */
 export async function getPaymentRecords() {
   return gymStore.memberPayments;

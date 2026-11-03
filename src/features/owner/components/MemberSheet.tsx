@@ -7,6 +7,7 @@ import { Btn } from '../../../components/ui/Btn';
 import { useI18n } from '../../../components/LanguageProvider';
 import { num, toman } from '../../../lib/format';
 import { Seg } from '../../../components/ui/Seg';
+import { SLOT_HOURS } from '../../../components/ui/Form';
 import { Toast } from '../../../components/ui/Toast';
 import { displayName, localizedLabel } from '../../../lib/displayName';
 import { exerciseName } from '../../../lib/exerciseLabels';
@@ -17,13 +18,14 @@ import {
   recordMemberPayment,
   adjustMemberSessions,
   changeMemberTrainer,
+  setMemberPreferredHour,
 } from '../../../api/members';
 import { getTrainers } from '../../../api/trainers';
 import { subscribeToStore } from '../../../api/auth';
 import type { DailySession, Member, Trainer } from '../../../lib/domain/gymManagement';
 import { AccountPanel, PackageSheet } from '../../accounts/AccountForms';
 
-type SheetAction = 'payment' | 'adjust' | 'trainer' | null;
+type SheetAction = 'payment' | 'adjust' | 'trainer' | 'hour' | null;
 type PaymentMethod = 'card' | 'cash' | 'transfer';
 
 export interface MemberData {
@@ -74,6 +76,7 @@ export function MemberSheet({
   const [delta, setDelta] = useState(1);
   const [reason, setReason] = useState('');
   const [newTrainerId, setNewTrainerId] = useState('');
+  const [newHour, setNewHour] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ message: string; ok: boolean } | null>(null);
   const [packageFor, setPackageFor] = useState<Member | null>(null);
@@ -134,6 +137,7 @@ export function MemberSheet({
     setDelta(1);
     setReason('');
     setNewTrainerId(live?.defaultTrainerId ?? '');
+    setNewHour(live?.preferredHour ?? '');
   };
 
   const run = async (fn: () => Promise<{ success: boolean; message: string }>) => {
@@ -155,6 +159,7 @@ export function MemberSheet({
   const submitAdjust = () =>
     run(() => adjustMemberSessions(memberId!, delta, reason.trim() || ms.reasonDefault));
   const submitTrainer = () => run(() => changeMemberTrainer(memberId!, newTrainerId));
+  const submitHour = () => run(() => setMemberPreferredHour(memberId!, newHour));
 
   const fieldStyle = {
     backgroundColor: 'var(--c-surface-2)',
@@ -286,6 +291,9 @@ export function MemberSheet({
           <Btn v="ghost" onClick={() => openAction('adjust')} aria-expanded={action === 'adjust'}>
             {ms.adjustBalance}
           </Btn>
+          <Btn v="ghost" onClick={() => openAction('hour')} aria-expanded={action === 'hour'}>
+            {t.accounts.preferredHour}
+          </Btn>
         </div>
 
         {action === 'payment' && (
@@ -408,6 +416,44 @@ export function MemberSheet({
                 type="submit"
                 disabled={busy || !newTrainerId || newTrainerId === live?.defaultTrainerId}
               >
+                {ms.submit}
+              </Btn>
+              <Btn v="ghost" type="button" onClick={() => setAction(null)}>{ms.cancel}</Btn>
+            </div>
+          </form>
+        )}
+
+        {action === 'hour' && (
+          <form
+            className="mt-3 rounded-xl border p-3 space-y-3"
+            style={{ borderColor: 'var(--c-border)' }}
+            onSubmit={e => {
+              e.preventDefault();
+              submitHour();
+            }}
+          >
+            <label className="block text-[13px] font-bold" style={{ color: 'var(--c-text-muted)' }}>
+              {t.accounts.preferredHour}
+              <select
+                value={newHour}
+                onChange={e => setNewHour(e.target.value)}
+                dir="ltr"
+                className="mt-1 w-full h-10 px-3 rounded-xl border text-[14px] font-bold text-center tnum"
+                style={fieldStyle}
+              >
+                <option value="">{t.accounts.noPreferredHour}</option>
+                {SLOT_HOURS.map(h => (
+                  <option key={h} value={h}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="text-[12px]" style={{ color: 'var(--c-text-muted)' }}>
+              {t.accounts.preferredHourHint}
+            </p>
+            <div className="flex gap-2">
+              <Btn v="primary" type="submit" disabled={busy}>
                 {ms.submit}
               </Btn>
               <Btn v="ghost" type="button" onClick={() => setAction(null)}>{ms.cancel}</Btn>

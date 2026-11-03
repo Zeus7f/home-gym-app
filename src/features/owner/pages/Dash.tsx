@@ -6,7 +6,8 @@ import { Btn } from '../../../components/ui/Btn';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Capacity } from '../../../components/ui/Capacity';
 import { MemberData } from '../components/MemberSheet';
-import { num, short, toman } from '../../../lib/format';
+import { num, toman } from '../../../lib/format';
+import { Amount } from '../../../components/ui/Amount';
 import { useI18n } from '../../../components/LanguageProvider';
 import { Toast } from '../../../components/ui/Toast';
 import { displayName } from '../../../lib/displayName';
@@ -366,23 +367,21 @@ export function Dash({ onNavigate, onOpenMember, isMobile = false }: DashProps) 
           <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
             {t.owner.dash.collectedToday}
           </div>
-          <div
+          <Amount
+            value={1500000}
             style={{ color: 'var(--c-ink)' }}
-            className="font-display text-[28px] tnum leading-tight mt-1"
-          >
-            {short(1500000)}
-          </div>
+            className="font-display text-[26px] leading-tight mt-1 block"
+          />
         </div>
         <div>
           <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
             {t.owner.dash.receivables}
           </div>
-          <div
+          <Amount
+            value={totalReceivables}
             style={{ color: 'var(--c-rubber)' }}
-            className="font-display text-[28px] tnum leading-tight mt-1"
-          >
-            {short(totalReceivables)}
-          </div>
+            className="font-display text-[26px] leading-tight mt-1 block"
+          />
         </div>
       </div>
       <button

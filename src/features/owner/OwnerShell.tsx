@@ -56,6 +56,8 @@ export function OwnerShell() {
   const [gymName, setGymName] = useState('');
   const [pendingCount, setPendingCount] = useState(0);
   const [members, setMembers] = useState<MemberData[]>([]);
+  /** هر بار افزایش، به صفحهٔ نوبت‌دهی می‌گوید کشوی نوبت تازه را باز کند */
+  const [bookingNonce, setBookingNonce] = useState(0);
 
   React.useEffect(() => {
     const refresh = () => {
@@ -97,16 +99,23 @@ export function OwnerShell() {
       subtitle={section === 'dashboard' ? formatJalaliHumanTodayLocalized(isFa) : gymName}
       context={gymName}
       actions={
-        section !== 'schedule' && (
-          <Btn v="primary" onClick={() => go('schedule')} className="h-10 !px-3 sm:!px-4" aria-label={t.owner.shell.newBooking}>
-            <Plus size={17} />
-            <span className="hidden sm:inline">{t.owner.shell.newBooking}</span>
-          </Btn>
-        )
+        <Btn
+          v="primary"
+          onClick={() => {
+            // از هر صفحه‌ای: رفتن به نوبت‌دهی و باز کردن کشوی نوبت تازه
+            if (section !== 'schedule') go('schedule');
+            setBookingNonce(n => n + 1);
+          }}
+          className="h-10 !px-3 sm:!px-4"
+          aria-label={t.owner.shell.newBooking}
+        >
+          <Plus size={17} />
+          <span className="hidden sm:inline">{t.owner.shell.newBooking}</span>
+        </Btn>
       }
     >
       {section === 'dashboard' && <Dash onNavigate={key => go(key)} onOpenMember={openMember} isMobile={isMobile} />}
-      {section === 'schedule' && <Sched isMobile={isMobile} />}
+      {section === 'schedule' && <Sched isMobile={isMobile} bookingNonce={bookingNonce} />}
       {section === 'memberships' && <Members onOpenMember={openMember} isMobile={isMobile} />}
       {section === 'trainers' && <Trainers isMobile={isMobile} />}
       {section === 'finance' && <Finance isMobile={isMobile} />}

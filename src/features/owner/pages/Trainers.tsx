@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Btn } from '../../../components/ui/Btn';
-import { num, short, toman } from '../../../lib/format';
+import { num, toman } from '../../../lib/format';
+import { Amount } from '../../../components/ui/Amount';
 import { useI18n } from '../../../components/LanguageProvider';
 import { displayName, localizedLabel } from '../../../lib/displayName';
 import { getTrainers, recordTrainerPayout } from '../../../api/trainers';
@@ -174,7 +175,7 @@ export function Trainers({ isMobile = false }: TrainersProps) {
                     className="font-semibold mt-0.5 tnum"
                     style={{ color: 'var(--c-heading)' }}
                   >
-                    {short(trainer.sessionRate)} {t.units.toman}
+                    <Amount value={trainer.sessionRate} />
                   </div>
                 </div>
 

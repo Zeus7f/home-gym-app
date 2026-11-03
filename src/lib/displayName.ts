@@ -46,9 +46,18 @@ const SEED_LABELS_EN: Record<string, string> = {
 
 /**
  * برچسب داده‌محور (نام بسته، تخصص مربی و …) به زبان فعال.
- * ابتدا معادل شناخته‌شدهٔ داده‌های نمونه، سپس بخش لاتین داخل پرانتز بررسی می‌شود.
+ *
+ * برچسب‌های آماده به شکل «فارسی (English)» ذخیره می‌شوند: در رابط انگلیسی بخش
+ * لاتین و در رابط فارسی بخش فارسی نشان داده می‌شود. پرانتزی که محتوای فارسی
+ * دارد (مثل «بستهٔ ویژه (تابستان)») دست‌نخورده می‌ماند.
  */
 export function localizedLabel(label: string, isFa: boolean): string {
-  if (isFa || !label) return label;
-  return SEED_LABELS_EN[label.trim()] ?? displayName(label, isFa);
+  if (!label) return label;
+  if (!isFa) return SEED_LABELS_EN[label.trim()] ?? displayName(label, isFa);
+
+  const match = label.match(LATIN_IN_PARENS);
+  if (match && match[1].trim() && !/[؀-ۿ]/.test(match[1])) {
+    return label.replace(LATIN_IN_PARENS, '').trim();
+  }
+  return label;
 }

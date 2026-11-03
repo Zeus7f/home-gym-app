@@ -3,7 +3,7 @@ import { H } from '../../../components/ui/H';
 import { Seg } from '../../../components/ui/Seg';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Btn } from '../../../components/ui/Btn';
-import { short } from '../../../lib/format';
+import { Amount } from '../../../components/ui/Amount';
 import { useI18n } from '../../../components/LanguageProvider';
 import { displayName } from '../../../lib/displayName';
 import { getMembers, getPaymentRecords } from '../../../api/members';
@@ -111,12 +111,12 @@ export function Finance({ isMobile = false }: FinanceProps) {
                   </div>
                 </div>
 
-                <span
+                <Amount
+                  value={m.outstandingBalance}
+                  unit={false}
                   style={{ color: 'var(--c-rubber)' }}
-                  className="tnum font-bold text-[15px] text-end min-w-[70px]"
-                >
-                  {short(m.outstandingBalance)}
-                </span>
+                  className="font-bold text-[15px] text-end min-w-[90px]"
+                />
 
                 {!isMobile && (
                   <Btn v="ghost" className="h-8 px-3 text-xs">
@@ -180,11 +180,8 @@ export function Finance({ isMobile = false }: FinanceProps) {
                     : t.owner.finance.transfer}
               </div>
             </div>
-            <span
-              style={{ color: 'var(--c-avail-fg)' }}
-              className="tnum font-bold text-[15px]"
-            >
-              +{short(p.amount)} {t.owner.finance.toman}
+            <span style={{ color: 'var(--c-avail-fg)' }} className="font-bold text-[15px]">
+              +<Amount value={p.amount} />
             </span>
           </div>
         ))}
@@ -228,15 +225,11 @@ export function Finance({ isMobile = false }: FinanceProps) {
             <div className="text-[14px]" style={{ color: 'var(--c-text-muted)' }}>
               {s.label}
             </div>
-            <div
+            <Amount
+              value={s.val}
               style={{ color: s.color }}
-              className="font-display tnum text-[32px] leading-tight mt-1"
-            >
-              {short(s.val)}
-              <span className="text-[15px] font-sans font-normal ms-1" style={{ color: 'var(--c-text-muted)' }}>
-                {t.owner.finance.toman}
-              </span>
-            </div>
+              className="font-display text-[28px] leading-tight mt-1 block"
+            />
           </div>
         ))}
       </div>

@@ -5,12 +5,14 @@
  */
 
 import React, { useId, useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { CalendarDays, Eye, EyeOff } from 'lucide-react';
+import { PersianCalendar } from '../calendar/PersianCalendar';
 import { Sheet } from '../../features/owner/components/Sheet';
 import { useI18n } from '../LanguageProvider';
 import { useIsMobile } from '../../lib/useMediaQuery';
 import { Btn } from './Btn';
 import { cn } from '../../lib/utils';
+import { groupAmount, num, toLatinDigits } from '../../lib/format';
 
 const control =
   'w-full h-11 rounded-xl border px-3.5 text-[15px] outline-none transition-shadow bg-[var(--c-surface-1)] text-[var(--c-text)] border-[var(--c-border-strong)] placeholder:text-[var(--c-text-faint)] focus:ring-2 focus:ring-[var(--c-steel)]/40 focus:border-[var(--c-steel)] disabled:opacity-60';
@@ -78,6 +80,12 @@ export const PhoneInput = React.forwardRef<HTMLInputElement, InputProps>(({ clas
 ));
 PhoneInput.displayName = 'PhoneInput';
 
+/**
+ * فیلد رمز با کلید نمایش/پنهان.
+ *
+ * فیلد همیشه چپ‌به‌راست است، پس جای دکمه و فضای خالی کنارش با ضلع فیزیکی
+ * (right) تعیین می‌شود؛ با `end-*` در صفحهٔ راست‌به‌چپ دکمه روی کاراکترهای رمز می‌افتاد.
+ */
 export const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(({ className, ...props }, ref) => {
   const [show, setShow] = useState(false);
   const { t } = useI18n();
@@ -88,12 +96,12 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(({ c
         type={show ? 'text' : 'password'}
         dir="ltr"
         {...props}
-        className={cn(control, 'pe-12 [direction:ltr] text-start', className)}
+        className={cn(control, 'pr-12 [direction:ltr] text-start', className)}
       />
       <button
         type="button"
         onClick={() => setShow(s => !s)}
-        className="absolute inset-y-0 end-0 w-11 grid place-items-center cursor-pointer"
+        className="absolute inset-y-0 right-0 w-11 grid place-items-center cursor-pointer"
         style={{ color: 'var(--c-text-muted)' }}
         aria-label={show ? t.auth.hidePassword : t.auth.showPassword}
         aria-pressed={show}
@@ -105,10 +113,189 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(({ c
 });
 PasswordInput.displayName = 'PasswordInput';
 
+/**
+ * فیلد مبلغ به تومان: هنگام تایپ سه‌رقمی جدا می‌شود و واحد داخل فیلد دیده می‌شود.
+ * مقدار همان متن جداشده است؛ هنگام ثبت با `parseAmount` به عدد تبدیل می‌شود.
+ */
+export const MoneyInput = React.forwardRef<
+  HTMLInputElement,
+  Omit<InputProps, 'value' | 'onChange' | 'type'> & { value: string; onChange: (grouped: string) => void }
+>(({ className, value, onChange, ...props }, ref) => {
+  const { t } = useI18n();
+  return (
+    <div className="relative">
+      <input
+        ref={ref}
+        type="text"
+        inputMode="numeric"
+        dir="ltr"
+        autoComplete="off"
+        value={value}
+        onChange={e => onChange(groupAmount(e.target.value))}
+        {...props}
+        className={cn(control, 'pr-16 [direction:ltr] text-start tnum', className)}
+      />
+      <span
+        className="absolute inset-y-0 right-3 flex items-center text-[12.5px] font-semibold pointer-events-none"
+        style={{ color: 'var(--c-text-faint)' }}
+      >
+        {t.units.toman}
+      </span>
+    </div>
+  );
+});
+MoneyInput.displayName = 'MoneyInput';
+
 export const SelectInput = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
   ({ className, ...props }, ref) => <select ref={ref} {...props} className={cn(control, 'pe-8', className)} />
 );
 SelectInput.displayName = 'SelectInput';
+
+/** ساعت‌های انتخابی بازهٔ کاری — از ۰۶:۰۰ تا ۲۳:۰۰، نیم‌ساعت به نیم‌ساعت */
+export const HOUR_OPTIONS = Array.from({ length: 35 }, (_, i) => {
+  const minutes = 6 * 60 + i * 30;
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+});
+
+/** سانس‌های نوبت‌دهی — سرِ هر ساعت، از ۰۶:۰۰ تا ۲۳:۰۰ */
+export const SLOT_HOURS = Array.from({ length: 18 }, (_, i) => `${String(6 + i).padStart(2, '0')}:00`);
+
+/** «۰۹:۰۰ - ۱۵:۰۰» → ['09:00', '15:00'] با مقدار پیش‌فرض برای ورودی ناقص */
+export function parseTimeRange(raw: string): [string, string] {
+  const [from, to] = toLatinDigits(raw).split('-').map(s => s.trim());
+  const valid = (v: string) => (HOUR_OPTIONS.includes(v) ? v : '');
+  return [valid(from) || '09:00', valid(to) || '15:00'];
+}
+
+export const formatTimeRange = (from: string, to: string): string => `${from} - ${to}`;
+
+/**
+ * بازهٔ ساعت کاری: دو فهرست کشویی که همان قالب متنی «HH:MM - HH:MM» را می‌سازند،
+ * تا بخش‌های دیگر برنامه که این رشته را می‌خوانند بدون تغییر کار کنند.
+ */
+export function TimeRangeInput({
+  id,
+  value,
+  onChange,
+  describedBy,
+}: {
+  id: string;
+  value: string;
+  onChange: (range: string) => void;
+  describedBy?: string;
+}) {
+  const { t } = useI18n();
+  const [from, to] = parseTimeRange(value);
+  return (
+    <div className="flex items-center gap-2" dir="ltr">
+      <SelectInput
+        id={id}
+        aria-describedby={describedBy}
+        aria-label={t.accounts.workingHoursFrom}
+        value={from}
+        onChange={e => onChange(formatTimeRange(e.target.value, to))}
+        className="flex-1 text-center tnum"
+      >
+        {HOUR_OPTIONS.map(h => (
+          <option key={h} value={h}>
+            {h}
+          </option>
+        ))}
+      </SelectInput>
+      <span aria-hidden className="text-[13px] font-bold" style={{ color: 'var(--c-text-faint)' }}>
+        –
+      </span>
+      <SelectInput
+        aria-label={t.accounts.workingHoursTo}
+        value={to}
+        onChange={e => onChange(formatTimeRange(from, e.target.value))}
+        className="flex-1 text-center tnum"
+      >
+        {HOUR_OPTIONS.map(h => (
+          <option key={h} value={h}>
+            {h}
+          </option>
+        ))}
+      </SelectInput>
+    </div>
+  );
+}
+
+/** ارتفاع تقریبی تقویم؛ اگر زیر فیلد جا نشود، رو به بالا باز می‌شود. */
+const CALENDAR_HEIGHT = 340;
+
+/** فیلد تاریخ جلالی با تقویم بازشونده — تایپ دستی لازم نیست. */
+export function JalaliDateInput({
+  id,
+  value,
+  onChange,
+  describedBy,
+}: {
+  id: string;
+  value: string;
+  onChange: (date: string) => void;
+  describedBy?: string;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const canonical = toLatinDigits(value);
+
+  const toggle = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) setDropUp(window.innerHeight - rect.bottom < CALENDAR_HEIGHT && rect.top > CALENDAR_HEIGHT);
+    setOpen(o => !o);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        id={id}
+        ref={triggerRef}
+        type="button"
+        aria-describedby={describedBy}
+        aria-expanded={open}
+        onClick={toggle}
+        className={cn(control, 'flex items-center justify-between gap-2 text-start cursor-pointer')}
+      >
+        <span className="tnum" dir="ltr">
+          {localizedDate(canonical)}
+        </span>
+        <CalendarDays size={17} style={{ color: 'var(--c-text-muted)' }} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
+          <div
+            className={cn(
+              'absolute z-50 w-[300px] max-w-[85vw] rounded-2xl border p-3 shadow-lg',
+              dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+            )}
+            style={{ backgroundColor: 'var(--c-surface-1)', borderColor: 'var(--c-border-strong)' }}
+            role="dialog"
+            aria-label={t.accounts.expirationDate}
+          >
+            <PersianCalendar
+              selectedDate={canonical}
+              onSelectDate={next => {
+                onChange(next);
+                setOpen(false);
+              }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** «۱۴۰۵/۰۹/۱۲» — ارقام زبان فعال، با صفر ابتدای ماه و روز. */
+function localizedDate(canonical: string): string {
+  const [year = '', month = '', day = ''] = canonical.split('/');
+  const digits = (part: string, width: number) => num(Number(part)).replace(/[,٬]/g, '').padStart(width, num(0));
+  return `${digits(year, 4)}/${digits(month, 2)}/${digits(day, 2)}`;
+}
 
 /** شبکهٔ فیلدها: یک ستون در موبایل، دو ستون از sm */
 export function FieldGrid({ children }: { children: React.ReactNode }) {

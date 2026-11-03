@@ -4,7 +4,8 @@ import { Chips } from '../../../components/ui/Chips';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Meter } from '../../../components/ui/Meter';
 import { MemberData } from '../components/MemberSheet';
-import { num, short, toman } from '../../../lib/format';
+import { num, toman } from '../../../lib/format';
+import { Amount } from '../../../components/ui/Amount';
 import { useI18n } from '../../../components/LanguageProvider';
 import { displayName, localizedLabel } from '../../../lib/displayName';
 import { getMembers } from '../../../api/members';
@@ -282,7 +283,7 @@ export function Members({ onOpenMember, isMobile = false }: MembersProps) {
                         className="font-bold"
                         style={{ color: 'var(--c-rubber)' }}
                       >
-                        {short(m.outstandingBalance)}
+                        <Amount value={m.outstandingBalance} unit={false} />
                       </span>
                     ) : (
                       <span style={{ color: 'var(--c-text-faint)' }}>

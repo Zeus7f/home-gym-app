@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { num, short } from '../../../lib/format';
+import { num } from '../../../lib/format';
 import { displayName } from '../../../lib/displayName';
 import { useI18n } from '../../../components/LanguageProvider';
 import { exerciseName } from '../../../lib/exerciseLabels';
@@ -116,7 +116,7 @@ export function History() {
   const stats = [
     { label: t.trainer.history.statCompleted, val: `${num(completedCount)} ${t.units.sessions}` },
     { label: t.trainer.history.statRate, val: `${num(sessionRate / 1000)} ${t.trainer.history.perThousand}` },
-    { label: t.trainer.history.statGross, val: `${short(grossEarnings)} ${t.units.toman}` },
+    { label: t.trainer.history.statGross, val: `${num(grossEarnings)} ${t.units.toman}` },
   ];
 
   return (

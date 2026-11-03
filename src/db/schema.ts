@@ -120,6 +120,8 @@ export const members = pgTable(
     status: varchar('status', { length: 20 }).notNull().default('active'),
     registrationDate: varchar('registration_date', { length: 10 }).notNull().default(''),
     packagePending: boolean('package_pending').notNull().default(false),
+    /** ساعت ثابت حضور ورزشکار («HH:MM») — پیش‌فرض نوبت‌دهی */
+    preferredHour: varchar('preferred_hour', { length: 10 }),
     createdByTrainerId: text('created_by_trainer_id'),
     goals: text('goals'),
     notes: text('notes'),
@@ -268,6 +270,8 @@ export const programDays = pgTable(
     programId: text('program_id').notNull().references(() => workoutPrograms.id, { onDelete: 'cascade' }),
     position: integer('position').notNull(),
     title: varchar('title', { length: 255 }).notNull(),
+    /** روز تقویمی این بخش از برنامه (جلالی، «YYYY/MM/DD») — برنامه‌های قدیمی خالی‌اند */
+    dateJalali: varchar('date_jalali', { length: 40 }),
   },
   t => [index('program_days_program_idx').on(t.programId, t.position)]
 );

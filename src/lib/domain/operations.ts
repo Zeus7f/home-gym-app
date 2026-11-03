@@ -185,6 +185,18 @@ export function changeMemberTrainer(store: GymStore, actor: Actor, a: { memberId
   return fromStore(store.changeMemberDefaultTrainer(a.memberId, a.trainerId));
 }
 
+/** ساعت ثابت حضور ورزشکار؛ مقدار خالی یعنی ساعت ثابتی ندارد. */
+export function setMemberPreferredHour(store: GymStore, actor: Actor, a: { memberId: string; hour: string }) {
+  if (!allowed(actor, 'member.package')) return FORBIDDEN;
+  const member = store.members.find(m => m.id === a.memberId);
+  if (!member) return fail('member.notFound');
+  const hour = String(a.hour ?? '').trim();
+  if (hour && !/^\d{2}:\d{2}$/.test(hour)) return fail('common.invalidInput');
+  member.preferredHour = hour || undefined;
+  store.notify();
+  return ok('common.saved');
+}
+
 export function assignMemberPackage(
   store: GymStore,
   actor: Actor,
@@ -285,8 +297,25 @@ export function saveProgram(
   const trainerId = actor.role === 'trainer' ? actor.entityId : a.trainerId;
   const trainer = store.trainers.find(t => t.id === trainerId);
   if (!trainer || !store.members.some(m => m.id === a.memberId)) return fail('program.notFound');
-  const program = store.saveProgram({ ...a, trainerId: trainer.id, trainerName: trainer.name });
+  const program = store.saveProgram({ ...a, trainerId: trainer.id, trainerName: trainer.name, days: ownDays(store, a) });
   return ok('common.saved', undefined, program);
+}
+
+/**
+ * شناسهٔ روزهای برنامه در کل باشگاه یکتاست. اگر شناسه‌ای از پیش به برنامهٔ دیگری
+ * تعلق داشته باشد، شناسهٔ تازه می‌گیرد تا ذخیره‌سازی روزِ آن برنامه را ندزدد.
+ */
+function ownDays(store: GymStore, a: { id?: string; days: WorkoutProgram['days'] }): WorkoutProgram['days'] {
+  const taken = new Set(
+    store.programs.filter(p => p.id !== a.id).flatMap(p => p.days.map(d => d.id))
+  );
+  const seen = new Set<string>();
+  return (a.days ?? []).map(day => {
+    const clash = !day.id || taken.has(day.id) || seen.has(day.id);
+    const id = clash ? `day-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}` : day.id;
+    seen.add(id);
+    return clash ? { ...day, id } : day;
+  });
 }
 
 function ownProgram(store: GymStore, actor: Actor, programId: string) {

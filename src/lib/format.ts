@@ -26,6 +26,50 @@ function localeTag(locale: FormatLocale = activeLocale): string {
 }
 
 // ---------------------------------------------------------------
+// Digit scripts and money input parsing
+// ---------------------------------------------------------------
+
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+
+/** ارقام فارسی، عربی و لاتین را به لاتین یکدست می‌کند. */
+export function toLatinDigits(raw: string): string {
+  return String(raw ?? '')
+    .replace(/[۰-۹]/g, d => String(FA_DIGITS.indexOf(d)))
+    .replace(/[٠-٩]/g, d => String(AR_DIGITS.indexOf(d)));
+}
+
+/**
+ * متن ورودی کاربر را به عدد تبدیل می‌کند — جداکننده، فاصله و ارقام فارسی را می‌پذیرد.
+ *
+ * @example
+ * parseAmount('۱۲٬۵۰۰٬۰۰۰')  // 12500000
+ * parseAmount('4,800,000')       // 4800000
+ */
+export function parseAmount(raw: string | number): number {
+  if (typeof raw === 'number') return isFinite(raw) ? raw : 0;
+  const digits = toLatinDigits(raw).replace(/[^\d]/g, '');
+  if (!digits) return 0;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * مبلغ در حال تایپ را سه‌رقمی جدا می‌کند و ارقام را به همان خطی که کاربر تایپ کرده نگه می‌دارد.
+ *
+ * @example
+ * groupAmount('1500000')   // "1,500,000"
+ * groupAmount('۱۵۰۰۰۰۰')   // "۱٬۵۰۰٬۰۰۰"
+ */
+export function groupAmount(raw: string): string {
+  const persian = /[۰-۹٠-٩]/.test(raw);
+  const digits = toLatinDigits(raw).replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
+  if (!digits) return '';
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, persian ? '٬' : ',');
+  return persian ? grouped.replace(/\d/g, d => FA_DIGITS[Number(d)]) : grouped;
+}
+
+// ---------------------------------------------------------------
 // Core number formatter
 // ---------------------------------------------------------------
 

@@ -278,7 +278,7 @@ export async function loadGym(db: Tx, gymId: string): Promise<LoadedGym | null> 
         }) as WorkoutProgram['days'][number]['items'][number]
       );
     const list = daysByProgram.get(d.programId) ?? [];
-    list.push({ id: d.id, title: d.title, items });
+    list.push(clean({ id: d.id, title: d.title, date: d.dateJalali, items }) as WorkoutProgram['days'][number]);
     daysByProgram.set(d.programId, list);
   }
 
@@ -340,6 +340,7 @@ export async function loadGym(db: Tx, gymId: string): Promise<LoadedGym | null> 
             registrationDate: r.registrationDate,
             packagePending: r.packagePending || undefined,
             createdByTrainerId: r.createdByTrainerId,
+            preferredHour: r.preferredHour,
           }) as Member
       ),
       todaySessions: sessionRows.filter(r => r.bucket !== 'past').map(toSession),
@@ -457,7 +458,7 @@ export function stateToRows(gymId: string, s: GymState, globalExercises: Map<str
       usedSessions: m.usedSessions, remainingSessions: m.remainingSessions, packagePrice: m.packagePrice, paidAmount: m.paidAmount,
       outstandingBalance: m.outstandingBalance, startDate: m.startDate ?? '', expirationDate: m.expirationDate ?? '',
       status: m.status, registrationDate: m.registrationDate ?? '', packagePending: !!m.packagePending,
-      createdByTrainerId: n(m.createdByTrainerId),
+      createdByTrainerId: n(m.createdByTrainerId), preferredHour: n(m.preferredHour),
     });
   }
   const seen = new Set<string>();
@@ -504,7 +505,7 @@ export function stateToRows(gymId: string, s: GymState, globalExercises: Map<str
       publishedAt: n(p.publishedAt),
     });
     p.days.forEach((d, position) => {
-      rows.programDays.push({ id: d.id, gymId, programId: p.id, position, title: d.title });
+      rows.programDays.push({ id: d.id, gymId, programId: p.id, position, title: d.title, dateJalali: n(d.date) });
       d.items.forEach((it, i) => {
         rows.programItems.push({
           id: `${d.id}:${i}`, gymId, dayId: d.id, position: i, exerciseId: it.exerciseId, name: it.name, bodyPart: it.bodyPart ?? '',

@@ -127,7 +127,7 @@ async function main() {
     assert(coachUser && !coachUser.passwordHash.includes('coach-temp-1') && coachUser.mustChangePassword, 'trainer password is hashed and must be changed');
 
     const memberRes = await ownerA.req('POST', '/api/members', {
-      data: { name: 'Athlete One', phone: '09123000001', defaultTrainerId: coachId, packageName: 'Gold', totalSessions: 10, packagePrice: 5000000, paidAmount: 2000000, startDate: today, expirationDate: '1499/12/29' },
+      data: { name: 'Athlete One', phone: '09123000001', defaultTrainerId: coachId, packageName: 'Gold', totalSessions: 10, packagePrice: 5000000, paidAmount: 2000000, startDate: today, expirationDate: '1499/12/29', preferredHour: '18:00' },
       password: 'member-temp-1',
     });
     assert(memberRes.json.success, 'owner creates an athlete with a package');
@@ -177,6 +177,72 @@ async function main() {
     assert(athleteRow.usedSessions === 1 && athleteRow.remainingSessions === 9, 'exactly one session is deducted under concurrency');
     const [coachRow] = await db.select().from(t.trainers).where(eq(t.trainers.id, coachId));
     assert(coachRow.completedSessions === 1 && coachRow.outstandingCompensation === 100000, 'trainer pay is credited once');
+
+    // ── ساعت ثابت حضور ورزشکار ──
+    const [athleteRowHour] = await db.select().from(t.members).where(eq(t.members.id, athleteId));
+    assert(athleteRowHour.preferredHour === '18:00', 'the attendance hour is stored at registration');
+    assert((await ownerA.req('PATCH', `/api/members/${athleteId}/hour`, { hour: '20:00' })).json.success, 'owner changes the attendance hour');
+    const [movedHour] = await db.select().from(t.members).where(eq(t.members.id, athleteId));
+    assert(movedHour.preferredHour === '20:00', 'the new attendance hour is stored');
+    assert((await ownerA.req('PATCH', `/api/members/${athleteId}/hour`, { hour: 'noon' })).status === 422, 'a malformed hour is rejected');
+    assert((await ownerA.req('PATCH', `/api/members/${athleteId}/hour`, { hour: '' })).json.success, 'an empty hour clears the fixed slot');
+    const [clearedHour] = await db.select().from(t.members).where(eq(t.members.id, athleteId));
+    assert(!clearedHour.preferredHour, 'clearing the hour leaves no fixed slot');
+    assert((await coach.req('PATCH', `/api/members/${athleteId}/hour`, { hour: '09:00' })).status === 403, 'trainers cannot change the attendance hour');
+
+    // ── برنامهٔ تمرینی: ذخیرهٔ پیش‌نویس و انتشار ──
+    const draft = await coach.req('POST', '/api/programs', {
+      memberId: athleteId,
+      memberName: 'Athlete One',
+      trainerId: coachId,
+      trainerName: 'Coach A',
+      title: 'Weekly plan',
+      description: 'probe',
+      days: [
+        {
+          id: 'day-1',
+          title: 'Day 1',
+          items: [
+            { exerciseId: EXERCISE_CATALOG[0].id, name: EXERCISE_CATALOG[0].name, bodyPart: 'chest', equipment: 'barbell', sets: 3, repsMin: 8, repsMax: 12, loadKg: 40 },
+          ],
+        },
+      ],
+    });
+    assert(draft.json.success && draft.json.data?.id, `trainer saves a program draft (${draft.status} ${draft.json.messageKey})`);
+    const programId = draft.json.data?.id;
+    const [draftRow] = await db.select().from(t.workoutPrograms).where(eq(t.workoutPrograms.id, programId));
+    assert(draftRow?.status === 'draft', 'the draft is stored in the database');
+    const resaved = await coach.req('POST', '/api/programs', {
+      id: programId,
+      memberId: athleteId,
+      memberName: 'Athlete One',
+      trainerId: coachId,
+      trainerName: 'Coach A',
+      title: 'Weekly plan v2',
+      days: [{ id: 'day-1', title: 'Day 1', items: [{ exerciseId: EXERCISE_CATALOG[0].id, name: EXERCISE_CATALOG[0].name, bodyPart: 'chest', equipment: 'barbell', sets: 4, repsMin: 6, repsMax: 10 }] }],
+    });
+    assert(resaved.json.success && resaved.json.data?.id === programId, 'saving again updates the same draft');
+    // روز با شناسهٔ تکراری نباید روز برنامهٔ دیگری را بدزدد
+    const second = await coach.req('POST', '/api/programs', {
+      memberId: pendingId,
+      memberName: 'Pending Two',
+      trainerId: coachId,
+      trainerName: 'Coach A',
+      title: 'Second plan',
+      days: [{ id: 'day-1', title: 'Day 1', date: today, items: [{ exerciseId: EXERCISE_CATALOG[1].id, name: EXERCISE_CATALOG[1].name, bodyPart: 'legs', equipment: 'barbell', sets: 3, repsMin: 8, repsMax: 12 }] }],
+    });
+    assert(second.json.success && second.json.data?.id !== programId, 'a second program is created for another athlete');
+    assert(second.json.data?.days?.[0]?.id !== 'day-1', 'a day id already used by another program is re-keyed');
+    assert(second.json.data?.days?.[0]?.date === today, 'the training day keeps its calendar date');
+    const firstDays = await db.select().from(t.programDays).where(eq(t.programDays.programId, programId));
+    assert(firstDays.length === 1 && firstDays[0].id === 'day-1', "the first program keeps its own day");
+    const secondDays = await db.select().from(t.programDays).where(eq(t.programDays.programId, second.json.data.id));
+    assert(secondDays.length === 1 && secondDays[0].dateJalali === today, 'the day date is stored in the database');
+
+    const published = await coach.req('POST', `/api/programs/${programId}/publish`);
+    assert(published.json.success, `trainer publishes the program (${published.json.messageKey})`);
+    const [publishedRow] = await db.select().from(t.workoutPrograms).where(eq(t.workoutPrograms.id, programId));
+    assert(publishedRow?.status === 'published', 'the published program is stored');
 
     // ── ورزشکار ──
     const athlete = new Browser(base);

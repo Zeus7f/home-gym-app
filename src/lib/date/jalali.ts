@@ -355,13 +355,21 @@ export interface WeekDay {
  * // ]
  */
 export function getCurrentWeekShamsi(): WeekDay[] {
+  return getWeekShamsi(0);
+}
+
+/**
+ * The 7-day week (Saturday → Friday) `offsetWeeks` weeks from the current one.
+ * `0` is this week, `1` the next, `-1` the previous.
+ */
+export function getWeekShamsi(offsetWeeks: number): WeekDay[] {
   const today = getTodayJalali();
   const todayDow = getJalaliDayOfWeek(today.jy, today.jm, today.jd); // 0=Sat … 6=Fri
 
-  // Find Saturday of this week
+  // Find Saturday of the requested week
   const saturdayGreg = jalaliToGregorian(today.jy, today.jm, today.jd);
   const saturdayDate = new Date(saturdayGreg.gy, saturdayGreg.gm - 1, saturdayGreg.gd);
-  saturdayDate.setDate(saturdayDate.getDate() - todayDow); // rewind to Saturday
+  saturdayDate.setDate(saturdayDate.getDate() - todayDow + offsetWeeks * 7);
 
   const todayKey = formatJalali(today);
 
