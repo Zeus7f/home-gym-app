@@ -8,6 +8,7 @@ import type { Database } from '../db/index.ts';
 import type { GymStore, UserAccount } from '../lib/store/gymStore';
 import type { OpResult } from '../lib/domain/operations';
 import { HttpError, snapshotFor, withGym } from './engine.ts';
+import type { Tx } from './repository.ts';
 
 export type Handler = (req: Request, res: Response, next: NextFunction) => Promise<unknown> | unknown;
 
@@ -27,10 +28,21 @@ function statusFor(result: OpResult): number {
  * مسیر تغییر داده: عملیات در تراکنش روی دادهٔ باشگاه اجرا می‌شود و پاسخ،
  * نتیجه + دادهٔ تازهٔ باشگاه (فیلترشده برای نقش کاربر) است.
  */
-export function gymOp<T>(db: Database, fn: (store: GymStore, actor: UserAccount, req: Request) => OpResult<T>): RequestHandler {
+export function gymOp<T>(
+  db: Database,
+  fn: (store: GymStore, actor: UserAccount, req: Request) => OpResult<T>,
+  /** کار اضافه در همان تراکنش، پس از موفقیت عملیات */
+  after?: (tx: Tx, result: OpResult<T>, req: Request) => Promise<void>
+): RequestHandler {
   return route(async (req, res) => {
     const auth = req.auth!;
-    const { result, store, loaded } = await withGym(db, auth.gymId!, auth.actor, store => fn(store, auth.actor, req));
+    const { result, store, loaded } = await withGym(
+      db,
+      auth.gymId!,
+      auth.actor,
+      store => fn(store, auth.actor, req),
+      after && ((tx, r) => after(tx, r, req))
+    );
     res.status(statusFor(result)).json({ ...result, snapshot: snapshotFor(store, loaded, auth.actor) });
   });
 }

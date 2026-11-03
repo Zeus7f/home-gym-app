@@ -14,7 +14,7 @@ import type { Database } from '../../db/index.ts';
 import type { AppRole } from '../../lib/auth/permissions';
 import type { UserAccount } from '../../lib/store/gymStore';
 import { signJwt, verifyJwt } from './crypto.ts';
-import { userFromRow } from '../repository.ts';
+import { membershipsOf, userFromRow, type MembershipRow } from '../repository.ts';
 
 export const SESSION_COOKIE = 'hg_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -26,6 +26,8 @@ export interface AuthContext {
   gymId: string | null;
   /** هویت عملیات: مدیر کل داخل یک باشگاه با اختیارات مدیر همان باشگاه عمل می‌کند */
   actor: UserAccount;
+  /** عضویت فعال این نشست */
+  membership?: MembershipRow;
 }
 
 declare global {
@@ -45,8 +47,13 @@ export function jwtSecret(): string {
   return secret;
 }
 
-export function issueSession(res: Response, user: { id: string; sessionVersion: number }) {
-  const token = signJwt({ sub: user.id, ver: user.sessionVersion }, jwtSecret(), SESSION_TTL_SECONDS);
+export function issueSession(
+  res: Response,
+  user: { id: string; sessionVersion: number },
+  /** عضویتی که نشست با آن کار می‌کند؛ بدون آن، عضویت پیش‌فرض هنگام هر درخواست پیدا می‌شود */
+  roleId?: string
+) {
+  const token = signJwt({ sub: user.id, ver: user.sessionVersion, rid: roleId }, jwtSecret(), SESSION_TTL_SECONDS);
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -88,16 +95,26 @@ export function requireAuth(db: Database) {
         clearSession(res);
         return deny(res, 401, row && !row.isActive ? 'login.inactive' : 'auth.unauthenticated');
       }
-      if (row.gymId) {
-        const [gym] = await db.select({ isActive: t.gyms.isActive }).from(t.gyms).where(eq(t.gyms.id, row.gymId));
+
+      // نقش فعال نشست؛ توکن بدون `rid` (یا با عضویتِ حذف‌شده) به نقش پیش‌فرض می‌افتد
+      const memberships = await membershipsOf(db, row.id);
+      const membership = memberships.find(m => m.id === claims.rid) ?? memberships[0];
+      if (memberships.length > 0 && !membership) {
+        clearSession(res);
+        return deny(res, 403, 'auth.forbidden');
+      }
+
+      const gymId = membership ? membership.gymId : row.gymId;
+      if (gymId) {
+        const [gym] = await db.select({ isActive: t.gyms.isActive }).from(t.gyms).where(eq(t.gyms.id, gymId));
         if (!gym?.isActive) {
           clearSession(res);
           return deny(res, 403, 'login.gymInactive');
         }
       }
 
-      const user = userFromRow(row);
-      req.auth = { user, mustChangePassword: row.mustChangePassword, gymId: row.gymId, actor: user };
+      const user = userFromRow(row, membership);
+      req.auth = { user, mustChangePassword: row.mustChangePassword, gymId, actor: user, membership };
 
       if (row.mustChangePassword && !ALLOWED_BEFORE_PASSWORD_CHANGE.has(req.originalUrl.split('?')[0])) {
         return deny(res, 403, 'auth.passwordChangeRequired');

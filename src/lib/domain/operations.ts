@@ -68,18 +68,38 @@ function findSession(store: GymStore, sessionId: string) {
 
 // ── جلسات ───────────────────────────────────────────────────────────────────
 
+/**
+ * آیا مربی و ورزشکار یک نفرند؟
+ *
+ * با نقش‌های چندگانه یک نفر می‌تواند هم مربی باشد هم ورزشکار. نباید بتواند
+ * جلسهٔ خودش را به خودش بدهد و دستمزد بگیرد؛ تمرین خودش باید زیر نظر مربی
+ * دیگری ثبت شود.
+ */
+function samePerson(store: GymStore, trainerId: string, memberId: string): boolean {
+  const trainerUser = store.users.find(u => u.role === 'trainer' && u.entityId === trainerId);
+  const memberUser = store.users.find(u => u.role === 'member' && u.entityId === memberId);
+  if (trainerUser && memberUser && trainerUser.id === memberUser.id) return true;
+
+  // هویت‌های جدا با یک شمارهٔ موبایل هم همان شخص‌اند
+  const trainer = store.trainers.find(t => t.id === trainerId);
+  const member = store.members.find(m => m.id === memberId);
+  return !!trainer?.phone && !!member?.phone && trainer.phone === member.phone;
+}
+
 export function scheduleSession(
   store: GymStore,
   actor: Actor,
   a: { date: string; time: string; memberId: string; trainerId: string; exercises?: SessionExercise[] }
 ) {
   if (!allowed(actor, 'schedule.own') || !staffOwns(actor, a.trainerId)) return FORBIDDEN;
+  if (samePerson(store, a.trainerId, a.memberId)) return fail('account.selfTrainer');
   const r = store.scheduleSessionOnDate(a.date, a.time, a.memberId, a.trainerId, a.exercises ?? []);
   return fromStore(r, r.session);
 }
 
 export function addSessionToToday(store: GymStore, actor: Actor, a: { memberId: string; trainerId: string; time?: string }) {
   if (!allowed(actor, 'schedule.own') || !staffOwns(actor, a.trainerId)) return FORBIDDEN;
+  if (samePerson(store, a.trainerId, a.memberId)) return fail('account.selfTrainer');
   const r = store.addSessionToToday(a.memberId, a.trainerId, a.time);
   return fromStore(r, r.session);
 }
@@ -262,6 +282,48 @@ export function createMemberAsTrainer(store: GymStore, actor: Actor, a: { name: 
     },
     a.password,
     { byTrainerId: trainer.id }
+  );
+  return fromStore(r, r.member);
+}
+
+/**
+ * نقش تازه برای شخصی که از قبل حساب ورود دارد.
+ *
+ * رکورد دامنه (مربی یا ورزشکار) ساخته می‌شود ولی حساب تازه‌ای در کار نیست؛
+ * همان هویت قبلی با نقش دوم به باشگاه وصل می‌شود. مثال: مربی فانکشنالی که
+ * می‌خواهد به‌عنوان ورزشکار زیر نظر مربی یوگا تمرین کند.
+ */
+export function addRoleToPerson(
+  store: GymStore,
+  actor: Actor,
+  a: { userId: string; role: 'trainer' | 'member'; trainer?: NewTrainerInput; member?: NewMemberInput }
+): OpResult<Trainer | Member> {
+  if (!allowed(actor, 'staff.manage')) return FORBIDDEN;
+  const person = store.users.find(u => u.id === a.userId);
+  if (!person) return fail('member.notFound');
+  if (person.role === a.role) return fail('account.roleExists');
+
+  if (a.role === 'trainer') {
+    if (!a.trainer) return fail('common.invalidInput');
+    const r = store.addTrainer({ ...a.trainer, phone: person.phone ?? a.trainer.phone, status: 'active' }, undefined, {
+      attachToExisting: true,
+    });
+    return fromStore(r, r.trainer);
+  }
+
+  if (!a.member) return fail('common.invalidInput');
+  if (!String(a.member.packageName ?? '').trim() || !(Number(a.member.totalSessions) >= 1)) {
+    return fail('member.invalidPackage');
+  }
+  const trainer = store.trainers.find(t => t.id === a.member!.defaultTrainerId);
+  if (!trainer) return fail('session.memberOrTrainerNotFound');
+  // مربی نمی‌تواند مربیِ خودش باشد
+  if (person.role === 'trainer' && person.entityId === trainer.id) return fail('account.selfTrainer');
+
+  const r = store.addMember(
+    { ...a.member, phone: person.phone ?? a.member.phone, defaultTrainerName: trainer.name, packagePending: false },
+    undefined,
+    { attachToExisting: true }
   );
   return fromStore(r, r.member);
 }

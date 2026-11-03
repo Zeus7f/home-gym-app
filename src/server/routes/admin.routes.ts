@@ -97,7 +97,7 @@ export function adminRoutes(db: Database) {
     '/accounts',
     route(async (_req, res) => {
       const owners = await db.select().from(t.users).where(eq(t.users.role, 'gym_owner'));
-      res.json({ success: true, accounts: owners.map(userFromRow) });
+      res.json({ success: true, accounts: owners.map(row => userFromRow(row)) });
     })
   );
 

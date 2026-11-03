@@ -43,7 +43,12 @@ export async function withGym<T>(
   db: Database,
   gymId: string,
   actor: UserAccount,
-  op: (store: GymStore) => OpResult<T>
+  op: (store: GymStore) => OpResult<T>,
+  /**
+   * کار اضافه در همان تراکنش، پس از ذخیرهٔ تغییرهای دامنه.
+   * برای نوشتن ردیف‌هایی که بیرون از مدل دامنه‌اند (مثل عضویت نقش‌ها).
+   */
+  after?: (tx: Tx, result: OpResult<T>) => Promise<void>
 ): Promise<{ result: OpResult<T>; store: GymStore; loaded: LoadedGym }> {
   return db.transaction(async tx => {
     await tx.execute(sql`SELECT id FROM gyms WHERE id = ${gymId} FOR UPDATE`);
@@ -62,6 +67,7 @@ export async function withGym<T>(
         { rows: afterRows, users: store.users },
         { actorId: actor.id }
       );
+      await after?.(tx as Tx, result);
     }
     return { result, store, loaded };
   });

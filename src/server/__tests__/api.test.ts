@@ -254,6 +254,65 @@ async function main() {
     assert((await athlete.req('POST', `/api/sessions/${sessionId}/member-cancel`, {})).status === 403, "athletes cannot cancel someone else's session");
     assert((await athlete.req('POST', '/api/trainers', { data: {}, password: 'x' })).status === 403, 'athletes cannot create trainers');
 
+    // ── نقش‌های چندگانه: مربی‌ای که به‌عنوان ورزشکار هم تمرین می‌کند ──
+    const [coachRole] = await db.select().from(t.userRoles).where(eq(t.userRoles.userId, coachUser.id));
+    assert(coachRole?.role === 'trainer' && coachRole.entityId === coachId, 'every account gets a matching membership');
+
+    // مربی دوم که مربیِ یوگای او می‌شود
+    const yoga = await ownerA.req('POST', '/api/trainers', {
+      data: { name: 'Yoga Coach', phone: '09122000009', specialty: 'Yoga', workingDays: ['Saturday'], workingHours: '09:00 - 15:00', dailyCapacity: 6, sessionRate: 120000 },
+      password: 'yoga-temp-1',
+    });
+    assert(yoga.json.success, 'owner creates the yoga trainer');
+    const yogaId = yoga.json.data.id;
+
+    // همان هویتِ مربی، نقش ورزشکار هم می‌گیرد
+    const dualRole = await ownerA.req('POST', `/api/accounts/${coachUser.id}/roles`, {
+      role: 'member',
+      data: { name: 'Coach A', phone: '09122000001', defaultTrainerId: yogaId, packageName: 'Yoga', totalSessions: 8, packagePrice: 2000000, paidAmount: 0, startDate: today, expirationDate: '1499/12/29', preferredHour: '07:00' },
+    });
+    assert(dualRole.json.success, `a trainer can also be enrolled as an athlete (${dualRole.json.messageKey})`);
+    const coachAsMemberId = dualRole.json.data?.id;
+    const coachRoles = await db.select().from(t.userRoles).where(eq(t.userRoles.userId, coachUser.id));
+    assert(coachRoles.length === 2, 'the identity now holds two memberships');
+    assert(coachRoles.some(x => x.role === 'member' && x.entityId === coachAsMemberId), 'the member membership points at the new athlete record');
+    assert((await db.select().from(t.users).where(eq(t.users.username, '09122000001'))).length === 1, 'no second login account was created');
+
+    // همان نقش دوباره اضافه نمی‌شود
+    assert((await ownerA.req('POST', `/api/accounts/${coachUser.id}/roles`, { role: 'trainer', data: { name: 'Coach A', phone: '09122000001' } })).json.messageKey === 'account.roleExists', 'the same role is not added twice');
+
+    // ورود: هر دو نقش برگردانده می‌شود و می‌توان میانشان جابه‌جا شد
+    const dual = new Browser(base);
+    const dualLogin = await dual.login('09122000001', 'coach-pass-1');
+    assert(dualLogin.json.success && dualLogin.json.roles?.length === 2, 'sign-in lists every role of the identity');
+    const memberRole = dualLogin.json.roles.find((x: any) => x.role === 'member');
+    assert(memberRole?.gymName === 'Gym A', 'each role names its gym');
+    assert(dualLogin.json.user.role === 'trainer', 'the last used role is the one signed into');
+
+    const switched = await dual.req('POST', '/api/auth/switch-role', { roleId: memberRole.id });
+    assert(switched.json.success && switched.json.user.role === 'member', 'the role switch changes the session identity');
+    assert(switched.json.user.entityId === coachAsMemberId, 'the switched session points at the athlete record');
+    const asMember = await dual.req('GET', '/api/gym/snapshot');
+    assert(asMember.json.snapshot.members.length === 1 && asMember.json.snapshot.members[0].id === coachAsMemberId, 'as an athlete the person only sees their own record');
+    assert((await dual.req('POST', '/api/trainers', { data: {}, password: 'x' })).status === 403, 'the athlete role cannot create trainers');
+
+    // نقشی که مال این هویت نیست پذیرفته نمی‌شود
+    assert((await dual.req('POST', '/api/auth/switch-role', { roleId: coachRole.id + '-nope' })).status === 404, "a role that is not theirs cannot be switched to");
+
+    const backToTrainer = await dual.req('POST', '/api/auth/switch-role', { roleId: coachRole.id });
+    assert(backToTrainer.json.success && backToTrainer.json.user.role === 'trainer', 'switching back to the trainer role works');
+
+    // تعارض منافع: مربی نمی‌تواند جلسهٔ خودش را به خودش بدهد
+    const selfBook = await dual.req('POST', '/api/sessions', { date: today, time: '07:00', memberId: coachAsMemberId, trainerId: coachId });
+    assert(selfBook.json.messageKey === 'account.selfTrainer', 'a trainer cannot coach themselves');
+
+    // ولی مربی یوگا می‌تواند
+    const yogaBrowser = new Browser(base);
+    await yogaBrowser.login('09122000009', 'yoga-temp-1');
+    await yogaBrowser.req('POST', '/api/auth/change-password', { currentPassword: 'yoga-temp-1', newPassword: 'yoga-pass-1' });
+    const yogaBook = await yogaBrowser.req('POST', '/api/sessions', { date: today, time: '07:00', memberId: coachAsMemberId, trainerId: yogaId });
+    assert(yogaBook.json.success, `the yoga trainer can coach them (${yogaBook.json.messageKey})`);
+
     // ── جداسازی باشگاه‌ها ──
     const bSnap = (await ownerB.req('GET', '/api/gym/snapshot')).json.snapshot;
     assert(bSnap.members.length === 0 && bSnap.todaySessions.length === 0, "gym B sees none of gym A's data");
@@ -271,7 +330,8 @@ async function main() {
     // ── مدیر کل وارد باشگاه می‌شود ──
     sa.gymHeader = gymAId;
     const saSnap = await sa.req('GET', '/api/gym/snapshot');
-    assert(saSnap.status === 200 && saSnap.json.snapshot.members.length === 2, 'super admin can open a gym panel');
+    // سه ورزشکار: «Athlete One»، «Pending Two» و مربی‌ای که نقش ورزشکار هم گرفت
+    assert(saSnap.status === 200 && saSnap.json.snapshot.members.length === 3, 'super admin can open a gym panel');
 
     // ── نگاشت پایدار: آنچه بار می‌شود همان است که در دیتابیس هست ──
     const loaded = await loadGym(db, gymAId);

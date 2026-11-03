@@ -6,6 +6,7 @@
  * و فقط ردیف‌های تغییرکرده/حذف‌شده نوشته می‌شوند (persistDiff) — همه در یک تراکنش.
  */
 
+import { randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, isNull, or, sql, getTableColumns } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import * as t from '../db/schema.ts';
@@ -83,19 +84,38 @@ export function gymFromRow(row: typeof t.gyms.$inferSelect): Gym {
   }) as Gym;
 }
 
-export function userFromRow(row: typeof t.users.$inferSelect): UserAccount {
+export type MembershipRow = typeof t.userRoles.$inferSelect;
+
+/**
+ * هویت + عضویت فعال → کاربری که عملیات با آن اجرا می‌شود.
+ *
+ * نقش و رکورد دامنه از عضویت می‌آید، نه از ردیف هویت؛ یک نفر می‌تواند چند
+ * عضویت داشته باشد. بدون عضویت (توکن‌های قدیمی) ستون‌های خود `users` به‌کار
+ * می‌روند تا نشست‌های باز از کار نیفتند.
+ */
+export function userFromRow(row: typeof t.users.$inferSelect, membership?: MembershipRow): UserAccount {
   return clean({
     id: row.id,
     username: row.username,
     password: '',
-    role: appRole(row.role),
-    entityId: row.entityId ?? '',
-    gymId: row.gymId ?? undefined,
+    role: appRole(membership?.role ?? row.role),
+    entityId: (membership ? membership.entityId : row.entityId) ?? '',
+    gymId: (membership ? membership.gymId : row.gymId) ?? undefined,
     isActive: row.isActive,
     displayName: row.displayName,
     phone: row.phone ?? undefined,
     createdAt: row.createdAt.toISOString(),
+    roleId: membership?.id,
   }) as UserAccount;
+}
+
+/** عضویت‌های فعال یک هویت — تازه‌ترین نقشِ استفاده‌شده اول می‌آید. */
+export async function membershipsOf(db: Database | Tx, userId: string): Promise<MembershipRow[]> {
+  const rows = await (db as Database)
+    .select()
+    .from(t.userRoles)
+    .where(and(eq(t.userRoles.userId, userId), eq(t.userRoles.isActive, true)));
+  return rows.sort((a, b) => (b.lastUsedAt?.getTime() ?? 0) - (a.lastUsedAt?.getTime() ?? 0));
 }
 
 function exerciseFromRow(row: typeof t.exercises.$inferSelect): ExerciseItem {
@@ -297,7 +317,7 @@ export async function loadGym(db: Tx, gymId: string): Promise<LoadedGym | null> 
 
   return {
     gym: gymFromRow(gymRow),
-    users: userRows.map(userFromRow),
+    users: userRows.map(row => userFromRow(row)),
     globalExercises,
     state: {
       trainers: trainerRows.map(
@@ -605,6 +625,15 @@ async function persistUsers(db: Tx, gymId: string, before: UserAccount[], after:
         entityId: u.entityId || null,
         isActive: u.isActive !== false,
       });
+      // هر حساب تازه، عضویت متناظرش را هم می‌گیرد
+      await db.insert(t.userRoles).values({
+        id: randomUUID(),
+        userId: u.id,
+        gymId,
+        role: dbRole(u.role),
+        entityId: u.entityId || null,
+        isActive: u.isActive !== false,
+      });
       continue;
     }
     const bump = passwordSet || (old.isActive !== false && u.isActive === false);
@@ -619,5 +648,19 @@ async function persistUsers(db: Tx, gymId: string, before: UserAccount[], after:
         ...(bump ? { sessionVersion: sql`${t.users.sessionVersion} + 1` } : {}),
       })
       .where(and(eq(t.users.id, u.id), eq(t.users.gymId, gymId)));
+
+    // فعال/غیرفعال شدن حساب روی عضویت همان نقش در همین باشگاه هم اعمال می‌شود
+    if (old.isActive !== u.isActive) {
+      await db
+        .update(t.userRoles)
+        .set({ isActive: u.isActive !== false })
+        .where(
+          and(
+            eq(t.userRoles.userId, u.id),
+            eq(t.userRoles.gymId, gymId),
+            eq(t.userRoles.role, dbRole(u.role))
+          )
+        );
+    }
   }
 }

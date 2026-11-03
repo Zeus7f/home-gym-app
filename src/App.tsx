@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate, useLocatio
 import { gymStore } from './lib/store/gymStore';
 import { LoginScreen } from './features/auth/LoginScreen';
 import { ChangePasswordScreen } from './features/auth/ChangePasswordScreen';
-import { initAuth, isAuthReady, logout, mustChangePassword } from './api/auth';
+import { initAuth, isAuthReady, logout, mustChangePassword, switchRole } from './api/auth';
 import { leaveGym } from './api/admin';
 import { can, type AppRole } from './lib/auth/permissions';
 import { AUTH_PATHS, BASE_PATH, homePath } from './lib/routes';
@@ -133,6 +133,13 @@ function App() {
           previewing: !!previewUser,
           viewAsRoles,
           onViewAs: role => navigate(`${homePath(role)}?preview_role=${role}`),
+          myRoles: gymStore.availableRoles,
+          onSwitchRole: roleId => {
+            void switchRole(roleId).then(res => {
+              // نقش تازه، فضای کاری تازه؛ از صفحهٔ نقش قبلی بیرون می‌آییم
+              if (res.success && gymStore.currentUser) navigate(homePath(gymStore.currentUser.role));
+            });
+          },
           onExitPreview: () => {
             if (authUser.role === 'super_admin') leaveGym();
             navigate(homePath(authUser.role));

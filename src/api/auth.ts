@@ -6,7 +6,7 @@
 
 import { apiRequest, gymStore, isRemote, refreshSnapshot } from './_client';
 import { localizeResult, translateStoreMessage } from './_messages';
-import type { UserAccount } from '../lib/domain/gymManagement';
+import type { RoleOption, UserAccount } from '../lib/domain/gymManagement';
 import type { StoreMessageKey } from '../lib/domain/storeMessages';
 
 /**
@@ -36,6 +36,8 @@ export function mustChangePassword(): boolean {
 interface SessionPayload {
   user: UserAccount;
   mustChangePassword: boolean;
+  /** همهٔ نقش‌های این هویت؛ بیش از یکی یعنی امکان تعویض نقش هست */
+  roles?: RoleOption[];
 }
 
 /** پس از ورود یا بازیابی نشست: کاربر و دادهٔ باشگاهش */
@@ -46,6 +48,7 @@ async function enterSession(payload: SessionPayload | null): Promise<boolean> {
   }
   gymStore.mustChangePassword = payload.mustChangePassword;
   gymStore.currentUser = payload.user;
+  gymStore.availableRoles = payload.roles ?? [];
   // مدیر کل باشگاه ندارد؛ با تغییر رمز اجباری هنوز به دادهٔ باشگاه دسترسی نیست
   if (payload.user.gymId && !payload.mustChangePassword && !(await refreshSnapshot())) {
     gymStore.setAuthenticatedUser(null);
@@ -91,6 +94,28 @@ export async function login(
     success: ok,
     message: translateStoreMessage(ok ? 'login.success' : 'server.unavailable'),
   };
+}
+
+/** نقش‌های این هویت — بیش از یکی یعنی کاربر می‌تواند نقش فعال را عوض کند. */
+export function getAvailableRoles(): RoleOption[] {
+  return gymStore.availableRoles;
+}
+
+/**
+ * تعویض نقش فعال بدون ورود دوباره.
+ * نشست سرور عوض می‌شود، پس دادهٔ باشگاه هم با هویت تازه دوباره خوانده می‌شود.
+ */
+export async function switchRole(roleId: string): Promise<{ success: boolean; message: string }> {
+  const { json } = await apiRequest<SessionPayload & { success: boolean; messageKey: StoreMessageKey }>(
+    'POST',
+    '/api/auth/switch-role',
+    { roleId }
+  );
+  if (!json.success) return { success: false, message: translateStoreMessage(json.messageKey ?? 'server.unavailable') };
+  // پیش‌نمایش نقش مدیر با تعویض نقش واقعی جمع می‌شود
+  gymStore.setPreviewUser(null);
+  const ok = await enterSession(json);
+  return { success: ok, message: translateStoreMessage(ok ? 'auth.roleSwitched' : 'server.unavailable') };
 }
 
 /** تغییر رمز خود کاربر (و پایان «تغییر رمز اجباری») */

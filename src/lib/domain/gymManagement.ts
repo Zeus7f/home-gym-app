@@ -149,6 +149,23 @@ export interface UserAccount {
   phone?: string;
   avatarUrl?: string;
   createdAt?: string;
+  /**
+   * عضویت فعال (`user_roles.id`). یک هویت می‌تواند چند نقش داشته باشد و
+   * نشست مشخص می‌کند الان با کدام‌یک کار می‌شود.
+   */
+  roleId?: string;
+}
+
+/** یک نقش از نقش‌های یک هویت — برای انتخاب و تعویض نقش در رابط کاربری. */
+export interface RoleOption {
+  /** `user_roles.id` */
+  id: string;
+  role: AppRole;
+  gymId?: string;
+  /** نام باشگاهی که این نقش در آن است */
+  gymName?: string;
+  /** نامی که در آن نقش نمایش داده می‌شود (نام مربی یا ورزشکار) */
+  label?: string;
 }
 
 export interface DailyCapacityConfig {

@@ -40,6 +40,7 @@ import {
   setAccountActive,
 } from '../../api/accounts';
 import { getTrainers } from '../../api/trainers';
+import { addRoleToPerson, findPersonByPhone } from '../../api/accounts';
 import { subscribeToStore } from '../../api/auth';
 import { displayName, localizedLabel } from '../../lib/displayName';
 import { parseAmount } from '../../lib/format';
@@ -193,6 +194,13 @@ export function NewMemberSheet({
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
+  /**
+   * این شماره از قبل حساب دارد؟ آن‌وقت به‌جای حساب دوم، نقش ورزشکار به همان
+   * هویت اضافه می‌شود — مثل مربی‌ای که زیر نظر مربی دیگری تمرین می‌کند.
+   */
+  const existing = mode === 'owner' ? findPersonByPhone(form.phone) : undefined;
+  const asNewRole = !!existing && existing.role !== 'member';
+
   const submit = async () => {
     setBusy(true);
     setError(null);
@@ -206,23 +214,23 @@ export function NewMemberSheet({
         setError(t.storeMessages['member.invalidPackage']);
         return;
       }
-      res = await createMember(
-        {
-          name: form.name,
-          phone: form.phone,
-          defaultTrainerId: trainer?.id ?? '',
-          defaultTrainerName: trainer?.name ?? '',
-          packageName: form.packageName.trim(),
-          totalSessions: Math.round(parseAmount(form.totalSessions)),
-          packagePrice: parseAmount(form.packagePrice),
-          paidAmount: parseAmount(form.paidAmount),
-          startDate: getTodayJalaliString(),
-          expirationDate: toLatinDigitsDate(form.expirationDate),
-          preferredHour: form.preferredHour || undefined,
-          status: 'active',
-        },
-        form.password
-      );
+      const memberData = {
+        name: form.name,
+        phone: form.phone,
+        defaultTrainerId: trainer?.id ?? '',
+        defaultTrainerName: trainer?.name ?? '',
+        packageName: form.packageName.trim(),
+        totalSessions: Math.round(parseAmount(form.totalSessions)),
+        packagePrice: parseAmount(form.packagePrice),
+        paidAmount: parseAmount(form.paidAmount),
+        startDate: getTodayJalaliString(),
+        expirationDate: toLatinDigitsDate(form.expirationDate),
+        preferredHour: form.preferredHour || undefined,
+        status: 'active' as const,
+      };
+      res = asNewRole
+        ? await addRoleToPerson(existing!.id, 'member', memberData)
+        : await createMember(memberData, form.password);
     }
     setBusy(false);
     if (res.success) onDone(res.message);
@@ -235,11 +243,21 @@ export function NewMemberSheet({
       onClose={onClose}
       title={a.newMember}
       description={mode === 'trainer' ? a.trainerCreateHint : undefined}
-      submitLabel={a.create}
+      submitLabel={asNewRole ? a.addRoleAction.replace('{name}', displayName(existing!.displayName, isFa)) : a.create}
       busy={busy}
       onSubmit={submit}
     >
       <FormError message={error} />
+      {asNewRole && (
+        <div
+          role="status"
+          className="rounded-xl border px-3.5 py-3 text-[13px] leading-relaxed"
+          style={{ backgroundColor: 'var(--c-surface-2)', borderColor: 'var(--c-steel)', color: 'var(--c-text)' }}
+        >
+          <strong className="font-bold">{a.existingPerson.replace('{name}', displayName(existing!.displayName, isFa))}</strong>
+          <div style={{ color: 'var(--c-text-muted)' }}>{a.addRoleInstead}</div>
+        </div>
+      )}
       <FormSection title={a.account}>
         <FieldGrid>
           <Field label={a.fullName} className="sm:col-span-2">

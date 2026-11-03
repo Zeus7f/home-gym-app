@@ -47,6 +47,39 @@ export async function createMemberAsTrainer(input: { name: string; phone: string
   return { ...r, member: r.data as Member | undefined };
 }
 
+/**
+ * شخصی که این شمارهٔ موبایل حساب اوست — برای پیشنهاد «نقش تازه» به‌جای خطای
+ * «موبایل تکراری». فقط حساب‌های همین باشگاه در دسترس مرورگر هستند.
+ */
+export function findPersonByPhone(phone: string): UserAccount | undefined {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return undefined;
+  return gymStore.users.find(u => u.phone && normalizePhone(u.phone) === normalized);
+}
+
+/**
+ * نقش تازه برای شخصی که از قبل حساب دارد — بدون ساخت حساب دوم.
+ * مثلاً مربی‌ای که می‌خواهد زیر نظر مربی دیگری تمرین کند.
+ */
+export async function addRoleToPerson(
+  userId: string,
+  role: 'trainer' | 'member',
+  data: NewTrainerInput | NewMemberInput
+): Promise<ActionResult> {
+  return localizeOp(
+    await runOp(
+      { method: 'POST', path: `/api/accounts/${encodeURIComponent(userId)}/roles`, body: { role, data } },
+      (s, a) =>
+        ops.addRoleToPerson(s, a, {
+          userId,
+          role,
+          trainer: role === 'trainer' ? (data as NewTrainerInput) : undefined,
+          member: role === 'member' ? (data as NewMemberInput) : undefined,
+        })
+    )
+  );
+}
+
 /** مدیر: تعیین بستهٔ ورزشکاری که مربی ساخته (یا بستهٔ تازه) */
 export async function assignMemberPackage(
   memberId: string,

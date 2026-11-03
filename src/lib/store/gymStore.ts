@@ -12,6 +12,7 @@ import type {
   SessionAdjustmentRecord,
   AuditLog,
   UserAccount,
+  RoleOption,
   DailyCapacityConfig,
   WorkoutProgram,
   ProgramDay,
@@ -1333,6 +1334,9 @@ export class GymStore {
   /** باشگاهی که مدیر کل وارد پنلش شده است (برای پیش‌نمایش نقش‌ها) */
   adminGymId: string | null = null;
 
+  /** نقش‌های هویت واردشده؛ بیش از یکی یعنی کلید تعویض نقش نمایش داده می‌شود */
+  availableRoles: RoleOption[] = [];
+
   /** هویتی که صفحات با آن داده می‌خوانند: کاربر پیش‌نمایش یا کاربر واردشده */
   get actingUser(): UserAccount | null {
     return this.previewUser ?? this.currentUser;
@@ -1424,10 +1428,16 @@ export class GymStore {
   // ==========================================
 
   /** اعتبارسنجی مشترک ساخت حساب؛ null یعنی معتبر */
-  private checkNewAccount(name: string, phone: string, password: string | undefined): StoreResult | null {
+  private checkNewAccount(
+    name: string,
+    phone: string,
+    password: string | undefined,
+    /** نقش تازه برای شخصی که از قبل حساب دارد — یکتایی موبایل اینجا مانع نیست */
+    attachToExisting = false
+  ): StoreResult | null {
     if (!name.trim()) return storeResult(false, 'account.invalidName');
     if (!isValidMobile(phone)) return storeResult(false, 'account.invalidPhone');
-    if (this.users.some(u => u.phone && normalizePhone(u.phone) === phone)) {
+    if (!attachToExisting && this.users.some(u => u.phone && normalizePhone(u.phone) === phone)) {
       return storeResult(false, 'account.phoneTaken');
     }
     if (password !== undefined && password.trim().length < MIN_PASSWORD_LENGTH) {
@@ -2045,10 +2055,10 @@ export class GymStore {
   addMember(
     data: Omit<Member, 'id' | 'usedSessions' | 'remainingSessions' | 'outstandingBalance' | 'registrationDate'>,
     initialPassword?: string,
-    options: { byTrainerId?: string } = {}
+    options: { byTrainerId?: string; attachToExisting?: boolean } = {}
   ): StoreResult & { member?: Member } {
     const phone = normalizePhone(data.phone);
-    const invalid = this.checkNewAccount(data.name, phone, initialPassword || undefined);
+    const invalid = this.checkNewAccount(data.name, phone, initialPassword || undefined, options.attachToExisting);
     if (invalid) return invalid;
 
     const byTrainer = options.byTrainerId
@@ -2302,10 +2312,11 @@ export class GymStore {
   /** مدیر: افزودن مربی. با رمز، حساب ورود هم ساخته می‌شود (نام کاربری = موبایل). */
   addTrainer(
     data: Omit<Trainer, 'id' | 'completedSessions' | 'paidCompensation' | 'outstandingCompensation'>,
-    initialPassword?: string
+    initialPassword?: string,
+    options: { attachToExisting?: boolean } = {}
   ): StoreResult & { trainer?: Trainer } {
     const phone = normalizePhone(data.phone);
-    const invalid = this.checkNewAccount(data.name, phone, initialPassword || undefined);
+    const invalid = this.checkNewAccount(data.name, phone, initialPassword || undefined, options.attachToExisting);
     if (invalid) return invalid;
 
     const newTrainer: Trainer = {

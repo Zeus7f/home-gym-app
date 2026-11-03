@@ -74,6 +74,38 @@ export const users = pgTable(
   t => [index('users_gym_idx').on(t.gymId, t.role)]
 );
 
+/**
+ * عضویت‌های یک هویت: «این شخص در کدام باشگاه، چه نقشی دارد».
+ *
+ * نقش از ردیف هویت جدا شده تا یک نفر بتواند هم‌زمان چند نقش داشته باشد —
+ * مثلاً مربی‌ای که در همان باشگاه زیر نظر مربی دیگری تمرین می‌کند.
+ * ستون‌های `role` / `gym_id` / `entity_id` روی `users` فعلاً دست‌نخورده
+ * می‌مانند تا بازگشت ممکن باشد؛ مرجع واقعی همین جدول است.
+ */
+export const userRoles = pgTable(
+  'user_roles',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** مدیر کل باشگاه ندارد، پس می‌تواند خالی باشد */
+    gymId: uuid('gym_id').references(() => gyms.id, { onDelete: 'cascade' }),
+    role: userRoleEnum('role').notNull(),
+    /** رکورد دامنهٔ متناظر: شناسهٔ مربی/ورزشکار؛ برای مدیر، شناسهٔ باشگاه */
+    entityId: text('entity_id'),
+    isActive: boolean('is_active').notNull().default(true),
+    /** آخرین باری که کاربر با این نقش وارد شد — نقش پیش‌فرض ورود بعدی */
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  t => [
+    uniqueIndex('user_roles_user_gym_role_key').on(t.userId, t.gymId, t.role),
+    index('user_roles_user_idx').on(t.userId),
+    index('user_roles_gym_idx').on(t.gymId, t.role),
+  ]
+);
+
 // ── مربیان ───────────────────────────────────────────────────────────────────
 export const trainers = pgTable(
   'trainers',

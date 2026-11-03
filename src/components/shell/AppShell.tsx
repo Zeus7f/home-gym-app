@@ -19,7 +19,7 @@ import { Sheet } from '../../features/owner/components/Sheet';
 import { displayName } from '../../lib/displayName';
 import { cn } from '../../lib/utils';
 import type { AppRole } from '../../lib/auth/permissions';
-import type { UserAccount } from '../../lib/domain/gymManagement';
+import type { RoleOption, UserAccount } from '../../lib/domain/gymManagement';
 
 // ── زمینهٔ پوسته: کاربر، پیش‌نمایش و کنش‌های سراسری (از App) ─────────────────
 
@@ -32,6 +32,12 @@ export interface ShellChrome {
   /** نقش‌هایی که کاربر می‌تواند به‌عنوان آن‌ها مشاهده کند */
   viewAsRoles: AppRole[];
   onViewAs: (role: AppRole) => void;
+  /**
+   * نقش‌های واقعی همین هویت (نه پیش‌نمایش). بیش از یکی یعنی این شخص در باشگاه
+   * چند نقش دارد — مثلاً مربی‌ای که خودش هم ورزشکار است.
+   */
+  myRoles: RoleOption[];
+  onSwitchRole: (roleId: string) => void;
   onExitPreview: () => void;
   onShowGuide: () => void;
   onLogout: () => void;
@@ -425,6 +431,39 @@ function UserMenu({ chrome }: { chrome: ShellChrome }) {
               <X size={16} />
             </button>
           </div>
+
+          {chrome.myRoles.length > 1 && (
+            <div className="px-3 pt-2 pb-1">
+              <div className="text-[11px] font-bold mb-1.5" style={{ color: 'var(--c-text-muted)' }}>{t.shell.myRoles}</div>
+              <div className="flex flex-col gap-1">
+                {chrome.myRoles.map(option => {
+                  const active = option.id === chrome.user.roleId;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      disabled={active}
+                      onClick={() => {
+                        setOpen(false);
+                        chrome.onSwitchRole(option.id);
+                      }}
+                      className="h-10 px-3 rounded-lg text-[13px] font-bold border text-start flex items-center justify-between gap-2 cursor-pointer disabled:cursor-default"
+                      style={{
+                        backgroundColor: active ? 'var(--c-ink)' : 'var(--c-surface-2)',
+                        color: active ? '#fff' : 'var(--c-ink)',
+                        borderColor: 'var(--c-border)',
+                      }}
+                    >
+                      <span className="truncate">{t.roles[option.role]}</span>
+                      {option.gymName && (
+                        <span className="text-[11px] font-medium truncate opacity-80">{option.gymName}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {chrome.viewAsRoles.length > 0 && (
             <div className="px-3 pt-2 pb-1">
