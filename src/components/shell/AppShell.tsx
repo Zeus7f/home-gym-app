@@ -10,7 +10,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Dumbbell, LogOut, MoreHorizontal, Eye, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Dumbbell, LogOut, MoreHorizontal, BookOpen, Eye, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useI18n } from '../LanguageProvider';
 import { Avatar } from '../ui/Avatar';
 import { ThemeToggle } from '../ui/ThemeToggle';
@@ -39,6 +39,8 @@ export interface ShellChrome {
   myRoles: RoleOption[];
   onSwitchRole: (roleId: string) => void;
   onExitPreview: () => void;
+  /** رفتن به راهنمای همین نقش */
+  onShowHelp: () => void;
   onLogout: () => void;
 }
 
@@ -527,6 +529,9 @@ function UserMenu({ chrome }: { chrome: ShellChrome }) {
 
           <div className="my-1.5 border-t" style={{ borderColor: 'var(--c-border)' }} />
 
+          <button type="button" role="menuitem" className={item} style={{ color: 'var(--c-text)' }} onClick={() => { setOpen(false); chrome.onShowHelp(); }}>
+            <BookOpen size={17} /> {t.help.title}
+          </button>
           <button type="button" role="menuitem" className={item} style={{ color: 'var(--c-rubber)' }} onClick={() => { setOpen(false); chrome.onLogout(); }}>
             <LogOut size={17} className={isFa ? '' : 'rotate-180'} /> {t.shell.signOut}
           </button>

@@ -5,6 +5,13 @@
 
 export const accountsDict = {
   en: {
+    help: {
+      title: 'Guide and FAQ',
+      subtitle: 'What the menus mean, how each job is done, and answers to the usual questions.',
+      searchPlaceholder: 'Search a menu, procedure or question…',
+      noMatch: 'Nothing matches that search.',
+      matchCount: '{count} results',
+    },
     shell: {
       brand: 'Home Gym',
       openMenu: 'Account menu',
@@ -80,13 +87,6 @@ export const accountsDict = {
       accountsTitle: 'Gym managers',
       accountsSubtitle: 'Sign-in accounts of every gym manager',
       systemTitle: 'System status',
-      help: {
-        title: 'Guide and procedures',
-        subtitle: 'What the menus mean, how each job is done, and the rules the system enforces.',
-        searchPlaceholder: 'Search a menu, procedure or rule…',
-        noMatch: 'Nothing matches that search.',
-        matchCount: '{count} results',
-      },
       systemSubtitle: 'Server and database health',
       systemStatus: 'Status',
       systemDb: 'Database response time',
@@ -153,6 +153,13 @@ export const accountsDict = {
     },
   },
   fa: {
+    help: {
+      title: 'راهنما و پرسش‌ها',
+      subtitle: 'معنی منوها، ترتیب درست انجام هر کار، و پاسخ پرسش‌های پرتکرار.',
+      searchPlaceholder: 'جست‌وجوی منو، رویه یا پرسش…',
+      noMatch: 'چیزی با این جست‌وجو پیدا نشد.',
+      matchCount: '{count} نتیجه',
+    },
     shell: {
       brand: 'هوم‌جیم',
       openMenu: 'منوی حساب',
@@ -228,13 +235,6 @@ export const accountsDict = {
       accountsTitle: 'مدیران باشگاه‌ها',
       accountsSubtitle: 'حساب ورود مدیر هر باشگاه',
       systemTitle: 'وضعیت سامانه',
-      help: {
-        title: 'راهنما و رویه‌ها',
-        subtitle: 'معنی منوها، ترتیب درست انجام هر کار، و قواعدی که سامانه اعمال می‌کند.',
-        searchPlaceholder: 'جست‌وجوی منو، رویه یا قاعده…',
-        noMatch: 'چیزی با این جست‌وجو پیدا نشد.',
-        matchCount: '{count} نتیجه',
-      },
       systemSubtitle: 'سلامت سرور و دیتابیس',
       systemStatus: 'وضعیت',
       systemDb: 'زمان پاسخ دیتابیس',

@@ -1,17 +1,19 @@
 /**
- * src/features/admin/HelpPage.tsx
- * راهنمای سامانه در پنل مدیر کل: نقش‌ها، منوها، رویه‌های کاری و قواعد.
+ * src/features/help/HelpPage.tsx
+ * راهنما و پرسش‌های پرتکرار — همین صفحه در هر چهار فضای کاری استفاده می‌شود و
+ * محتوایش را از روی نقش فعال می‌گیرد.
  *
  * جست‌وجو روی همهٔ متن‌ها کار می‌کند تا پیدا کردن یک قاعده سریع باشد.
- * متن در `helpContent.ts` است؛ این فایل فقط آن را نشان می‌دهد.
+ * متن در `content.ts` است؛ این فایل فقط آن را نشان می‌دهد.
  */
 
 import React, { useMemo, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { PageHeader, Panel } from '../../components/ui/Page';
+import type { AppRole } from '../../lib/auth/permissions';
 import { useI18n } from '../../components/LanguageProvider';
 import { num } from '../../lib/format';
-import { HELP_CONTENT, type HelpItem, type HelpSection } from './helpContent';
+import { helpFor, type HelpItem, type HelpSection } from './content';
 
 /** آیا این بند با عبارت جست‌وجو می‌خواند؟ */
 function matches(item: HelpItem, q: string): boolean {
@@ -20,18 +22,18 @@ function matches(item: HelpItem, q: string): boolean {
   return haystack.includes(q);
 }
 
-export function HelpPage() {
+export function HelpPage({ role }: { role: AppRole }) {
   const { t, lang } = useI18n();
-  const h = t.admin.help;
+  const h = t.help;
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const sections = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return HELP_CONTENT[lang]
+    return helpFor(lang, role)
       .map(section => ({ ...section, items: section.items.filter(item => matches(item, q)) }))
       .filter(section => section.items.length > 0);
-  }, [lang, query]);
+  }, [lang, role, query]);
 
   const total = sections.reduce((sum, s) => sum + s.items.length, 0);
 

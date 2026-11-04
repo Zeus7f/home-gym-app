@@ -21,7 +21,7 @@ import { num } from '../../lib/format';
 import { displayName } from '../../lib/displayName';
 import { homePath } from '../../lib/routes';
 import { useSection } from '../../lib/useSection';
-import { HelpPage } from './HelpPage';
+import { HelpPage } from '../help/HelpPage';
 
 /** /admin/:section — باشگاه‌ها، حساب مدیران، وضعیت سامانه */
 export function AdminShell() {
@@ -33,7 +33,7 @@ export function AdminShell() {
     { key: 'gyms', icon: Building2, label: t.admin.title, to: linkTo('gyms') },
     { key: 'accounts', icon: UserCog, label: t.admin.accountsTitle, to: linkTo('accounts') },
     { key: 'system', icon: Activity, label: t.admin.systemTitle, to: linkTo('system') },
-    { key: 'help', icon: BookOpen, label: t.admin.help.title, to: linkTo('help') },
+    { key: 'help', icon: BookOpen, label: t.help.title, to: linkTo('help') },
   ];
   const title = nav.find(n => n.key === section)?.label ?? t.admin.title;
 
@@ -42,7 +42,7 @@ export function AdminShell() {
       {section === 'gyms' && <GymsPage />}
       {section === 'accounts' && <AccountsPage />}
       {section === 'system' && <SystemPage />}
-      {section === 'help' && <HelpPage />}
+      {section === 'help' && <HelpPage role="super_admin" />}
     </AppShell>
   );
 }

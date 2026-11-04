@@ -28,6 +28,7 @@ import { Athletes } from './pages/Athletes';
 import { History } from './pages/History';
 import { Catalog } from './pages/Catalog';
 import { Programs } from './pages/Programs';
+import { HelpPage } from '../help/HelpPage';
 import { Calendar } from './pages/Calendar';
 import { SessionFlow } from './components/SessionFlow';
 
@@ -116,7 +117,8 @@ export function TrainerShell() {
   if (redirectTo && !isLive) return <Navigate to={redirectTo} replace />;
 
   const shownSection: TrainerSection = isLive ? 'today' : (section as TrainerSection);
-  const currentTabInfo = TABS.find(t2 => t2.key === shownSection)!;
+  // «راهنما» مسیر دارد ولی تب نیست
+  const currentTabInfo = TABS.find(t2 => t2.key === shownSection);
   const closeLive = () => navigate(linkTo('today'));
 
   const nav: ShellNavItem[] = TABS.map(tab => ({
@@ -132,7 +134,7 @@ export function TrainerShell() {
       mobileKeys={MOBILE_TABS}
       activeKey={shownSection}
       onNavigate={key => go(key)}
-      title={t.trainer.shell[TAB_TITLES[currentTabInfo.labelKey]]}
+      title={currentTabInfo ? t.trainer.shell[TAB_TITLES[currentTabInfo.labelKey]] : t.help.title}
       subtitle={todayShamsi}
       context={gymName}
     >
@@ -142,6 +144,7 @@ export function TrainerShell() {
       {shownSection === 'exercises' && <Catalog />}
       {shownSection === 'programs' && <Programs />}
       {shownSection === 'calendar' && <Calendar />}
+      {shownSection === 'help' && <HelpPage role="trainer" />}
 
       {/* اجرای تمام‌صفحهٔ جلسه (Session Flow) */}
       <AnimatePresence>

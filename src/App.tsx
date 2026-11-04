@@ -6,7 +6,7 @@ import { ChangePasswordScreen } from './features/auth/ChangePasswordScreen';
 import { initAuth, isAuthReady, logout, mustChangePassword, switchRole } from './api/auth';
 import { leaveGym } from './api/admin';
 import { can, type AppRole } from './lib/auth/permissions';
-import { AUTH_PATHS, BASE_PATH, homePath } from './lib/routes';
+import { AUTH_PATHS, BASE_PATH, homePath, sectionPath } from './lib/routes';
 import { ShellChromeProvider, type ShellChrome } from './components/shell/AppShell';
 import { LanguageProvider, useI18n } from './components/LanguageProvider';
 
@@ -138,6 +138,7 @@ function App() {
               if (res.success && gymStore.currentUser) navigate(homePath(gymStore.currentUser.role));
             });
           },
+          onShowHelp: () => navigate(sectionPath(currentUser.role, 'help')),
           onExitPreview: () => {
             if (authUser.role === 'super_admin') leaveGym();
             navigate(homePath(authUser.role));

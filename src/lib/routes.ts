@@ -14,9 +14,9 @@ export const AUTH_PATHS = {
 /** بخش‌های هر فضای کاری (بخش دوم مسیر) */
 export const SECTIONS = {
   super_admin: ['gyms', 'accounts', 'system', 'help'],
-  owner: ['dashboard', 'schedule', 'memberships', 'trainers', 'finance', 'analytics', 'settings'],
-  trainer: ['today', 'calendar', 'athletes', 'programs', 'exercises', 'history'],
-  member: ['overview', 'sessions', 'workouts', 'progress'],
+  owner: ['dashboard', 'schedule', 'memberships', 'trainers', 'finance', 'analytics', 'settings', 'help'],
+  trainer: ['today', 'calendar', 'athletes', 'programs', 'exercises', 'history', 'help'],
+  member: ['overview', 'sessions', 'workouts', 'progress', 'help'],
 } as const;
 
 export type Section<R extends AppRole> = (typeof SECTIONS)[R][number];

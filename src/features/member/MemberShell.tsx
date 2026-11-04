@@ -16,6 +16,7 @@ import { Home } from './pages/Home';
 import { Sessions } from './pages/Sessions';
 import { Exercises } from './pages/Exercises';
 import { History } from './pages/History';
+import { HelpPage } from '../help/HelpPage';
 
 type MemberSection = Section<'member'>;
 
@@ -48,7 +49,8 @@ export function MemberShell() {
   const todayShamsi = formatJalaliHumanTodayLocalized(isFa);
   if (redirectTo) return <Navigate to={redirectTo} replace />;
   const activeTab = section as MemberSection;
-  const currentTabInfo = TABS.find(tab => tab.key === activeTab)!;
+  // «راهنما» مسیر دارد ولی تب نیست
+  const currentTabInfo = TABS.find(tab => tab.key === activeTab);
   const user = getCurrentUser();
   const memberName = displayName(user?.displayName || '', isFa);
 
@@ -64,7 +66,7 @@ export function MemberShell() {
       nav={nav}
       activeKey={activeTab}
       onNavigate={key => go(key)}
-      title={t.member.shell[TAB_TITLES[currentTabInfo.labelKey]]}
+      title={currentTabInfo ? t.member.shell[TAB_TITLES[currentTabInfo.labelKey]] : t.help.title}
       subtitle={activeTab === 'overview' ? `${memberName} · ${todayShamsi}` : todayShamsi}
       context={getGymName()}
     >
@@ -73,6 +75,7 @@ export function MemberShell() {
       {activeTab === 'sessions' && <Sessions />}
       {activeTab === 'workouts' && <Exercises />}
       {activeTab === 'progress' && <History />}
+      {activeTab === 'help' && <HelpPage role="member" />}
     </AppShell>
   );
 }

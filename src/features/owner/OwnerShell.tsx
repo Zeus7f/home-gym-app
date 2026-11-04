@@ -30,6 +30,7 @@ import { Trainers } from './pages/Trainers';
 import { Finance } from './pages/Finance';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
+import { HelpPage } from '../help/HelpPage';
 
 type OwnerSection = Section<'owner'>;
 type LabelKey = 'dashboard' | 'members' | 'trainers' | 'schedule' | 'finance' | 'reports' | 'settings';
@@ -86,8 +87,9 @@ export function OwnerShell() {
     badge: n.key === 'memberships' ? pendingCount : undefined,
     to: linkTo(n.key),
   }));
-  const current = NAV.find(n => n.key === section)!;
-  const title = section === 'dashboard' ? t.owner.shell.todayOps : t.nav.owner[current.labelKey];
+  // «راهنما» مسیر دارد ولی در نوار ناوبری نیست، پس عنوانش از NAV نمی‌آید
+  const current = NAV.find(n => n.key === section);
+  const title = !current ? t.help.title : section === 'dashboard' ? t.owner.shell.todayOps : t.nav.owner[current.labelKey];
 
   return (
     <AppShell
@@ -121,6 +123,7 @@ export function OwnerShell() {
       {section === 'finance' && <Finance isMobile={isMobile} />}
       {section === 'analytics' && <Reports isMobile={isMobile} />}
       {section === 'settings' && <Settings isMobile={isMobile} />}
+      {section === 'help' && <HelpPage role="owner" />}
 
       {/* کشوی اطلاعات عضو — بسته شدن، به فهرست اعضا برمی‌گردد */}
       <MemberSheet member={selectedMember} onClose={() => go('memberships')} isMobile={isMobile} />
