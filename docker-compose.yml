@@ -1,10 +1,14 @@
-# Home Gym — PostgreSQL + برنامه (Express + فرانت‌اند ساخته‌شده)
+# GymVero — PostgreSQL + برنامه (Express + فرانت‌اند ساخته‌شده)
 #
 # توسعهٔ محلی (فقط دیتابیس):    docker compose up -d db
 # اجرای کامل روی سرور:          docker compose --profile app up -d --build
 #   (سرویس‌ها: db، app، و backup برای پشتیبان روزانه در ./backups)
 #
 # متغیرها از فایل .env کنار همین فایل خوانده می‌شوند (نمونه: .env.example).
+
+# نام پروژه صریح است تا با جابه‌جا شدن پوشه، نام volume و کانتینرها عوض نشود
+# (وگرنه docker compose نام را از نام پوشه می‌سازد و دیتابیس خالی به نظر می‌رسد).
+name: gymvero
 
 services:
   db:
@@ -27,7 +31,7 @@ services:
 
   app:
     build: .
-    image: homegym-app:latest
+    image: gymvero-app:latest
     restart: unless-stopped
     depends_on:
       db:

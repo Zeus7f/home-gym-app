@@ -1,4 +1,4 @@
-# Home Gym — تصویر تولیدی: فرانت‌اند ساخته‌شده + سرور Express (Node)
+# GymVero — تصویر تولیدی: فرانت‌اند ساخته‌شده + سرور Express (Node)
 # docker compose --profile app up -d --build
 
 # ── ۱. وابستگی‌ها و build ──
