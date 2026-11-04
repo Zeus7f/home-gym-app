@@ -7,9 +7,14 @@ import { runAuthTests } from './auth.test';
 import { runRolesTests } from './roles.test';
 import { runReportingTests } from './reporting.test';
 import { runSessionDraftTests } from '../../../features/trainer/hooks/__tests__/useSessionDraft.test';
+import { gymStore } from '../../store/gymStore';
 
 async function main() {
   console.log('--- Running Home Gym Domain Tests ---');
+
+  // استور دیگر خودکار با دادهٔ نمونه پر نمی‌شود (مرورگر آن را لازم ندارد)،
+  // پس تست‌ها پیش از اجرا باشگاه دمو را صریحاً بار می‌کنند.
+  await gymStore.loadDemoData();
 
   const suites = [
     ['domain', runAllDomainTests()],

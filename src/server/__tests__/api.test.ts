@@ -71,7 +71,8 @@ async function main() {
   const { createApp } = await import('../app.ts');
   const { hashPassword } = await import('../auth/crypto.ts');
   const { exerciseToRow, loadGym, stateToRows } = await import('../repository.ts');
-  const { EXERCISE_CATALOG } = await import('../../lib/exercises/catalog');
+  const { EXERCISE_CATALOG, loadExerciseCatalog } = await import('../../lib/exercises/catalog');
+  await loadExerciseCatalog();
   const { getTodayJalaliString } = await import('../../lib/date/jalali');
 
   const db = getDb();

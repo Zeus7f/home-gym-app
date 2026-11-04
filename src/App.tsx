@@ -7,7 +7,6 @@ import { initAuth, isAuthReady, logout, mustChangePassword, switchRole } from '.
 import { leaveGym } from './api/admin';
 import { can, type AppRole } from './lib/auth/permissions';
 import { AUTH_PATHS, BASE_PATH, homePath } from './lib/routes';
-import { UserJourneyGuide } from './components/UserJourneyGuide';
 import { ShellChromeProvider, type ShellChrome } from './components/shell/AppShell';
 import { LanguageProvider, useI18n } from './components/LanguageProvider';
 
@@ -89,7 +88,6 @@ function SessionGate() {
 
 // ── App (needs router context) ───────────────────────────────
 function App() {
-  const [showJourney, setShowJourney] = useState(false);
   const { lang, setLang } = useI18n();
   const [, setTick] = useState(0);
   const navigate = useNavigate();
@@ -144,7 +142,6 @@ function App() {
             if (authUser.role === 'super_admin') leaveGym();
             navigate(homePath(authUser.role));
           },
-          onShowGuide: () => setShowJourney(true),
           onLogout: () => {
             void logout();
             navigate(AUTH_PATHS.login);
@@ -222,15 +219,6 @@ function App() {
         </Routes>
       </React.Suspense>
 
-      {showJourney && authUser && (
-        <UserJourneyGuide
-          lang={lang}
-          onClose={() => setShowJourney(false)}
-          onSelectRole={role =>
-            navigate(can(authUser.role, 'role.preview') && authUser.role !== role ? `${homePath(role)}?preview_role=${role}` : homePath(role))
-          }
-        />
-      )}
     </ShellChromeProvider>
   );
 }

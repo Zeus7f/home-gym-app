@@ -6,6 +6,7 @@
 
 import { apiRequest, gymStore, isRemote, refreshSnapshot } from './_client';
 import { localizeResult, translateStoreMessage } from './_messages';
+import { loadExerciseCatalog } from '../lib/exercises/catalog';
 import type { RoleOption, UserAccount } from '../lib/domain/gymManagement';
 import type { StoreMessageKey } from '../lib/domain/storeMessages';
 
@@ -65,7 +66,9 @@ export function initAuth(): () => void {
     return () => {};
   }
   let cancelled = false;
-  apiRequest<SessionPayload>('GET', '/api/auth/me').then(({ status, json }) => {
+  // کاتالوگ حرکات چانک جداست و هم‌زمان با نشست گرفته می‌شود؛ صفحات آن را
+  // هم‌زمان (sync) می‌خوانند، پس باید پیش از نخستین رندر آماده باشد.
+  Promise.all([apiRequest<SessionPayload>('GET', '/api/auth/me'), loadExerciseCatalog()]).then(([{ status, json }]) => {
     if (cancelled) return;
     void enterSession(status === 200 ? json : null);
   });

@@ -16,14 +16,17 @@ import { randomUUID } from 'node:crypto';
 import { eq, getTableColumns, sql } from 'drizzle-orm';
 import { closeDb, getDb, runMigrations } from './index.ts';
 import * as t from './schema.ts';
-import { EXERCISE_CATALOG } from '../lib/exercises/catalog';
-import { INITIAL_GYM, INITIAL_USERS, emptyGymData, initialGymData } from '../lib/store/gymStore';
+import { EXERCISE_CATALOG, loadExerciseCatalog } from '../lib/exercises/catalog';
+import { emptyGymData } from '../lib/store/gymStore';
+import { INITIAL_GYM, INITIAL_USERS, initialGymData } from '../lib/store/demoData';
 import { isValidMobile, normalizePhone } from '../lib/phone';
 import { MIN_PASSWORD_LENGTH } from '../lib/auth/accountRules';
 import { hashPassword } from '../server/auth/crypto.ts';
 import { dbRole, exerciseToRow, persistDiff, stateToRows } from '../server/repository.ts';
 
 async function seed() {
+  // کاتالوگ چانک جداست و باید پیش از ساخت ردیف‌ها بار شود
+  await loadExerciseCatalog();
   const db = getDb();
   await runMigrations('drizzle');
 

@@ -105,7 +105,6 @@ export const EXERCISE_POSITIONS: { id: ExercisePosition; labelEn: string; labelF
   { id: 'plank', labelEn: 'Plank Position', labelFa: 'وضعیت پلانک' }
 ];
 
-import { RAW_EXERCISE_CATALOG } from './catalogData';
 
 const FMS_INITIAL_EXERCISES: ExerciseItem[] = [
   // ==========================================
@@ -477,14 +476,29 @@ const FMS_INITIAL_EXERCISES: ExerciseItem[] = [
   }
 ];
 
-// Full merged catalog: All 413 CSV exercises + FMS movements for backwards compatibility
-const seenIds = new Set<string>();
+/**
+ * کاتالوگ کامل: ۴۱۳ حرکت CSV + حرکت‌های FMS.
+ *
+ * دادهٔ خام نیم مگابایت است و با `import()` جدا بارگذاری می‌شود تا در باندل
+ * اصلی ننشیند و تغییر کد برنامه آن را از کش مرورگر بیرون نیندازد. آرایه همان
+ * آرایه می‌ماند و فقط پر می‌شود، پس مصرف‌کننده‌ها مثل قبل هم‌زمان می‌خوانند —
+ * به شرطی که `loadExerciseCatalog()` پیش از نخستین رندر تمام شده باشد.
+ */
 export const EXERCISE_CATALOG: ExerciseItem[] = [];
 
-for (const item of [...RAW_EXERCISE_CATALOG, ...FMS_INITIAL_EXERCISES]) {
-  if (!seenIds.has(item.id)) {
-    seenIds.add(item.id);
-    EXERCISE_CATALOG.push(item);
-  }
+let loading: Promise<void> | null = null;
+
+/** بارگذاری یک‌بارهٔ کاتالوگ؛ فراخوانی دوباره همان Promise قبلی را برمی‌گرداند. */
+export function loadExerciseCatalog(): Promise<void> {
+  loading ??= import('./catalogData').then(({ RAW_EXERCISE_CATALOG }) => {
+    if (EXERCISE_CATALOG.length > 0) return;
+    const seenIds = new Set<string>();
+    for (const item of [...RAW_EXERCISE_CATALOG, ...FMS_INITIAL_EXERCISES]) {
+      if (seenIds.has(item.id)) continue;
+      seenIds.add(item.id);
+      EXERCISE_CATALOG.push(item);
+    }
+  });
+  return loading;
 }
 
