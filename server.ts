@@ -1,5 +1,5 @@
 /**
- * server.ts — سرور مستقل Home Gym: Express + PostgreSQL، بدون سرویس خارجی.
+ * server.ts — سرور مستقل GymVero: Express + PostgreSQL، بدون سرویس خارجی.
  *
  *   توسعه:  docker compose up -d db && bun run dev        (Vite به‌صورت middleware)
  *   تولید:  bun run build && bun run start                 (فایل‌های dist/ با کش)
@@ -57,7 +57,7 @@ async function start() {
   }
 
   const server = app.listen(port, '0.0.0.0', () => {
-    console.log(`Home Gym server running on http://localhost:${port} (${production ? 'production' : 'development'})`);
+    console.log(`GymVero server running on http://localhost:${port} (${production ? 'production' : 'development'})`);
   });
 
   const shutdown = () => {

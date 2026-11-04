@@ -316,7 +316,7 @@ export const ownerDict = {
   },
   fa: {
     shell: {
-      brand: 'هوم‌جیم',
+      brand: 'جیم‌ورو',
       seniorOwner: 'مدیر ارشد',
       signOut: 'خروج',
       searchPlaceholder: 'جستجو در کل سامانه…',

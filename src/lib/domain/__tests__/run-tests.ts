@@ -10,7 +10,7 @@ import { runSessionDraftTests } from '../../../features/trainer/hooks/__tests__/
 import { gymStore } from '../../store/gymStore';
 
 async function main() {
-  console.log('--- Running Home Gym Domain Tests ---');
+  console.log('--- Running GymVero Domain Tests ---');
 
   // استور دیگر خودکار با دادهٔ نمونه پر نمی‌شود (مرورگر آن را لازم ندارد)،
   // پس تست‌ها پیش از اجرا باشگاه دمو را صریحاً بار می‌کنند.

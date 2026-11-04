@@ -5,7 +5,7 @@
 
 export const appDict = {
   en: {
-    appName: 'HomeGym Ops',
+    appName: 'GymVero Ops',
     appBadge: 'Gym Management',
     appSubtitle: 'Operational System for Gym Owners & Trainers',
     previewMode: 'Preview mode',
@@ -144,7 +144,7 @@ export const appDict = {
     },
   },
   fa: {
-    appName: 'مدیریت باشگاه هوم‌جیم',
+    appName: 'مدیریت باشگاه جیم‌ورو',
     appBadge: 'سامانه عملیاتی باشگاه',
     appSubtitle: 'مدیریت سریع، ساده و کاربردی برای مدیر باشگاه و مربیان',
     previewMode: 'حالت پیش‌نمایش',
@@ -241,7 +241,7 @@ export const appDict = {
     },
     userJourney: {
       button: 'راهنمای تعاملی مسیر برنامه',
-      title: 'راهنمای تعاملی چرخه کارکرد سامانه هوم‌جیم',
+      title: 'راهنمای تعاملی چرخه کارکرد سامانه جیم‌ورو',
       subtitle: 'آشنایی با نحوه تعامل مدیر، مربیان و ورزشکاران در ۵ گام ساده',
       stepBadge: 'گام',
       jumpToRole: 'رفتن به این بخش',
