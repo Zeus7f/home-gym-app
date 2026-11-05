@@ -18,7 +18,6 @@ import { closeDb, getDb, runMigrations } from './index.ts';
 import * as t from './schema.ts';
 import { EXERCISE_CATALOG, loadExerciseCatalog } from '../lib/exercises/catalog';
 import { emptyGymData } from '../lib/store/gymStore';
-import { INITIAL_GYM, INITIAL_USERS, initialGymData } from '../lib/store/demoData';
 import { isValidMobile, normalizePhone } from '../lib/phone';
 import { MIN_PASSWORD_LENGTH } from '../lib/auth/accountRules';
 import { hashPassword } from '../server/auth/crypto.ts';
@@ -80,6 +79,9 @@ async function seed() {
     if (existing) {
       console.log('• demo gym already exists');
     } else {
+      // بدنهٔ demoData هنگام بارگذاری ماژول از کاتالوگ می‌خواند، پس باید پس از
+      // `loadExerciseCatalog()` بار شود — نه با import ایستا در بالای فایل.
+      const { INITIAL_GYM, INITIAL_USERS, initialGymData } = await import('../lib/store/demoData');
       const data = initialGymData();
       await db.transaction(async tx => {
         const [gym] = await tx
