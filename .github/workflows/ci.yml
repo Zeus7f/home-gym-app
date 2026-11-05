@@ -90,7 +90,7 @@ jobs:
           context: .
           push: false
           load: true
-          tags: homegym-app:latest
+          tags: gymvero-app:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Smoke test (image + PostgreSQL, health and login)

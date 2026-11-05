@@ -8,7 +8,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 ENV_FILE="${ENV_FILE:-.env}"
-IMAGE="homegym-app"
+IMAGE="gymvero-app"
 compose() { docker compose --env-file "$ENV_FILE" --profile app "$@"; }
 set -a; . "./$ENV_FILE"; set +a
 
