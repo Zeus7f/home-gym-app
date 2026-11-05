@@ -11,6 +11,8 @@ export const accountsDict = {
       searchPlaceholder: 'Search a menu, procedure or question…',
       noMatch: 'Nothing matches that search.',
       matchCount: '{count} results',
+      /** برچسب کوتاه تب‌ها؛ کلید همان `HelpSection.id` است */
+      tabs: { menus: 'Menus', sop: 'Procedures', faq: 'Questions', rules: 'Rules', roles: 'Roles' },
     },
     shell: {
       brand: 'GymVero',
@@ -159,6 +161,7 @@ export const accountsDict = {
       searchPlaceholder: 'جست‌وجوی منو، رویه یا پرسش…',
       noMatch: 'چیزی با این جست‌وجو پیدا نشد.',
       matchCount: '{count} نتیجه',
+      tabs: { menus: 'منوها', sop: 'رویه‌ها', faq: 'پرسش‌ها', rules: 'قواعد', roles: 'نقش‌ها' },
     },
     shell: {
       brand: 'جیم‌ورو',
