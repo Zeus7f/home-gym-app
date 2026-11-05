@@ -18,6 +18,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-homegym}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-homegym_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-homegym}
+      # رمز برای هر اتصالی لازم باشد، از جمله لوکال‌هاست داخل خود کانتینر.
+      # بدون این، initdb برای سوکت محلی و loopback قاعدهٔ trust می‌نویسد و هر کسی
+      # که به داخل کانتینر برسد بدون رمز وارد دیتابیس می‌شود.
+      # فقط هنگام ساخت cluster تازه اثر دارد، نه روی volume موجود.
+      POSTGRES_INITDB_ARGS: "--auth-local=scram-sha-256 --auth-host=scram-sha-256"
     ports:
       # فقط روی localhost؛ روی سرور دیتابیس از بیرون در دسترس نیست
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
